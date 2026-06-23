@@ -1,6 +1,6 @@
 # kd-post-qa — Playwright Automation Suite
 
-Post-QA sanity check automation for [ZingoBingo](https://www.zingobingo.co.uk) using Playwright + TypeScript.
+Post-QA sanity check automation for [Slingo](https://www.slingo.com) using Playwright + TypeScript.
 
 ---
 

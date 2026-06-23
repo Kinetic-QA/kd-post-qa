@@ -29,7 +29,7 @@ Each release or change set uses this structure:
 ## [1.0.0] - 2026-06-23
 
 ### Added
-- Initial Playwright automation suite for ZingoBingo (https://www.zingobingo.co.uk)
+- Initial Playwright automation suite for Slingo (https://www.slingo.com)
 - P1 tests (17 tests across 5 files):
   - `tests/p1/login.spec.ts` — Login flow validation
   - `tests/p1/registration.spec.ts` — User registration flow
