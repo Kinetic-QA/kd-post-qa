@@ -1,0 +1,38 @@
+name: Changelog Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  check-changelog:
+    name: Verify CHANGELOG.md was updated
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check CHANGELOG.md was modified
+        run: |
+          BASE=${{ github.event.pull_request.base.sha }}
+          HEAD=${{ github.event.pull_request.head.sha }}
+
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD")
+          echo "Files changed in this PR:"
+          echo "$CHANGED"
+
+          if echo "$CHANGED" | grep -q "^CHANGELOG.md$"; then
+            echo "✅ CHANGELOG.md was updated. Good to go."
+          else
+            echo ""
+            echo "❌ CHANGELOG.md was NOT updated."
+            echo ""
+            echo "Every PR must include a CHANGELOG.md entry under [Unreleased]."
+            echo "Please add an entry describing your changes and push again."
+            exit 1
+          fi

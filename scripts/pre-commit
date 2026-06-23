@@ -1,0 +1,21 @@
+#!/bin/bash
+# pre-commit hook
+# Warns if CHANGELOG.md is not staged in this commit.
+# Install via: bash scripts/setup-hooks.sh
+
+STAGED=$(git diff --cached --name-only)
+
+if echo "$STAGED" | grep -q "^CHANGELOG.md$"; then
+  exit 0
+fi
+
+echo ""
+echo "⚠️  WARNING: CHANGELOG.md is not staged in this commit."
+echo ""
+echo "   Every push to this repo requires a CHANGELOG.md update."
+echo "   If this is a WIP commit, that's fine — but make sure"
+echo "   CHANGELOG.md is updated before you open a PR."
+echo ""
+echo "   To proceed anyway: git commit --no-verify"
+echo ""
+exit 1

@@ -1,0 +1,28 @@
+### Dependencies ###
+node_modules/
+dist/
+
+### Playwright generated output ###
+test-results/
+playwright-report/
+.playwright/
+
+### Test report files ###
+*.xlsx
+
+### Local environment ###
+.env
+.env.local
+.env.*.local
+
+### Claude / AI agent internal files ###
+.claude/
+memory/
+
+### OS files ###
+.DS_Store
+Thumbs.db
+
+### IDE ###
+.vscode/settings.json
+.idea/

@@ -1,0 +1,24 @@
+{
+  "name": "revwright-sanity-tests",
+  "version": "1.0.0",
+  "description": "Playwright automation for ZingoBingo sanity checklist",
+  "scripts": {
+    "test": "playwright test",
+    "test:p1": "playwright test tests/p1/",
+    "test:p2": "playwright test tests/p2/",
+    "test:p3": "playwright test tests/p3/",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "report:excel": "node generate-report.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@types/node": "^25.9.1",
+    "exceljs": "^4.4.0",
+    "typescript": "^5.4.5"
+  },
+  "overrides": {
+    "uuid": ">=11.1.1"
+  }
+}
