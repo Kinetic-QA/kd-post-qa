@@ -4,28 +4,41 @@
  * Usage:
  *   npx ts-node src/agent.ts SC-913
  *   npx ts-node src/agent.ts SC-913 --dry-run
- *   npx ts-node src/agent.ts SC-913 --url https://www.slingo.com
  *
  * Flow:
  *   1. Fetch ticket from JIRA
- *   2. Parse description → extract URL, username, password
- *   3. Transition → "In Review"
- *   4. Run Playwright login test against qa.slingo.com
- *   5. Post comment with findings
- *   6. If pass → Transition → "Approved"
+ *   2. Parse description → extract Test Type
+ *   3. Resolve Test Type → matching Playwright spec file
+ *   4. Transition → "In Review"
+ *   5. Run the Playwright test suite
+ *   6. Upload evidence screenshots as Jira attachments
+ *   7. Post comment with findings
+ *   8. If pass → Transition → "Approved"
  *      If fail → leave in "In Review" and report failure
+ *
+ * Test type detection (two modes):
+ *   Option A — Keyword (no API key needed):
+ *     Add "Test Type: login" to the ticket description.
+ *   Option B — AI Interpreter (requires ANTHROPIC_API_KEY in .env):
+ *     Write a free-form description; Claude reads it and picks the right test.
+ *     Option A is always tried first; Option B is the fallback.
+ *
+ * Supported test types:
+ *   login, registration, search, blog search, feedback form,
+ *   sidebar navigation, footer navigation, game category navigation,
+ *   game info modal, contact us
  */
 
 import * as dotenv from 'dotenv';
 dotenv.config();
 
 import { JiraClient } from './jira-client';
-import { parseCredentials } from './requirements-parser';
-import { runLoginTest, BrowserTestResult, StepResult } from './browser-runner';
+import { parseTestType } from './requirements-parser';
+import { interpretTicket } from './ticket-interpreter';
+import { resolveTestFile, runPlaywrightTest, SUPPORTED_TEST_TYPES, TestRunResult } from './test-runner';
 
 const TRANSITION_IN_REVIEW = process.env.JIRA_TRANSITION_IN_REVIEW ?? '71';
 const TRANSITION_APPROVED  = process.env.JIRA_TRANSITION_APPROVED  ?? '101';
-const QA_BASE_URL          = process.env.QA_BASE_URL ?? 'https://qa.slingo.com';
 
 function getErrorMessage(e: unknown): string {
   if (e && typeof e === 'object' && 'response' in e) {
@@ -71,18 +84,15 @@ function adfImage(thumbnailUrl: string) {
   };
 }
 
-// ─── Comment builder (returns ADF) ───────────────────────────────────────────
+// ─── Comment builder ─────────────────────────────────────────────────────────
 
 function buildCommentAdf(
-  result: BrowserTestResult,
-  targetUrl: string,
-  attachments: { loggedIn?: { thumbnailUrl: string; filename: string }; loggedOut?: { thumbnailUrl: string; filename: string } },
+  result: TestRunResult,
+  attachments: { thumbnailUrl: string; filename: string }[],
 ): object {
-  const icon = (s: StepResult) => s.status === 'pass' ? '✅' : s.status === 'fail' ? '❌' : '⏭️';
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const duration = (result.durationMs / 1000).toFixed(1);
-
-  const stepItems = result.steps.map(s => `${icon(s)} ${s.step}${s.detail ? ` — ${s.detail}` : ''}`);
+  const testLabel = result.testType.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   const nodes: object[] = [];
 
@@ -90,60 +100,54 @@ function buildCommentAdf(
     nodes.push(
       adfPara(adfBold(`Pre-Checked (${today})`)),
       adfPara(adfBold('Scope Checked:')),
-      adfBulletList('Login Flow', 'Logout Flow'),
-      adfPara(adfBold('URL: '), adfText(targetUrl)),
+      adfBulletList(`${testLabel} Flow`),
       adfPara(adfBold('Platform and GEOs checked:')),
       adfBulletList('Desktop', 'N/A (Automated QA)'),
       adfPara(adfBold('Overall Result: ✅ PASS')),
-      adfPara(adfText('No issues were identified during pre-checking. Login and logout completed successfully.')),
-      adfPara(adfBold(`Steps Executed (${duration}s):`)),
-      adfBulletList(...stepItems),
+      adfPara(adfText(
+        `${result.passed} test(s) passed in ${duration}s. No issues were identified during pre-checking.`
+      )),
     );
   } else {
-    const failedItems = result.steps
-      .filter(s => s.status === 'fail')
-      .map(s => `${s.step}${s.detail ? `: ${s.detail}` : ''}`);
+    const errItems = result.errors.length
+      ? result.errors
+      : ['Test failed — no error details captured'];
 
     nodes.push(
       adfPara(adfBold(`Pre-Checked (${today})`)),
       adfPara(adfBold('Scope Checked:')),
-      adfBulletList('Login Flow', 'Logout Flow'),
-      adfPara(adfBold('URL: '), adfText(targetUrl)),
+      adfBulletList(`${testLabel} Flow`),
       adfPara(adfBold('Affected GEOs and Platform:')),
       adfBulletList('Desktop', 'N/A (Automated QA)'),
       adfPara(adfBold('Overall Result: ❌ FAIL')),
       adfPara(adfBold('Issue Summary:')),
-      adfPara(adfText('Login flow test failed during automated pre-check.')),
-      adfPara(adfBold('Failed Step(s):')),
-      adfBulletList(...(failedItems.length ? failedItems : [result.error ?? 'Unknown error'])),
-      adfPara(adfBold(`All Steps Executed (${duration}s):`)),
-      adfBulletList(...stepItems),
+      adfPara(adfText(
+        `${testLabel} test failed during automated pre-check. `
+        + `${result.failed} test(s) failed in ${duration}s.`
+      )),
+      adfPara(adfBold('Failed Reason:')),
+      adfBulletList(...errItems),
       adfPara(adfText('Action required: Please investigate the failure and re-run after fix.')),
     );
   }
 
-  // Embed screenshots inline as images — logged out first (starting state), then logged in (proof)
-  if (attachments.loggedIn || attachments.loggedOut) {
+  if (attachments.length > 0) {
     nodes.push(adfPara(adfBold('Evidence:')));
-    if (attachments.loggedOut) {
-      nodes.push(adfPara(adfText(`Logged Out (before) — ${attachments.loggedOut.filename}`)));
-      nodes.push(adfImage(attachments.loggedOut.thumbnailUrl));
-    }
-    if (attachments.loggedIn) {
-      nodes.push(adfPara(adfText(`Logged In (after) — ${attachments.loggedIn.filename}`)));
-      nodes.push(adfImage(attachments.loggedIn.thumbnailUrl));
+    for (const att of attachments) {
+      nodes.push(adfPara(adfText(att.filename)));
+      nodes.push(adfImage(att.thumbnailUrl));
     }
   }
 
   return adfDoc(...nodes);
 }
 
+// ─── Main ─────────────────────────────────────────────────────────────────────
+
 async function main() {
   const args = process.argv.slice(2);
   const issueKey = args.find(a => !a.startsWith('--'));
   const dryRun = args.includes('--dry-run');
-  const urlFlagIdx = args.findIndex(a => a === '--url');
-  const urlOverride = urlFlagIdx !== -1 ? args[urlFlagIdx + 1] : undefined;
 
   if (!issueKey) {
     console.error('Usage: npx ts-node src/agent.ts <JIRA-TICKET-KEY> [--dry-run]');
@@ -158,7 +162,7 @@ async function main() {
   const jira = new JiraClient();
 
   // 1. Fetch ticket
-  console.log(`[1/6] Fetching ${issueKey}...`);
+  console.log(`[1/7] Fetching ${issueKey}...`);
   let ticket;
   try {
     ticket = await jira.getTicket(issueKey);
@@ -184,38 +188,48 @@ async function main() {
     process.exit(1);
   }
 
-  // 2. Parse credentials from description
-  console.log(`\n[2/6] Parsing ticket description for credentials...`);
-  const creds = parseCredentials(ticket.description);
-  const targetUrl = urlOverride ?? creds.targetUrl ?? QA_BASE_URL;
-  if (urlOverride) console.log(`      URL overridden via --url flag`);
-  const username  = creds.username;
-  const password  = creds.password;
+  // 2. Parse Test Type from description — keyword first, AI fallback second
+  console.log(`\n[2/7] Parsing ticket description for Test Type...`);
+  let rawTestType = parseTestType(ticket.description);
 
-  if (!username || !password) {
-    console.error(`[FAIL] Could not extract credentials from ticket description.`);
-    console.error(`       Description must contain lines like:`);
-    console.error(`         Username: user@example.com`);
-    console.error(`         Password: yourpassword`);
+  if (!rawTestType) {
+    console.log('      No "Test Type:" keyword found. Trying AI interpreter...');
+    rawTestType = await interpretTicket(ticket.summary, ticket.description);
+    if (rawTestType) {
+      console.log(`      AI matched: "${rawTestType}"`);
+    }
+  }
+
+  if (!rawTestType) {
+    console.error(`[FAIL] Could not determine test type from ticket.`);
+    console.error(`       Option A — add a line to the ticket description:  Test Type: login`);
+    console.error(`       Option B — set ANTHROPIC_API_KEY in .env for AI interpretation`);
+    console.error(`       Supported types: ${SUPPORTED_TEST_TYPES.join(', ')}`);
     process.exit(1);
   }
-  console.log(`      URL:      ${targetUrl}`);
-  console.log(`      Username: ${username}`);
-  console.log(`      Password: ${'*'.repeat(password.length)}`);
+
+  const testFile = resolveTestFile(rawTestType);
+  if (!testFile) {
+    console.error(`[FAIL] Unknown test type: "${rawTestType}"`);
+    console.error(`       Supported types: ${SUPPORTED_TEST_TYPES.join(', ')}`);
+    process.exit(1);
+  }
+
+  console.log(`      Test Type: ${rawTestType}`);
+  console.log(`      Test File: ${testFile}`);
 
   if (dryRun) {
-    console.log('\n[3/6] [DRY RUN] Would transition to In Review');
-    console.log(`\n[4/6] [DRY RUN] Would run Playwright login test`);
-    console.log(`      Target: ${targetUrl}`);
-    console.log(`      User:   ${username}`);
-    console.log('\n[5/6] [DRY RUN] Would post comment with findings');
-    console.log('\n[6/6] [DRY RUN] Would transition to Approved (if test passed)');
+    console.log('\n[3/7] [DRY RUN] Would transition to In Review');
+    console.log(`\n[4/7] [DRY RUN] Would run: npx playwright test ${testFile}`);
+    console.log('\n[5/7] [DRY RUN] Would upload evidence screenshots');
+    console.log('\n[6/7] [DRY RUN] Would post comment with findings');
+    console.log('\n[7/7] [DRY RUN] Would transition to Approved (if test passed)');
     console.log('\n[AGENT] Dry run complete — no changes made.\n');
     return;
   }
 
   // 3. Transition → In Review
-  console.log(`\n[3/6] Transitioning to In Review...`);
+  console.log(`\n[3/7] Transitioning to In Review...`);
   try {
     await jira.transitionTicket(issueKey, TRANSITION_IN_REVIEW);
     console.log('      Done.');
@@ -224,55 +238,46 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. Run browser test
-  console.log(`\n[4/6] Running Playwright login test...`);
-  console.log(`      Opening ${targetUrl} in browser...`);
-  let testResult: BrowserTestResult;
+  // 4. Run Playwright test
+  console.log(`\n[4/7] Running Playwright test: ${testFile}`);
+  let testResult: TestRunResult;
   try {
-    testResult = await runLoginTest(targetUrl, username, password);
+    testResult = runPlaywrightTest(rawTestType, testFile);
   } catch (e) {
-    console.error(`[FAIL] Browser test threw unexpectedly: ${getErrorMessage(e)}`);
+    console.error(`[FAIL] Test runner threw unexpectedly: ${getErrorMessage(e)}`);
     process.exit(1);
   }
 
   const resultIcon = testResult.success ? '✅ PASS' : '❌ FAIL';
-  console.log(`      Result: ${resultIcon} (${(testResult.durationMs / 1000).toFixed(1)}s)`);
-  testResult.steps.forEach(s => {
-    const icon = s.status === 'pass' ? '✅' : s.status === 'fail' ? '❌' : '⏭️';
-    console.log(`        ${icon} ${s.step}${s.detail ? `: ${s.detail}` : ''}`);
-  });
-  if (testResult.error) {
-    console.log(`      Error: ${testResult.error}`);
-  }
-  if (testResult.screenshotPath) {
-    console.log(`      Screenshot: ${testResult.screenshotPath}`);
+  console.log(`      Result:  ${resultIcon} (${(testResult.durationMs / 1000).toFixed(1)}s)`);
+  console.log(`      Passed:  ${testResult.passed}`);
+  console.log(`      Failed:  ${testResult.failed}`);
+  if (testResult.skipped > 0) console.log(`      Skipped: ${testResult.skipped}`);
+  if (testResult.errors.length > 0) {
+    console.log(`      Errors:`);
+    testResult.errors.forEach(err => console.log(`        • ${err.substring(0, 120)}`));
   }
 
-  // 4b. Upload evidence screenshots as Jira attachments
-  const attachmentMeta: {
-    loggedIn?: { thumbnailUrl: string; filename: string };
-    loggedOut?: { thumbnailUrl: string; filename: string };
-  } = {};
-  if (testResult.screenshotLoggedIn || testResult.screenshotLoggedOut) {
-    console.log(`\n[4b] Uploading evidence screenshots...`);
-    for (const [key, filePath] of [
-      ['loggedIn', testResult.screenshotLoggedIn],
-      ['loggedOut', testResult.screenshotLoggedOut],
-    ] as const) {
-      if (!filePath) continue;
+  // 5. Upload evidence screenshots
+  const attachments: { thumbnailUrl: string; filename: string }[] = [];
+  if (testResult.screenshotPaths.length > 0) {
+    console.log(`\n[5/7] Uploading ${testResult.screenshotPaths.length} screenshot(s)...`);
+    for (const screenshotPath of testResult.screenshotPaths) {
       try {
-        const att = await jira.uploadAttachment(issueKey, filePath);
-        attachmentMeta[key] = { thumbnailUrl: att.contentUrl, filename: att.filename };
-        console.log(`      ${key}: ${att.filename} → ${att.thumbnailUrl}`);
+        const att = await jira.uploadAttachment(issueKey, screenshotPath);
+        attachments.push({ thumbnailUrl: att.contentUrl, filename: att.filename });
+        console.log(`      Uploaded: ${att.filename}`);
       } catch (e) {
-        console.warn(`      [WARN] Could not upload ${key} screenshot: ${getErrorMessage(e)}`);
+        console.warn(`      [WARN] Could not upload screenshot ${screenshotPath}: ${getErrorMessage(e)}`);
       }
     }
+  } else {
+    console.log(`\n[5/7] No screenshots to upload.`);
   }
 
-  // 5. Post comment with findings
-  console.log(`\n[5/6] Posting findings comment...`);
-  const commentAdf = buildCommentAdf(testResult, targetUrl, attachmentMeta);
+  // 6. Post comment with findings
+  console.log(`\n[6/7] Posting findings comment...`);
+  const commentAdf = buildCommentAdf(testResult, attachments);
   try {
     await jira.addCommentAdf(issueKey, commentAdf);
     console.log('      Done.');
@@ -282,9 +287,9 @@ async function main() {
     process.exit(1);
   }
 
-  // 6. Approve if test passed
+  // 7. Approve or leave in review
   if (testResult.success) {
-    console.log(`\n[6/6] Transitioning to Approved...`);
+    console.log(`\n[7/7] Transitioning to Approved...`);
     try {
       await jira.transitionTicket(issueKey, TRANSITION_APPROVED);
       console.log('      Done.');
@@ -295,7 +300,7 @@ async function main() {
     }
     console.log(`\n[AGENT] ${issueKey} → All steps complete. ✅\n`);
   } else {
-    console.log(`\n[6/6] Test FAILED — leaving ticket in "In Review" for manual review.`);
+    console.log(`\n[7/7] Test FAILED — leaving ticket in "In Review" for manual review.`);
     console.log(`\n[AGENT] ${issueKey} → Test failed. Ticket left in "In Review". ❌\n`);
     process.exit(1);
   }

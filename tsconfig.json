@@ -10,7 +10,9 @@
     "tests/**/*.ts",
     "helpers/**/*.ts",
     "src/**/*.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "global-setup.ts",
+    "global-teardown.ts"
   ],
   "exclude": [
     "node_modules"

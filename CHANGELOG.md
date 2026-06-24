@@ -24,19 +24,33 @@ Each release or change set uses this structure:
 
 ---
 
-## [Unreleased]
+## [Unreleased] - 2026-06-24
 
 ### Added
-- `src/agent.ts` — Jira QA Agent CLI (`npx ts-node src/agent.ts <TICKET-KEY> [--dry-run]`). Automates the full QA workflow: transition ticket to In Review, run Playwright login/logout test against qa.slingo.com, post a formatted ADF comment with screenshots, then transition to Approved (or leave in In Review on failure).
-- `src/jira-client.ts` — Axios-based Jira REST API v3 wrapper (getTicket, transitionTicket, addComment, addCommentAdf, uploadAttachment, getTransitions).
-- `src/browser-runner.ts` — Playwright login/logout test runner that captures two evidence screenshots (logged-out state before, logged-in state after).
-- `src/requirements-parser.ts` — Parses ticket description for URL, username, and password credentials.
-- `src/check-transitions.ts` — Diagnostic script to list all available workflow transitions for any given ticket key.
-- `.env.example` — Template for required environment variables (JIRA credentials, transition IDs, QA base URL).
-- `JIRAWorkflow.png` — Visual reference diagram of the SC project Jira workflow states and verified transition IDs.
-- `npm run agent` and `npm run check-transitions` scripts added to `package.json`.
-- `axios` and `dotenv` runtime dependencies; `ts-node` dev dependency added to `package.json`.
-- `src/**/*.ts` added to `tsconfig.json` include paths.
+
+**Jira QA Agent (`src/agent.ts`)**
+- CLI: `npx ts-node src/agent.ts <TICKET-KEY> [--dry-run]`
+- Full automated QA workflow: fetch ticket → detect test type → transition to In Review → run Playwright → upload screenshots → post ADF comment → transition to Approved (or leave in In Review on failure)
+
+**Agent source files**
+- `src/jira-client.ts` — Jira REST API v3 wrapper (fetch ticket, transition, comment, upload attachment)
+- `src/requirements-parser.ts` — Extracts `Test Type: <value>` keyword from ticket description
+- `src/test-runner.ts` — Maps 10 test types to Playwright spec files, runs tests, parses results
+- `src/ticket-interpreter.ts` — AI fallback (Claude Sonnet): reads free-form ticket text and identifies the test type when no keyword is present. Requires `ANTHROPIC_API_KEY` in `.env`
+- `src/check-transitions.ts` — Diagnostic script to list available Jira workflow transitions for a ticket
+- `src/browser-runner.ts` — Standalone login/logout runner with evidence screenshots
+
+**Config & dependencies**
+- `.env.example` updated with `ANTHROPIC_API_KEY` for the AI interpreter (optional)
+- `@anthropic-ai/sdk` added as a runtime dependency
+- `npm run agent` and `npm run check-transitions` scripts added to `package.json`
+
+### Changed
+
+**Test type detection in `src/agent.ts`**
+- Now tries keyword match first (`Test Type: login` in description) — fast, no API cost
+- Falls back to AI interpreter if no keyword is found — Claude Sonnet reads the ticket and picks the closest match
+- Error message updated to explain both options when neither method resolves a test type
 
 ## [1.0.0] - 2026-06-23
 
@@ -64,5 +78,5 @@ Each release or change set uses this structure:
 
 ---
 
-[Unreleased]: https://github.com/ed-pacson/kd-post-qa/compare/v1.0.0...HEAD
+[Unreleased - 2026-06-24]: https://github.com/ed-pacson/kd-post-qa/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/ed-pacson/kd-post-qa/releases/tag/v1.0.0

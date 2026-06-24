@@ -15,6 +15,7 @@
     "check-transitions": "ts-node src/check-transitions.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
     "axios": "^1.7.0",
     "dotenv": "^16.4.0"
   },
