@@ -55,6 +55,16 @@ export function parseRequirements(ticket: JiraTicket): ParsedRequirement {
   };
 }
 
+// ─── Test Type Extractor ──────────────────────────────────────────────────────
+// Reads the "Test Type: <value>" line from the ticket description.
+
+export function parseTestType(description: string): string | null {
+  const lines = description.split('\n').map(l => l.trim());
+  const line = lines.find(l => /^test\s*type\s*:/i.test(l));
+  if (!line) return null;
+  return line.replace(/^test\s*type\s*:\s*/i, '').trim().toLowerCase() || null;
+}
+
 // ─── Credential Extractor ─────────────────────────────────────────────────────
 // Pulls username, password, and target URL out of a plain-text ticket description.
 
