@@ -10,12 +10,19 @@
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report",
-    "report:excel": "node generate-report.js"
+    "report:excel": "node generate-report.js",
+    "agent": "ts-node src/agent.ts",
+    "check-transitions": "ts-node src/check-transitions.ts"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",
     "@types/node": "^25.9.1",
     "exceljs": "^4.4.0",
+    "ts-node": "^10.9.0",
     "typescript": "^5.4.5"
   },
   "overrides": {

@@ -26,6 +26,18 @@ Each release or change set uses this structure:
 
 ## [Unreleased]
 
+### Added
+- `src/agent.ts` — Jira QA Agent CLI (`npx ts-node src/agent.ts <TICKET-KEY> [--dry-run]`). Automates the full QA workflow: transition ticket to In Review, run Playwright login/logout test against qa.slingo.com, post a formatted ADF comment with screenshots, then transition to Approved (or leave in In Review on failure).
+- `src/jira-client.ts` — Axios-based Jira REST API v3 wrapper (getTicket, transitionTicket, addComment, addCommentAdf, uploadAttachment, getTransitions).
+- `src/browser-runner.ts` — Playwright login/logout test runner that captures two evidence screenshots (logged-out state before, logged-in state after).
+- `src/requirements-parser.ts` — Parses ticket description for URL, username, and password credentials.
+- `src/check-transitions.ts` — Diagnostic script to list all available workflow transitions for any given ticket key.
+- `.env.example` — Template for required environment variables (JIRA credentials, transition IDs, QA base URL).
+- `JIRAWorkflow.png` — Visual reference diagram of the SC project Jira workflow states and verified transition IDs.
+- `npm run agent` and `npm run check-transitions` scripts added to `package.json`.
+- `axios` and `dotenv` runtime dependencies; `ts-node` dev dependency added to `package.json`.
+- `src/**/*.ts` added to `tsconfig.json` include paths.
+
 ## [1.0.0] - 2026-06-23
 
 ### Added
