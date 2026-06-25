@@ -5,6 +5,12 @@ import { JiraClient } from './jira-client';
 const issueKey = process.argv[2];
 const transitionId = process.argv[3];
 
+if (!issueKey) {
+  console.error('Usage: npx ts-node src/check-transitions.ts <JIRA-TICKET-KEY> [transition-id]');
+  console.error('Example: npx ts-node src/check-transitions.ts SC-913');
+  process.exit(1);
+}
+
 (async () => {
   const jira = new JiraClient();
   if (transitionId) {

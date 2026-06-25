@@ -265,7 +265,7 @@ async function main() {
     for (const screenshotPath of testResult.screenshotPaths) {
       try {
         const att = await jira.uploadAttachment(issueKey, screenshotPath);
-        attachments.push({ thumbnailUrl: att.contentUrl, filename: att.filename });
+        attachments.push({ thumbnailUrl: att.thumbnailUrl, filename: att.filename });
         console.log(`      Uploaded: ${att.filename}`);
       } catch (e) {
         console.warn(`      [WARN] Could not upload screenshot ${screenshotPath}: ${getErrorMessage(e)}`);

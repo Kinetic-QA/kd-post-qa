@@ -157,7 +157,9 @@ async function generateExcelReport(rows: TestResult[], data: any): Promise<strin
   ws.views = [{ state: 'frozen', ySplit: headerRow, activeCell: `A${headerRow + 1}` }];
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
-  const outPath = path.join(__dirname, 'test-results', `test-report_${timestamp}.xlsx`);
+  const outDir = path.join(__dirname, 'test-results');
+  fs.mkdirSync(outDir, { recursive: true });
+  const outPath = path.join(outDir, `test-report_${timestamp}.xlsx`);
   await wb.xlsx.writeFile(outPath);
   return outPath;
 }
