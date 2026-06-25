@@ -10,14 +10,15 @@
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report",
-    "report:excel": "node generate-report.js",
+    "report:excel": "python generate-report.py",
     "agent": "ts-node src/agent.ts",
     "check-transitions": "ts-node src/check-transitions.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
     "axios": "^1.7.0",
-    "dotenv": "^16.4.0"
+    "dotenv": "^16.4.0",
+    "form-data": "^4.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",

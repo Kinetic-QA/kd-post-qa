@@ -6,6 +6,8 @@
  */
 
 import { chromium } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,9 @@ export async function runLoginTest(
   let screenshotPath: string | undefined;
   let screenshotLoggedIn: string | undefined;
   let screenshotLoggedOut: string | undefined;
+
+  const screenshotsDir = path.join(process.cwd(), 'test-results');
+  fs.mkdirSync(screenshotsDir, { recursive: true });
 
   const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext({
@@ -117,7 +122,7 @@ export async function runLoginTest(
         }
         if (!clicked) {
           steps.push(fail('Open login', 'Login button not found in header or fallbacks'));
-          screenshotPath = `playwright-results/login-not-found-${Date.now()}.png`;
+          screenshotPath = path.join(screenshotsDir, `login-not-found-${Date.now()}.png`);
           await page.screenshot({ path: screenshotPath });
           return finalize(false, steps, start, 'Login entry point not found', screenshotPath);
         }
@@ -164,7 +169,7 @@ export async function runLoginTest(
         }
         if (!filled) {
           steps.push(fail('Enter credentials', 'Could not find username field in login frame'));
-          screenshotPath = `playwright-results/no-email-field-${Date.now()}.png`;
+          screenshotPath = path.join(screenshotsDir, `no-email-field-${Date.now()}.png`);
           await page.screenshot({ path: screenshotPath });
           return finalize(false, steps, start, 'Username field not found', screenshotPath);
         }
@@ -191,7 +196,7 @@ export async function runLoginTest(
         }
         if (!emailFilled) {
           steps.push(fail('Enter credentials', 'Could not find username/email field'));
-          screenshotPath = `playwright-results/no-email-field-${Date.now()}.png`;
+          screenshotPath = path.join(screenshotsDir, `no-email-field-${Date.now()}.png`);
           await page.screenshot({ path: screenshotPath });
           return finalize(false, steps, start, 'Username field not found', screenshotPath);
         }
@@ -229,7 +234,7 @@ export async function runLoginTest(
           const text = await el.textContent();
           if (text && /invalid|incorrect|wrong|failed|error/i.test(text)) {
             steps.push(fail('Verify login', `Login error: ${text.trim()}`));
-            screenshotPath = `playwright-results/login-error-${Date.now()}.png`;
+            screenshotPath = path.join(screenshotsDir, `login-error-${Date.now()}.png`);
             await page.screenshot({ path: screenshotPath });
             return finalize(false, steps, start, text.trim(), screenshotPath);
           }
@@ -270,13 +275,13 @@ export async function runLoginTest(
       }
 
       if (!loggedIn) {
-        screenshotPath = `playwright-results/login-unclear-${Date.now()}.png`;
+        screenshotPath = path.join(screenshotsDir, `login-unclear-${Date.now()}.png`);
         await page.screenshot({ path: screenshotPath });
         steps.push(fail('Verify login', 'Could not confirm successful login'));
         return finalize(false, steps, start, 'Login result unclear', screenshotPath);
       }
 
-      screenshotLoggedIn = `playwright-results/evidence-logged-in-${Date.now()}.png`;
+      screenshotLoggedIn = path.join(screenshotsDir, `evidence-logged-in-${Date.now()}.png`);
       await page.screenshot({ path: screenshotLoggedIn, fullPage: false });
       steps.push(pass('Verify login', `Successfully logged in (detected: ${loggedInDetail})`));
     } catch (e: any) {
@@ -329,7 +334,7 @@ export async function runLoginTest(
       // Confirm logged-out state: "Log in" button should now be visible
       await page.waitForSelector('button:has-text("Log in")', { timeout: 10_000 }).catch(() => {});
       await page.waitForTimeout(2_000); // let hero banner and assets settle
-      screenshotLoggedOut = `playwright-results/evidence-logged-out-${Date.now()}.png`;
+      screenshotLoggedOut = path.join(screenshotsDir, `evidence-logged-out-${Date.now()}.png`);
       await page.screenshot({ path: screenshotLoggedOut, fullPage: false });
       steps.push(pass('Log out', 'Successfully logged out'));
     } catch (e: any) {
