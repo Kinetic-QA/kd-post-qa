@@ -25,6 +25,11 @@ export const TEST_MAP: Record<string, string> = {
   'game category navigation': 'tests/p2/game-category-navigation.spec.ts',
   'game info modal':          'tests/p2/game-info-modal.spec.ts',
   'contact us':               'tests/p2/contact-us-page.spec.ts',
+  // Tracking tag checkers
+  'google analytics':         'tests/p1/tracking/google-analytics.spec.ts',
+  'meta pixel':               'tests/p1/tracking/meta-pixel.spec.ts',
+  'tiktok pixel':             'tests/p1/tracking/not-implemented.spec.ts',
+  'google tag manager':       'tests/p1/tracking/not-implemented.spec.ts',
 };
 
 export const SUPPORTED_TEST_TYPES = Object.keys(TEST_MAP);

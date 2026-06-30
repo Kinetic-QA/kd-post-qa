@@ -26,6 +26,32 @@ Each release or change set uses this structure:
 
 ## [Unreleased] - 2026-06-30
 
+### Added
+
+- **Meta Pixel tag checker** — New automated check (`tests/p1/tracking/meta-pixel.spec.ts`) that crawls every page on the QA site and verifies the Facebook Pixel script is present, `fbq()` is initialised, and the correct Pixel ID is the one that was fired. On any failure it attaches a screenshot of the broken page to the Jira comment.
+
+- **Full Jira workflow transition map** — All 17 transition IDs for the SC/SNG workflow are now documented and loaded into both `.env` and `.env.example`. Previously only 3 were wired up; the rest (QA Rejected, Reopened, Production QA, Post Release QA, Released, Done no QA, Rejected, and all globals) were missing.
+
+- **Tracking test types added to agent header** — `google analytics`, `meta pixel`, `tiktok pixel`, and `google tag manager` are now listed in the agent's supported test types comment.
+
+### Changed
+
+- **Failed QA checks now move ticket to QA Rejected** — Previously when a Playwright test failed, the ticket was left silently in "In Review". It now transitions to QA Rejected (which moves it to Reopened status) so the developer knows it needs attention.
+
+- **AI interpreter now returns structured output** — The ticket interpreter previously returned just a test type string. It now returns `testType`, `checkItems` (bullet points for the Jira comment scope section), `params` (brand, GEO, tag ID), and `confidence`. Low-confidence matches are flagged in the console.
+
+- **Jira comment scope bullets now match the ticket** — The "Scope Checked" section in the QA comment used to show a generic label. It now lists the actual check items extracted from the ticket by the AI interpreter.
+
+- **Agent reads brand + GEO to resolve the correct QA URL** — When the interpreter extracts a brand and GEO from the ticket (e.g. `[SNG AB]`), the agent looks up the matching QA environment from `helpers/brand-urls.ts` and runs the test against that URL instead of the default.
+
+- **`.env.example` fully updated** — All 17 transition IDs are now documented with comments explaining which state each one moves a ticket from and to.
+
+### Fixed
+
+- **TypeScript error in ticket interpreter** — `Object.fromEntries` on `parsed.params` was inferred as `{ [k: string]: unknown }` which conflicted with `Record<string, string>`. Fixed with an explicit type predicate on the filter callback.
+
+- **`meta pixel` test type now routes to real spec** — Previously `meta pixel` tickets pointed to `not-implemented.spec.ts` and would always fail with a "not implemented" error. They now run the new Meta Pixel spec.
+
 ### Security
 
 - **Patched `form-data` CRLF injection vulnerability** — `form-data` was pinned to 4.0.5 which contained a high-severity CRLF injection flaw (GHSA-hmw2-7cc7-3qxx) allowing malicious multipart field names or filenames to inject arbitrary headers. Bumped to 4.0.6 via `npm audit fix`. No code changes required.
