@@ -14,7 +14,7 @@
  *   6. Upload evidence screenshots as Jira attachments
  *   7. Post comment with findings
  *   8. If pass → Transition → "Approved"
- *      If fail → leave in "In Review" and report failure
+ *      If fail → Transition → "QA Rejected" (moves ticket to Reopened)
  *
  * Test type detection (two modes):
  *   Option A — Keyword (no API key needed):
@@ -26,7 +26,8 @@
  * Supported test types:
  *   login, registration, search, blog search, feedback form,
  *   sidebar navigation, footer navigation, game category navigation,
- *   game info modal, contact us
+ *   game info modal, contact us,
+ *   google analytics, meta pixel, tiktok pixel, google tag manager
  */
 
 import * as dotenv from 'dotenv';
@@ -36,9 +37,36 @@ import { JiraClient } from './jira-client';
 import { parseTestType } from './requirements-parser';
 import { interpretTicket } from './ticket-interpreter';
 import { resolveTestFile, runPlaywrightTest, SUPPORTED_TEST_TYPES, TestRunResult } from './test-runner';
+import { getQAUrl } from '../helpers/brand-urls';
 
-const TRANSITION_IN_REVIEW = process.env.JIRA_TRANSITION_IN_REVIEW ?? '71';
-const TRANSITION_APPROVED  = process.env.JIRA_TRANSITION_APPROVED  ?? '101';
+// ── Linear flow ──────────────────────────────────────────────────────────────
+const TRANSITION_START_PROGRESS  = process.env.JIRA_TRANSITION_START_PROGRESS  ?? '31';
+const TRANSITION_DEV_DONE        = process.env.JIRA_TRANSITION_DEV_DONE        ?? '41';
+const TRANSITION_READY_FOR_QA    = process.env.JIRA_TRANSITION_READY_FOR_QA    ?? '51';
+const TRANSITION_IN_REVIEW       = process.env.JIRA_TRANSITION_IN_REVIEW       ?? '71';
+const TRANSITION_APPROVED        = process.env.JIRA_TRANSITION_APPROVED        ?? '101';
+const TRANSITION_RELEASED        = process.env.JIRA_TRANSITION_RELEASED        ?? '111';
+
+// ── QA rejection path ────────────────────────────────────────────────────────
+const TRANSITION_QA_REJECTED       = process.env.JIRA_TRANSITION_QA_REJECTED       ?? '81';
+const TRANSITION_BACK_TO_IN_PROGRESS = process.env.JIRA_TRANSITION_BACK_TO_IN_PROGRESS ?? '91';
+const TRANSITION_QA_REJECTED_BY_DEV = process.env.JIRA_TRANSITION_QA_REJECTED_BY_DEV ?? '161';
+
+// ── Post-release path ─────────────────────────────────────────────────────────
+const TRANSITION_POST_RELEASE_QA    = process.env.JIRA_TRANSITION_POST_RELEASE_QA    ?? '181';
+const TRANSITION_POST_RELEASE_CLOSED = process.env.JIRA_TRANSITION_POST_RELEASE_CLOSED ?? '191';
+
+// ── Production QA / skip QA paths ────────────────────────────────────────────
+const TRANSITION_PRODUCTION_QA  = process.env.JIRA_TRANSITION_PRODUCTION_QA  ?? '61';
+const TRANSITION_DONE_NO_QA     = process.env.JIRA_TRANSITION_DONE_NO_QA     ?? '131';
+
+// ── Other states ──────────────────────────────────────────────────────────────
+const TRANSITION_REJECTED       = process.env.JIRA_TRANSITION_REJECTED       ?? '151';
+
+// ── Global ────────────────────────────────────────────────────────────────────
+const TRANSITION_ON_HOLD        = process.env.JIRA_TRANSITION_ON_HOLD        ?? '11';
+const TRANSITION_CANCELLED      = process.env.JIRA_TRANSITION_CANCELLED      ?? '21';
+const TRANSITION_TO_DO          = process.env.JIRA_TRANSITION_TO_DO          ?? '141';
 
 function getErrorMessage(e: unknown): string {
   if (e && typeof e === 'object' && 'response' in e) {
@@ -89,10 +117,12 @@ function adfImage(thumbnailUrl: string) {
 function buildCommentAdf(
   result: TestRunResult,
   attachments: { thumbnailUrl: string; filename: string }[],
+  checkItems: string[],
 ): object {
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const duration = (result.durationMs / 1000).toFixed(1);
   const testLabel = result.testType.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const scopeItems = checkItems.length > 0 ? checkItems : [`${testLabel} Flow`];
 
   const nodes: object[] = [];
 
@@ -100,7 +130,7 @@ function buildCommentAdf(
     nodes.push(
       adfPara(adfBold(`Pre-Checked (${today})`)),
       adfPara(adfBold('Scope Checked:')),
-      adfBulletList(`${testLabel} Flow`),
+      adfBulletList(...scopeItems),
       adfPara(adfBold('Platform and GEOs checked:')),
       adfBulletList('Desktop', 'N/A (Automated QA)'),
       adfPara(adfBold('Overall Result: ✅ PASS')),
@@ -120,6 +150,8 @@ function buildCommentAdf(
       adfPara(adfBold('Affected GEOs and Platform:')),
       adfBulletList('Desktop', 'N/A (Automated QA)'),
       adfPara(adfBold('Overall Result: ❌ FAIL')),
+      adfPara(adfBold('Scope Checked:')),
+      adfBulletList(...scopeItems),
       adfPara(adfBold('Issue Summary:')),
       adfPara(adfText(
         `${testLabel} test failed during automated pre-check. `
@@ -190,17 +222,31 @@ async function main() {
 
   // 2. Parse Test Type from description — keyword first, AI fallback second
   console.log(`\n[2/7] Parsing ticket description for Test Type...`);
-  let rawTestType = parseTestType(ticket.description);
+  let testType: string | null = parseTestType(ticket.description);
+  let checkItems: string[] = [];
+  let testParams: Record<string, string> = {};
 
-  if (!rawTestType) {
+  if (!testType) {
     console.log('      No "Test Type:" keyword found. Trying AI interpreter...');
-    rawTestType = await interpretTicket(ticket.summary, ticket.description);
-    if (rawTestType) {
-      console.log(`      AI matched: "${rawTestType}"`);
+    const interpreted = await interpretTicket(ticket.summary, ticket.description);
+    if (interpreted) {
+      testType = interpreted.testType;
+      checkItems = interpreted.checkItems;
+      testParams = interpreted.params;
+      const flag = interpreted.confidence === 'low' ? ' (low confidence — please verify)' : '';
+      console.log(`      AI matched: "${testType}"${flag}`);
+      if (checkItems.length > 0) {
+        console.log(`      Check items:`);
+        checkItems.forEach(item => console.log(`        • ${item}`));
+      }
+      if (Object.keys(testParams).length > 0) {
+        console.log(`      Extracted params:`);
+        Object.entries(testParams).forEach(([k, v]) => console.log(`        ${k} = ${v}`));
+      }
     }
   }
 
-  if (!rawTestType) {
+  if (!testType) {
     console.error(`[FAIL] Could not determine test type from ticket.`);
     console.error(`       Option A — add a line to the ticket description:  Test Type: login`);
     console.error(`       Option B — set ANTHROPIC_API_KEY in .env for AI interpretation`);
@@ -208,19 +254,28 @@ async function main() {
     process.exit(1);
   }
 
-  const testFile = resolveTestFile(rawTestType);
+  const testFile = resolveTestFile(testType);
   if (!testFile) {
-    console.error(`[FAIL] Unknown test type: "${rawTestType}"`);
+    console.error(`[FAIL] Unknown test type: "${testType}"`);
     console.error(`       Supported types: ${SUPPORTED_TEST_TYPES.join(', ')}`);
     process.exit(1);
   }
 
-  console.log(`      Test Type: ${rawTestType}`);
+  console.log(`      Test Type: ${testType}`);
   console.log(`      Test File: ${testFile}`);
 
   if (dryRun) {
     console.log('\n[3/7] [DRY RUN] Would transition to In Review');
     console.log(`\n[4/7] [DRY RUN] Would run: npx playwright test ${testFile}`);
+    if (testParams.BRAND && testParams.GEO) {
+      const qaUrl = getQAUrl(testParams.BRAND, testParams.GEO);
+      if (qaUrl) {
+        console.log(`        Pre-check target: ${qaUrl}`);
+        console.log(`          Brand: ${testParams.BRAND} | GEO: ${testParams.GEO}`);
+      } else {
+        console.log(`        [WARN] No QA URL found for brand "${testParams.BRAND}" GEO "${testParams.GEO}"`);
+      }
+    }
     console.log('\n[5/7] [DRY RUN] Would upload evidence screenshots');
     console.log('\n[6/7] [DRY RUN] Would post comment with findings');
     console.log('\n[7/7] [DRY RUN] Would transition to Approved (if test passed)');
@@ -238,11 +293,29 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. Run Playwright test
+  // 4. Resolve QA URL from brand+GEO, inject params, then run Playwright test
+  if (testParams.BRAND && testParams.GEO) {
+    const qaUrl = getQAUrl(testParams.BRAND, testParams.GEO);
+    if (qaUrl) {
+      testParams.QA_BASE_URL = qaUrl;
+      console.log(`\n      Pre-check target: ${qaUrl}`);
+      console.log(`        Brand: ${testParams.BRAND} | GEO: ${testParams.GEO}`);
+    } else {
+      console.error(`[FAIL] No QA URL found for brand "${testParams.BRAND}" GEO "${testParams.GEO}".`);
+      console.error(`       Add this entry to helpers/brand-urls.ts and retry.`);
+      process.exit(1);
+    }
+  }
+
+  // Inject all params into process.env so the spec can read them at runtime
+  for (const [key, value] of Object.entries(testParams)) {
+    process.env[`QA_${key}`] = value;
+  }
+
   console.log(`\n[4/7] Running Playwright test: ${testFile}`);
   let testResult: TestRunResult;
   try {
-    testResult = runPlaywrightTest(rawTestType, testFile);
+    testResult = runPlaywrightTest(testType, testFile);
   } catch (e) {
     console.error(`[FAIL] Test runner threw unexpectedly: ${getErrorMessage(e)}`);
     process.exit(1);
@@ -277,7 +350,7 @@ async function main() {
 
   // 6. Post comment with findings
   console.log(`\n[6/7] Posting findings comment...`);
-  const commentAdf = buildCommentAdf(testResult, attachments);
+  const commentAdf = buildCommentAdf(testResult, attachments, checkItems);
   try {
     await jira.addCommentAdf(issueKey, commentAdf);
     console.log('      Done.');
@@ -300,8 +373,16 @@ async function main() {
     }
     console.log(`\n[AGENT] ${issueKey} → All steps complete. ✅\n`);
   } else {
-    console.log(`\n[7/7] Test FAILED — leaving ticket in "In Review" for manual review.`);
-    console.log(`\n[AGENT] ${issueKey} → Test failed. Ticket left in "In Review". ❌\n`);
+    console.log(`\n[7/7] Test FAILED — transitioning to QA Rejected...`);
+    try {
+      await jira.transitionTicket(issueKey, TRANSITION_QA_REJECTED);
+      console.log('      Done.');
+    } catch (e) {
+      console.error(`[FAIL] Transition to QA Rejected failed: ${getErrorMessage(e)}`);
+      console.error(`       Ticket is in "In Review" with comment posted, but was NOT rejected.`);
+      process.exit(1);
+    }
+    console.log(`\n[AGENT] ${issueKey} → Test failed. Ticket moved to QA Rejected. ❌\n`);
     process.exit(1);
   }
 }
