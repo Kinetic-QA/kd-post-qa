@@ -24,6 +24,14 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-06-30
+
+### Security
+
+- **Patched `form-data` CRLF injection vulnerability** — `form-data` was pinned to 4.0.5 which contained a high-severity CRLF injection flaw (GHSA-hmw2-7cc7-3qxx) allowing malicious multipart field names or filenames to inject arbitrary headers. Bumped to 4.0.6 via `npm audit fix`. No code changes required.
+
+---
+
 ## [Unreleased] - 2026-06-25
 
 ### Fixed
