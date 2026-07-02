@@ -5,6 +5,9 @@ import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher }
 
 /**
  * GCN: Game Category - Navigation
+ * Scope: Verifies every main category and sub-category navigation link
+ * (Slingo, Slots + sub-tabs, Bingo, Casino + sub-tabs) redirects to its
+ * expected URL.
  *
  * Single test, multiple steps, soft assertions.
  *
@@ -28,7 +31,7 @@ import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher }
  *   Step 11: Casino > Other → /casino/other/
  */
 
-test.describe('P2 - Game Category Navigation', () => {
+test.describe('P1 - Game Category Navigation', () => {
 
   test.setTimeout(180_000);
 

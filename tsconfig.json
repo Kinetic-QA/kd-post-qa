@@ -11,8 +11,7 @@
     "helpers/**/*.ts",
     "src/**/*.ts",
     "playwright.config.ts",
-    "global-setup.ts",
-    "global-teardown.ts"
+    "global-setup.ts"
   ],
   "exclude": [
     "node_modules"

@@ -3,6 +3,8 @@ import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher }
 
 /**
  * CU: Contact Us Page
+ * Scope: LOGIN link presence, geo-specific support email (mailto href),
+ * Report a Problem → Feedback Form handoff, and closing each opened modal.
  *
  * Entry: Hamburger menu -> Contact Us link (same pattern as sidebar-navigation)
  * Confirmed via live DOM inspection on /contact/:
@@ -19,7 +21,7 @@ const HAMBURGER = '[class*="hamburger"]';
 const SIDEBAR   = '[class*="MainMenu_main-menu"]';
 const GEO_EMAIL = 'contact@slingo.com'; // UK geo
 
-test.describe('P2 - Contact Us Page', () => {
+test.describe('P3 - Contact Us Page', () => {
 
   test.setTimeout(120_000);
 
@@ -150,7 +152,7 @@ test.describe('P2 - Contact Us Page', () => {
       await expect(page).toHaveURL(/#account\/feedback/, { timeout: 8_000 });
       console.log('CU-01 feedback form URL: ' + page.url());
       // Verify the feedback form iframe loads
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe').first();
+      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
       const emailInput = feedbackFrame.getByPlaceholder('name@example.com').first();
       await expect(emailInput).toBeVisible({ timeout: 15_000 });
     });

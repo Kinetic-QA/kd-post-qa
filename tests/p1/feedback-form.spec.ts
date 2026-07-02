@@ -3,6 +3,9 @@ import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher }
 
 /**
  * FF-01: Feedback Form - Full Flow
+ * Scope: Report a Problem → Feedback Form flow triggered from a failed
+ * login attempt, through email entry, category selection, and message
+ * text, stopping short of actual submission.
  * Form is inside nested iframes: #frmFeedbackParent > iframe
  * NOTE: SUBMIT is intentionally not clicked to avoid sending real feedback.
  */
@@ -92,14 +95,14 @@ test.describe('P1 - Feedback Form', () => {
       const reportLink = page.getByText('Report a problem', { exact: true }).first();
       await reportLink.click();
       await page.waitForTimeout(3_000);
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe').first();
+      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
       const emailInput = feedbackFrame.getByPlaceholder('name@example.com').first();
       await expect(emailInput).toBeVisible({ timeout: 15_000 });
     });
 
     // ── Step 4: Fill email → click NEXT ──────────────────────────────────
     await runStep('Email entered → NEXT proceeds to Step 2', async () => {
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe').first();
+      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
       const emailInput = feedbackFrame.getByPlaceholder('name@example.com').first();
       await emailInput.fill('test_feedback@mailinator.com');
       const nextBtn = feedbackFrame.getByRole('button', { name: 'NEXT' }).first();
@@ -110,7 +113,7 @@ test.describe('P1 - Feedback Form', () => {
 
     // ── Step 5: Select "Other" → click NEXT ──────────────────────────────
     await runStep('"Other" selected → NEXT proceeds to Step 3', async () => {
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe').first();
+      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
       const otherOption = feedbackFrame.getByText('Other', { exact: true }).first();
       await expect(otherOption).toBeVisible({ timeout: 10_000 });
       await otherOption.click();
@@ -123,7 +126,7 @@ test.describe('P1 - Feedback Form', () => {
 
     // ── Step 6: Fill textarea → SUBMIT visible and enabled ───────────────
     await runStep('Textarea typeable → SUBMIT enabled', async () => {
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe').first();
+      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
       const textarea = feedbackFrame.getByPlaceholder('Type your answer here').first();
       await expect(textarea).toBeVisible({ timeout: 10_000 });
       await textarea.fill('test');

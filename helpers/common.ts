@@ -1,9 +1,7 @@
 import { Page, expect } from '@playwright/test';
 
-export async function dismissCookieConsent(page: Page): Promise<void> {
-  await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
-  await page.waitForTimeout(300);
-  const clicked = await page.evaluate(() => {
+async function tryClickCookieConsent(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
     const allButtons = Array.from(document.querySelectorAll('button')) as HTMLButtonElement[];
     const consentEl = document.querySelector('son-cookie-consent');
     if (consentEl) {
@@ -17,7 +15,24 @@ export async function dismissCookieConsent(page: Page): Promise<void> {
     if (target) { target.scrollIntoView({ behavior: 'instant', block: 'nearest' }); target.click(); return true; }
     return false;
   }).catch(() => false);
-  if (clicked) await page.waitForTimeout(700);
+}
+
+export async function dismissCookieConsent(page: Page): Promise<void> {
+  await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+  await page.waitForTimeout(300);
+  // Poll rather than a single check-and-click attempt: under a long
+  // sequential suite run, the <son-cookie-consent> custom element's script
+  // sometimes loads a beat later than usual, so a one-shot attempt can find
+  // nothing and leave the banner to appear afterwards, silently intercepting
+  // every later click for the rest of that test.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const clicked = await tryClickCookieConsent(page);
+    if (clicked) {
+      await page.waitForTimeout(700);
+      return;
+    }
+    await page.waitForTimeout(500);
+  }
 }
 
 export async function dismissCampaignPopup(page: Page): Promise<void> {

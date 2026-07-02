@@ -1,6 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { dismissPopups, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
 
+/**
+ * LW-01: Login
+ * Scope: Happy-path login only — opens the header login widget, submits
+ * valid credentials, and confirms redirect to an authenticated session with
+ * a visible Logout button. Negative/validation paths and secondary controls
+ * (Forgot Password, Show Password, Close) are covered in
+ * p2/login-widget.spec.ts.
+ */
+
 const TEST_USERNAME = 'kn@test.com';
 const TEST_PASSWORD = '5Tandard1';
 

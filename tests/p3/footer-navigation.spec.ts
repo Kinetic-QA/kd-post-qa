@@ -3,6 +3,8 @@ import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher }
 
 /**
  * FN: Footer Navigation
+ * Scope: Footer visibility, plus every footer navigation link (category,
+ * policy, support, and content links) redirects to its expected URL.
  *
  * CONFIRMED via live DOM inspection on slingo.com:
  * - Footer container: [class*="Footer_footer-mid"]
@@ -16,7 +18,7 @@ import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher }
 
 const FOOTER = '[class*="Footer_footer-mid"]';
 
-test.describe('P2 - Footer Navigation', () => {
+test.describe('P3 - Footer Navigation', () => {
 
   test.setTimeout(180_000);
 
