@@ -24,6 +24,14 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-02 (2)
+
+### Fixed
+
+- **Two tracking tests were silently broken** — `google-analytics.spec.ts` and `meta-pixel.spec.ts` were left pointing at the wrong file path and referencing a misspelled setting name (`QA_QA_BASE_URL` instead of `QA_BASE_URL`) after being moved into a new folder in an earlier update. Both tests would fail to even start. Fixed the path and the typo so they run normally again.
+
+---
+
 ## [Unreleased] - 2026-07-02
 
 ### Added

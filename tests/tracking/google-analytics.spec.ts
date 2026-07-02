@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { discoverPages } from '../../../helpers/tracking';
+import { discoverPages } from '../../helpers/tracking';
 
 const tagId = process.env.QA_TAG_ID;
-const qaBaseUrl = process.env.QA_QA_BASE_URL;
+const qaBaseUrl = process.env.QA_BASE_URL;
 
 if (!tagId || !qaBaseUrl) {
   throw new Error(
-    'Missing required env vars: QA_TAG_ID and QA_QA_BASE_URL must be set.\n' +
+    'Missing required env vars: QA_TAG_ID and QA_BASE_URL must be set.\n' +
     'These are injected automatically by the agent — do not set them manually.'
   );
 }
