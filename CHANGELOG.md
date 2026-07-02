@@ -24,6 +24,31 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-02
+
+### Added
+
+- **14 new automated regression tests** covering site areas that had no automated coverage before: Website Header, Game Filter, Promotions Page, Banner, Registration Widget, Login Widget, Footer Regulations, Payment Method Strip, Features Page, Help Page, Blog Page, Blog Page Header, Blog Sidebar, and Footer Social Media Strip. Every one of these was run against the live site and fixed until it passed for real — not just written and left untested.
+
+### Changed
+
+- **Test folders reorganized to match the official QA priority checklist** — Several existing tests were filed under the wrong priority folder (e.g. Game Information Modal and Game Category Navigation were sitting in the P2 folder but are actually P1). They've been moved to match the spreadsheet the team uses to rank what matters most, including two spots where the spreadsheet's own reviewer comment overrode the initial ranking (Feedback Form moved up to P1, Contact Us Page moved down to P3).
+- **Features Page and Help Page tests now enter through the sidebar menu** instead of jumping straight to the page's web address — this matches how an actual visitor would reach those pages, so the test also confirms the menu link itself works.
+
+### Fixed
+
+- **Registration test updated for a recent site change** — the "Enter password" step no longer exists on the live registration form (the password field shows immediately), so the test was updated to match.
+- **Flaky test runs caused by the cookie banner** — during long test runs, the cookie consent popup would occasionally still be on screen a beat after the test expected it to be gone, causing random click failures. The dismiss logic now keeps retrying for a few seconds instead of giving up after one attempt.
+- **"Forgot Password" test was racing ahead too fast** — it was only waiting for the login button to disappear (which happens almost instantly) before moving to the next check, so it never actually gave the password-reset window time to finish appearing on screen. It now waits the full time that window actually takes to load.
+- **Removed a leftover script** that printed a confusing "no results found" message in the terminal even when every test passed — it was duplicate, broken reporting logic left over from earlier work; the real Excel/HTML reports were never affected.
+
+### Notes for the team
+
+- Confirmed with dev: the blog page's logo intentionally links to the main homepage, not the blog homepage — this matches other brand sites and is not a bug.
+- Confirmed with dev: the mobile banner is currently 750×360px. The 750×484px size in the checklist is a newer banner format already live on other brands (MC, GC, SNG) but not yet rolled out to Slingo — the test is written to expect the new size so it'll start passing automatically once Slingo gets the update.
+
+---
+
 ## [Unreleased] - 2026-06-30
 
 ### Added

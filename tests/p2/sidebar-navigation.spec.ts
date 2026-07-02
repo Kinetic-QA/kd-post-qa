@@ -3,6 +3,9 @@ import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher }
 
 /**
  * SN: Sidebar Navigation
+ * Scope: Full sidebar menu flow — hamburger open/close, Login/Join CTA
+ * handoff, and every sidebar navigation link (Promotions, Features, Home,
+ * category links, Responsible Gaming, Help, Contact, About, Blog).
  *
  * CONFIRMED via live DOM inspection:
  * - Hamburger: <a class="withMainMenu_hamburger__4zgpj hamburger"> (clicking toggles sidebar)

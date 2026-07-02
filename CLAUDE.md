@@ -5,6 +5,20 @@ When the user says **"That's it for today"**, execute the full end-of-session pu
 1. Update CHANGELOG.md (see rules below)
 2. Create a new branch — never push to `main` directly
 3. Stage, commit, and push
+4. After the push succeeds, create a Slack-ready update doc (see rules below)
+
+---
+
+## Slack Update Doc Rules
+
+After every end-of-session push, create a new file at `docs/updates/YYYY-MM-DD-update.md` (today's date) summarizing the session for a non-technical Slack audience.
+
+**How to write it:**
+- Same plain layman's-terms voice as CHANGELOG.md — no dev jargon, write for teammates who don't code
+- Format it ready to paste directly into Slack (short paragraphs/bullets, no raw markdown tables, sparing use of bold for emphasis)
+- Cover: what changed today, why it matters, and anything the team should know or watch for (e.g. a pending finding, a decision made, next steps)
+- Keep it tight — a few short bullets beat a wall of text
+- If multiple sessions happen on the same date, append to that day's existing file rather than overwriting it
 
 ---
 

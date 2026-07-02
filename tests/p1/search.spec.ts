@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
 
+/**
+ * GS-01: Game - Search
+ * Scope: Full search flow — open search panel, type a query, open a game
+ * info modal from results, close it, hover a tile to reveal the Play It
+ * CTA, route to registration, close the registration modal, and re-open
+ * search / navigate Back.
+ */
+
 test.describe('P1 - Search', () => {
 
   test.setTimeout(120_000);

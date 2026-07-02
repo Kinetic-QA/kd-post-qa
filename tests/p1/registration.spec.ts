@@ -2,6 +2,15 @@ import { test, expect, Page, FrameLocator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
 import { generateRegistrationData, generateUKMobile, RegistrationData } from '../../helpers/testData';
 
+/**
+ * REG-01: Registration
+ * Scope: Full new-player registration journey — Join → mobile/DOB →
+ * personal details → address → username/password/consent checkboxes,
+ * ending on an enabled "GO PLAY" button. Secondary widget controls (Close,
+ * Members Login handoff, Report a Problem) are covered in
+ * p2/registration-widget.spec.ts.
+ */
+
 type Scope = Page | FrameLocator;
 const MAX_MOBILE_RETRIES = 10;
 
@@ -280,11 +289,14 @@ async function fillStep3(page: Page, scope: Scope, data: RegistrationData): Prom
   await usernameInput.press('Tab');
   await page.waitForTimeout(300);
 
-  // Click "Enter password" tab (plain text element, no role)
+  // "Enter password" tab is no longer shown as a separate step on live site —
+  // the password field renders directly under "Create a password". Click the
+  // tab only if the site reintroduces it.
   const enterPasswordTab = scope.getByText('Enter password', { exact: true }).first();
-  await expect(enterPasswordTab).toBeVisible({ timeout: 5_000 });
-  await enterPasswordTab.click();
-  await page.waitForTimeout(300);
+  if (await enterPasswordTab.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await enterPasswordTab.click();
+    await page.waitForTimeout(300);
+  }
 
   // Password
   const passwordInput = scope.getByPlaceholder('Minimum 10 characters').first();

@@ -3,11 +3,13 @@ import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher }
 
 /**
  * BS-01: Blog Search Flow
+ * Scope: Sidebar entry to the blog, opening blog search, typing a query,
+ * and confirming search results (or a no-results state) render.
  * CRITICAL: Never click the campaign popup close button (it opens login).
  * Always use Escape key via dismissCampaignPopup.
  */
 
-test.describe('P1 - Blog Search', () => {
+test.describe('P3 - Blog Search', () => {
 
   test.setTimeout(90_000);
 

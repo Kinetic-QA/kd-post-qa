@@ -3,6 +3,9 @@ import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher }
 
 /**
  * GIM-01: Game Information Modal
+ * Scope: Full game info modal flow — open from a tile click, Play It →
+ * registration handoff, opening the game in a new tab, geo currency display
+ * inside the modal, closing/reopening, and hover-triggered Play It routing.
  * CURRENCY: UK='£'  EU='€'  CA='$'
  * Steps 6-7: window.open() used as equivalent of "Open link in new tab"
  */
@@ -10,7 +13,7 @@ import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher }
 const EXPECTED_CURRENCY = '£'; // pound sign - change for other geos
 const GAME_TITLE = 'Slingo Super Spin';
 
-test.describe('P2 - Game Information Modal', () => {
+test.describe('P1 - Game Information Modal', () => {
 
   test.setTimeout(120_000);
 

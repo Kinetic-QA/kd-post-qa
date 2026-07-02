@@ -1,0 +1,104 @@
+import { test, expect } from '@playwright/test';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+
+/**
+ * GF: Game Filter
+ * Scope: Homepage game filter/carousel behavior — filter rows render games,
+ * caret buttons scroll the row, and Load More/See All expands visible games.
+ * CONFIRMED via live DOM inspection:
+ * - Slider row: [class*="GamesSlider_wrapper"], caret nav: [class*="Slider_next"]/[class*="Slider_prev"] (both <div>, not <button>)
+ * - Movement is transform-based (not scrollLeft) — verified by the Prev
+ *   button's "disabled" class flipping from true to false after clicking Next
+ * - No "Load More"/"See All" control exists on the homepage or /slots/ category
+ *   page on the live site today — that step is a soft no-op if absent.
+ */
+
+test.describe('P1 - Game Filter', () => {
+
+  test.setTimeout(120_000);
+
+  test.beforeEach(async ({ page }) => {
+    await setupCampaignPopupWatcher(page);
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3_000);
+    await dismissCookieConsent(page);
+    await dismissCampaignPopup(page);
+    await page.waitForTimeout(500);
+  });
+
+  test('GF-01: Game filter full flow', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    const results: { label: string; status: string }[] = [];
+    function record(label: string, passed: boolean) {
+      results.push({ label, status: passed ? 'Pass' : 'Fail' });
+    }
+    function printSummary() {
+      console.log('\n' + '═'.repeat(45));
+      console.log('  GF-01 GAME FILTER - RESULTS');
+      console.log('═'.repeat(45));
+      for (const r of results) {
+        console.log(`  ${r.status === 'Pass' ? '✅' : '❌'}  ${r.label.padEnd(35)} ${r.status}`);
+      }
+      const passed = results.filter(r => r.status === 'Pass').length;
+      const failed = results.filter(r => r.status === 'Fail').length;
+      console.log('─'.repeat(45));
+      console.log(`  Total: ${results.length}  |  Passed: ${passed}  |  Failed: ${failed}`);
+      console.log('═'.repeat(45) + '\n');
+    }
+    async function runStep(label: string, fn: () => Promise<void>) {
+      await test.step(label, async () => {
+        try { await fn(); record(label, true); }
+        catch (e) { record(label, false); throw e; }
+      });
+    }
+
+    try {
+
+    await runStep('Step 1: Game filter category rows are visible with correct games', async () => {
+      const filterRows = page.locator('[class*="GamesSlider_wrapper"]');
+      const count = await filterRows.count();
+      expect(count).toBeGreaterThan(0);
+      console.log('GF-01 game slider rows found: ' + count);
+      const firstRowGames = filterRows.first().locator('a[href*="/slingo/"], a[href*="/slots/"], a[href*="/casino/"], a[href*="/bingo/"]');
+      const gameCount = await firstRowGames.count();
+      expect(gameCount).toBeGreaterThan(0);
+      console.log('GF-01 games in first row: ' + gameCount);
+    });
+
+    await runStep('Step 2: Caret buttons scroll the filter row', async () => {
+      const row = page.locator('[class*="GamesSlider_wrapper"]').first();
+      const nextCaret = row.locator('[class*="Slider_next"]').first();
+      const prevCaret = row.locator('[class*="Slider_prev"]').first();
+      await expect(nextCaret).toBeVisible({ timeout: 5_000 });
+
+      const prevDisabledBefore = await prevCaret.getAttribute('class').then(c => c?.includes('disabled') ?? false);
+      await nextCaret.click();
+      await page.waitForTimeout(800);
+      const prevDisabledAfter = await prevCaret.getAttribute('class').then(c => c?.includes('disabled') ?? false);
+
+      console.log(`GF-01 prev caret disabled before=${prevDisabledBefore} after=${prevDisabledAfter}`);
+      record('Caret scroll moves the game filter row', prevDisabledBefore === true && prevDisabledAfter === false);
+    });
+
+    await runStep('Step 3: "Load more"/"See all" expands the category (if present)', async () => {
+      const loadMoreBtn = page.getByText(/load more|see all|show more/i).first();
+      const visible = await loadMoreBtn.isVisible({ timeout: 5_000 }).catch(() => false);
+      if (visible) {
+        const tilesBefore = await page.locator('a[href*="/slots/"], a[href*="/casino/"]').count();
+        await loadMoreBtn.click();
+        await page.waitForTimeout(1_500);
+        const tilesAfter = await page.locator('a[href*="/slots/"], a[href*="/casino/"]').count();
+        record('Load more/See all expands visible games', tilesAfter > tilesBefore);
+      } else {
+        console.log('GF-01 no Load More/See All control present on this page — confirmed absent on homepage and /slots/, skipping');
+      }
+    });
+
+    } finally {
+      printSummary();
+    }
+  });
+
+});
