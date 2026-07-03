@@ -24,6 +24,29 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-03
+
+### Added
+
+- **New helper tool that connects to the CMS (Strapi) for all 9 brands** — Genting Casino, ICE36, Lord Ping, Mega Casino, Prime Casino, Prime Slots, Slingo, Spin Genie, and Zingo Bingo. This lets the QA agent look inside each brand's CMS to check things like promotions and game pages, using credentials that are stored securely on each person's own machine and never shared or exposed.
+
+- **The QA agent now automatically checks the CMS when a ticket needs it** — If a Jira ticket mentions "CMS" or "Strapi" in its title or description, the agent now connects to the right brand's CMS on its own and reports what it finds, right alongside the usual test results in the Jira comment. No one needs to remember to run anything manually.
+
+- **The agent will ask before guessing which brand a ticket belongs to** — If a CMS-related ticket comes from a project the agent hasn't seen before, it stops and asks a person to confirm which brand it is, instead of assuming. Once confirmed, it remembers the answer so it never has to ask again for that project.
+
+- **New diagnostic tools for checking CMS access** — Small command-line tools were added to confirm CMS login credentials are set up correctly and working for any brand, and to list out everything available inside a brand's CMS (useful for scoping future QA work).
+
+### Changed
+
+- **CMS-only tickets are now left for manual review, not auto-approved or rejected** — If a ticket is purely about CMS content and doesn't match any existing automated test, the agent reports its CMS findings but deliberately does not move the ticket forward on its own, since there isn't yet an agreed definition of "pass" for CMS-only checks. A person still needs to review and move those tickets manually.
+
+### Notes for the team
+
+- This is a first step: the CMS agent can currently see what's in the CMS (e.g. confirm a promotion or game entry exists) but does not yet judge whether the content itself is correct or matches what was asked for. What counts as a "pass" for a CMS check is still to be decided.
+- Used the new tool today to check ticket GSP-2 (Genting Safe Play CMS templates) — confirmed none of the 25 planned templates have been built in the CMS yet, which matches the ticket's "To Do" status.
+
+---
+
 ## [Unreleased] - 2026-07-02 (2)
 
 ### Fixed

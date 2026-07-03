@@ -38,6 +38,7 @@ import { parseTestType } from './requirements-parser';
 import { interpretTicket } from './ticket-interpreter';
 import { resolveTestFile, runPlaywrightTest, SUPPORTED_TEST_TYPES, TestRunResult } from './test-runner';
 import { getQAUrl } from '../helpers/brand-urls';
+import { needsCmsCheck, runCmsAgent, CmsCheckResult } from './cms-agent';
 
 // ── Linear flow ──────────────────────────────────────────────────────────────
 const TRANSITION_START_PROGRESS  = process.env.JIRA_TRANSITION_START_PROGRESS  ?? '31';
@@ -118,6 +119,7 @@ function buildCommentAdf(
   result: TestRunResult,
   attachments: { thumbnailUrl: string; filename: string }[],
   checkItems: string[],
+  cmsResult: CmsCheckResult | null,
 ): object {
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const duration = (result.durationMs / 1000).toFixed(1);
@@ -168,6 +170,14 @@ function buildCommentAdf(
     for (const att of attachments) {
       nodes.push(adfPara(adfText(att.filename)));
       nodes.push(adfImage(att.thumbnailUrl));
+    }
+  }
+
+  if (cmsResult && cmsResult.ranCheck) {
+    nodes.push(adfPara(adfBold(`CMS Check (${cmsResult.brand}):`)));
+    nodes.push(adfPara(adfText(cmsResult.summary)));
+    if (cmsResult.details.length > 0) {
+      nodes.push(adfBulletList(...cmsResult.details));
     }
   }
 
@@ -246,7 +256,29 @@ async function main() {
     }
   }
 
+  // CMS check — runs independently of test type resolution, since some
+  // CMS-related tickets (e.g. "CMS insert templates") have no Playwright
+  // test type at all.
+  let cmsResult: CmsCheckResult | null = null;
+  if (needsCmsCheck(ticket.summary, ticket.description)) {
+    console.log(`\n[CMS] Ticket references CMS/Strapi — calling CMS agent...`);
+    try {
+      cmsResult = await runCmsAgent(ticket);
+      console.log(`      ${cmsResult.summary}`);
+      cmsResult.details.forEach(d => console.log(`        • ${d}`));
+    } catch (e) {
+      console.warn(`      [WARN] CMS agent failed: ${getErrorMessage(e)}`);
+    }
+  }
+
   if (!testType) {
+    if (cmsResult) {
+      console.log(`\n[AGENT] No automated Playwright test type for this ticket, but it is CMS-related.`);
+      console.log(`         CMS findings are logged above. Automated pass/fail judgment for CMS`);
+      console.log(`         content isn't defined yet, so this ticket needs manual QA review —`);
+      console.log(`         left in "Ready for QA", no transition or comment was made.\n`);
+      return;
+    }
     console.error(`[FAIL] Could not determine test type from ticket.`);
     console.error(`       Option A — add a line to the ticket description:  Test Type: login`);
     console.error(`       Option B — set ANTHROPIC_API_KEY in .env for AI interpretation`);
@@ -350,7 +382,7 @@ async function main() {
 
   // 6. Post comment with findings
   console.log(`\n[6/7] Posting findings comment...`);
-  const commentAdf = buildCommentAdf(testResult, attachments, checkItems);
+  const commentAdf = buildCommentAdf(testResult, attachments, checkItems, cmsResult);
   try {
     await jira.addCommentAdf(issueKey, commentAdf);
     console.log('      Done.');
