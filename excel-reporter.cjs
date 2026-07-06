@@ -1,37 +1,91 @@
 const fs = require('fs');
 const path = require('path');
 
+function stripAnsi(str) {
+  return (str || '').replace(/\x1B\[[0-9;]*m/g, '');
+}
+
+/**
+ * Translates a raw Playwright assertion/timeout error into a one-line,
+ * non-technical explanation. Falls back to a cleaned/shortened version of
+ * the raw message when no known pattern matches, so nothing is ever blank.
+ */
+function humanizeError(rawMessage) {
+  const msg = stripAnsi(rawMessage).replace(/\s+/g, ' ').trim();
+  if (!msg) return '';
+
+  if (/toBeVisible/.test(msg) && /element\(s\) not found/.test(msg)) {
+    return "Couldn't find this on the page at all — it may not exist for this market, or the page changed.";
+  }
+  if (/toBeVisible/.test(msg) && /Received:\s*hidden/.test(msg)) {
+    return "Found it on the page, but it was hidden — likely covered by a pop-up/banner, or not shown for this market.";
+  }
+  if (/toBeVisible/.test(msg)) {
+    return "Waited for something to appear on the page, but it never showed up in time.";
+  }
+  if (/locator\.click:.*Timeout/.test(msg)) {
+    return "Tried to click something that never appeared on the page in time.";
+  }
+  if (/toHaveURL/.test(msg)) {
+    return "The page didn't go to the expected address in time.";
+  }
+  if (/Expected:\s*true.*Received:\s*false/.test(msg)) {
+    return "A check on the page came back failed (expected it to pass, but it didn't).";
+  }
+  if (/Expected:\s*false.*Received:\s*true/.test(msg)) {
+    return "A check on the page came back true when it shouldn't have.";
+  }
+  if (/Timeout of \d+ms exceeded/.test(msg) || /Test timeout of \d+ms exceeded/.test(msg)) {
+    return "The test ran out of time — the page may have been slow to load, or something got stuck.";
+  }
+  if (/net::ERR|ERR_CONNECTION|ERR_NAME_NOT_RESOLVED/.test(msg)) {
+    return "Couldn't reach the website — a connection/network error occurred.";
+  }
+
+  // No known pattern — fall back to a shortened, cleaned version of the raw message.
+  const firstSentence = msg.split(/(?<=[.!?])\s/)[0] || msg;
+  return firstSentence.length > 180 ? firstSentence.substring(0, 180) + '…' : firstSentence;
+}
+
 class ExcelReporter {
   constructor() {
-    this._results = [];
+    // Keyed by geo+titlePath so retries overwrite the same entry rather than
+    // adding duplicate rows — onTestEnd fires once per attempt when
+    // playwright.config.ts's retries > 0, and only the final attempt's
+    // outcome should count toward the report.
+    this._resultsByKey = new Map();
     this._startTime = null;
   }
 
   onBegin(config, suite) {
     this._startTime = new Date().toISOString();
-    this._results = [];
+    this._resultsByKey = new Map();
     console.log('\n[Excel Reporter] Started — will generate report on completion.');
   }
 
   onTestEnd(test, result) {
     const titlePath = test.titlePath();
+    const geo = test.parent?.project()?.name || 'default';
     const file = titlePath[1] || '';
     const testName = titlePath[titlePath.length - 1] || '';
     const errors = result.errors || [];
-    const errorMsg = errors.length > 0
-      ? (errors[0].message || '').replace(/\n/g, ' ').substring(0, 300)
-      : '';
-    this._results.push({
+    const rawError = errors.length > 0 ? stripAnsi(errors[0].message || '').replace(/\n/g, ' ').substring(0, 400) : '';
+    const errorMsg = rawError ? humanizeError(rawError) : '';
+    const key = geo + '::' + titlePath.join('>');
+    this._resultsByKey.set(key, {
+      geo,
       file,
       test: testName,
       status: result.status,
       duration_s: Math.round(result.duration / 100) / 10,
       error: errorMsg,
+      errorRaw: rawError,
+      retried: result.retry > 0,
     });
   }
 
   async onEnd(result) {
-    const rows = this._results;
+    const rows = [...this._resultsByKey.values()];
     if (rows.length === 0) {
       console.log('\n[Excel Reporter] No results to write.');
       return;
@@ -45,14 +99,43 @@ class ExcelReporter {
       return;
     }
 
+    const wb = new ExcelJS.Workbook();
+    const geos = [...new Set(rows.map(r => r.geo))];
+    for (const geo of geos) {
+      const sheetName = geo.substring(0, 31);
+      const ws = wb.addWorksheet(sheetName);
+      this._writeSheet(ws, rows.filter(r => r.geo === geo));
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 23);
+
+    const uniqueSuites = [...new Set(rows.map(r => r.file).filter(Boolean))];
+    const baseName = uniqueSuites.length === 1
+      ? uniqueSuites[0]
+          .replace(/^(p[12]|sample)\s*[-–]\s*/i, '')  // strip "P1 - ", "P2 - ", "Sample - "
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, '-')
+          .replace(/[^a-z0-9-]/g, '')
+      : 'all-tests';
+
+    const outDir = path.join(__dirname, 'test-results');
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+    const outPath = path.join(outDir, `${baseName}_${timestamp}.xlsx`);
+    await wb.xlsx.writeFile(outPath);
+    console.log(`\n[Excel Reporter] Report saved: ${outPath}\n`);
+  }
+
+  _writeSheet(ws, rows) {
     const total = rows.length;
     const passed = rows.filter(r => r.status === 'passed').length;
     const failed = rows.filter(r => ['failed', 'timedOut'].includes(r.status)).length;
     const skipped = rows.filter(r => r.status === 'skipped').length;
     const passRate = total > 0 ? `${Math.round(passed / total * 1000) / 10}%` : '0%';
-
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Test Results');
+    const totalDurationS = rows.reduce((sum, r) => sum + (r.duration_s || 0), 0);
+    const minutes = Math.floor(totalDurationS / 60);
+    const seconds = Math.round(totalDurationS % 60);
+    const totalDurationLabel = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 
     const summary = [
       ['Run Date', new Date(this._startTime).toLocaleString()],
@@ -61,6 +144,7 @@ class ExcelReporter {
       ['Failed', failed],
       ['Skipped', skipped],
       ['Pass Rate', passRate],
+      ['Total Duration', totalDurationLabel],
     ];
 
     summary.forEach(([label, value], i) => {
@@ -77,7 +161,7 @@ class ExcelReporter {
     });
 
     const headerRow = summary.length + 2;
-    const headers = ['Test File', 'Test Name', 'Status', 'Duration (s)', 'Error Message'];
+    const headers = ['Test File', 'Test Name', 'Status', 'Duration (s)', 'What Went Wrong', 'Technical Details'];
     const hr = ws.getRow(headerRow);
     headers.forEach((h, i) => {
       const cell = hr.getCell(i + 1);
@@ -97,7 +181,10 @@ class ExcelReporter {
       const rowNum = headerRow + 1 + idx;
       const dr = ws.getRow(rowNum);
       const shade = idx % 2 === 0 ? 'FFF2F2F2' : 'FFFFFFFF';
-      const vals = [r.file, r.test, statusLabels[r.status] || r.status.toUpperCase(), r.duration_s, r.error];
+      const testLabel = r.retried
+        ? `${r.test} (${r.status === 'passed' ? 'passed after retry' : 'failed even after retry'})`
+        : r.test;
+      const vals = [r.file, testLabel, statusLabels[r.status] || r.status.toUpperCase(), r.duration_s, r.error, r.errorRaw];
       const border = { top: { style: 'thin', color: { argb: 'FFD0D0D0' } }, bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } }, left: { style: 'thin', color: { argb: 'FFD0D0D0' } }, right: { style: 'thin', color: { argb: 'FFD0D0D0' } } };
       vals.forEach((val, ci) => {
         const cell = dr.getCell(ci + 1);
@@ -110,32 +197,14 @@ class ExcelReporter {
         } else {
           cell.font = { name: 'Arial', size: 10 };
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: shade } };
-          cell.alignment = { vertical: 'middle', wrapText: ci === 4 };
+          cell.alignment = { vertical: 'middle', wrapText: ci === 4 || ci === 5 };
         }
       });
       dr.commit();
     });
 
-    ws.columns = [{ width: 35 }, { width: 45 }, { width: 14 }, { width: 14 }, { width: 60 }];
+    ws.columns = [{ width: 35 }, { width: 45 }, { width: 14 }, { width: 14 }, { width: 50 }, { width: 55 }];
     ws.views = [{ state: 'frozen', ySplit: headerRow, activeCell: `A${headerRow + 1}` }];
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 23);
-
-    const uniqueSuites = [...new Set(rows.map(r => r.file).filter(Boolean))];
-    const baseName = uniqueSuites.length === 1
-      ? uniqueSuites[0]
-          .replace(/^(p[12]|sample)\s*[-–]\s*/i, '')  // strip "P1 - ", "P2 - ", "Sample - "
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, '-')
-          .replace(/[^a-z0-9-]/g, '')
-      : 'all-tests';
-
-    const outDir = path.join(__dirname, 'test-results');
-    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-    const outPath = path.join(outDir, `${baseName}_${timestamp}.xlsx`);
-    await wb.xlsx.writeFile(outPath);
-    console.log(`\n[Excel Reporter] Report saved: ${outPath}\n`);
   }
 }
 

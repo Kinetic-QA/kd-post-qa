@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * RW: Registration Widget (secondary controls)
@@ -14,7 +15,7 @@ test.describe('P2 - Registration Widget', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -49,11 +50,11 @@ test.describe('P2 - Registration Widget', () => {
       });
     }
 
+    const strings = currentLocaleStrings();
+
     async function openRegistrationWidget() {
       await dismissCampaignPopup(page);
-      const joinBtn = page.locator(
-        'a:has-text("Join"), button:has-text("Join"), a:has-text("JOIN"), button:has-text("JOIN")'
-      ).first();
+      const joinBtn = page.getByRole('banner').getByRole('button', { name: strings.joinButton }).first();
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
       await joinBtn.click();
       await expect(page).toHaveURL(/#account/, { timeout: 15_000 });
@@ -64,20 +65,20 @@ test.describe('P2 - Registration Widget', () => {
 
     await runStep('Step 1: "Members Login" link opens the login form', async () => {
       await openRegistrationWidget();
-      const membersLoginLink = page.getByText(/members login/i).first();
+      const membersLoginLink = page.getByText(strings.membersLoginText).first();
       await expect(membersLoginLink).toBeVisible({ timeout: 10_000 });
       await membersLoginLink.click();
       await page.waitForTimeout(1_500);
-      const usernameInput = page.getByLabel(/username or email/i).first();
+      const usernameInput = page.getByLabel(strings.usernameOrEmailLabel).first();
       await expect(usernameInput).toBeVisible({ timeout: 10_000 });
     });
 
     await runStep('Step 2: "Report a Problem" link opens the Feedback Form', async () => {
-      await page.goto('/');
+      await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await openRegistrationWidget();
-      const reportLink = page.getByText('Report a problem', { exact: true }).first();
+      const reportLink = page.getByText(strings.reportProblemText, { exact: true }).first();
       await expect(reportLink).toBeVisible({ timeout: 10_000 });
       await reportLink.click();
       await page.waitForTimeout(2_000);
@@ -87,7 +88,7 @@ test.describe('P2 - Registration Widget', () => {
     });
 
     await runStep('Step 3: Close button dismisses the registration window', async () => {
-      await page.goto('/');
+      await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);

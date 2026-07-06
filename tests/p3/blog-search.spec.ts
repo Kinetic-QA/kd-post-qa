@@ -1,10 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * BS-01: Blog Search Flow
  * Scope: Sidebar entry to the blog, opening blog search, typing a query,
  * and confirming search results (or a no-results state) render.
+ * Blog only exists for some GEOs (see helpers/geo-features.ts) — this
+ * suite skips cleanly where it doesn't.
  * CRITICAL: Never click the campaign popup close button (it opens login).
  * Always use Escape key via dismissCampaignPopup.
  */
@@ -13,9 +16,13 @@ test.describe('P3 - Blog Search', () => {
 
   test.setTimeout(90_000);
 
+  let geoFeatures: ReturnType<typeof currentGeoFeatures>;
+
   test.beforeEach(async ({ page }) => {
+    geoFeatures = currentGeoFeatures();
+    test.skip(!geoFeatures.hasBlog, `Blog does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded'); // faster than networkidle for initial load
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -97,7 +104,7 @@ test.describe('P3 - Blog Search', () => {
         break;
       }
       if (!clicked) {
-        await page.goto('/blog/');
+        await page.goto(geoFeatures.blogPath!);
       }
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_500); // wait for campaign popup to appear on blog page

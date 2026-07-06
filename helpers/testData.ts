@@ -33,6 +33,18 @@ export interface RegistrationData {
   password: string;     // Always 5Tandard@1
 }
 
+export interface EsRegistrationData {
+  nie: string;           // Format-valid synthetic NIE (see generateNie)
+  firstName: string;
+  lastName: string;
+  dob: string;            // DD-MM-YYYY (placeholder shows "Día-Mes-Año")
+  gender: 'Masculino' | 'Femenino' | 'Otro';
+  email: string;
+  mobile: string;         // 9 digits starting 6/7 (form already shows +34 prefix)
+  username: string;
+  password: string;      // Always 5Tandard@1 (min 10 chars required by the form)
+}
+
 // ── Source pools ─────────────────────────────────────────────────────────────
 
 const FIRST_NAMES = [
@@ -43,6 +55,16 @@ const FIRST_NAMES = [
 const LAST_NAMES = [
   'Smith', 'Jones', 'Williams', 'Taylor', 'Brown',
   'Davies', 'Evans', 'Wilson',  'Thomas', 'Roberts',
+];
+
+const ES_FIRST_NAMES = [
+  'Alejandro', 'Javier', 'Manuel', 'Pablo', 'Daniel',
+  'Lucía', 'Marta', 'Sara', 'Elena', 'Carmen',
+];
+
+const ES_LAST_NAMES = [
+  'García', 'Martínez', 'López', 'Sánchez', 'González',
+  'Pérez', 'Fernández', 'Ruiz', 'Díaz', 'Moreno',
 ];
 
 /**
@@ -101,6 +123,17 @@ function randomFrom<T>(arr: T[]): T {
  * Valid UK mobile ranges begin with 07[4-9], so after stripping the
  * leading 0 we get 7[4-9]XXXXXXXX (10 digits total).
  */
+/**
+ * Generates a random valid Spanish mobile number. The form already shows
+ * "+34" as the country code prefix, so we supply the 9-digit national
+ * number — Spanish mobiles start with 6 or 7.
+ */
+export function generateSpanishMobile(): string {
+  const firstDigit = randomFrom([6, 7]);
+  const rest = Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
+  return `${firstDigit}${rest}`;
+}
+
 export function generateUKMobile(): string {
   const secondDigit = randomFrom([4, 5, 7, 8, 9]);
   const rest = Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
@@ -108,10 +141,10 @@ export function generateUKMobile(): string {
 }
 
 /**
- * Generates a random date of birth for a person aged 25–50.
- * Always returns DD/MM/YYYY format as expected by the Slingo form.
+ * Generates a random date of birth for a person aged 25–50, joined with the
+ * given separator (UK's form wants DD/MM/YYYY, ES's wants DD-MM-YYYY).
  */
-function generateDOB(): string {
+function generateDOBWithSeparator(separator: string): string {
   const currentYear = new Date().getFullYear();
   const year  = currentYear - 25 - Math.floor(Math.random() * 26); // 25–50 years old
   const month = 1 + Math.floor(Math.random() * 12);
@@ -121,7 +154,53 @@ function generateDOB(): string {
     String(day).padStart(2, '0'),
     String(month).padStart(2, '0'),
     String(year),
-  ].join('/');
+  ].join(separator);
+}
+
+function generateDOB(): string {
+  return generateDOBWithSeparator('/');
+}
+
+/**
+ * Generates a synthetic but FORMAT-VALID Spanish NIE (foreigner ID number)
+ * using the real public checksum algorithm — X/Y/Z prefix maps to 0/1/2,
+ * the resulting 8-digit number mod 23 indexes this 23-letter control-letter
+ * table. Sequential digits (a fresh timestamp-derived number each call) keep
+ * it effectively unique per run without needing a lookup table of real IDs.
+ * This is not a real person's document — QA use only.
+ */
+export function generateNie(): string {
+  const table = 'TRWAGMYFPDXBNJZSQVHLCKE';
+  const prefixLetter = randomFrom(['X', 'Y', 'Z']);
+  const prefixDigit = { X: 0, Y: 1, Z: 2 }[prefixLetter];
+  // Last 7 digits of the current timestamp, kept unique enough per run.
+  const digits = String(Date.now()).slice(-7);
+  const full = parseInt(`${prefixDigit}${digits}`, 10);
+  const control = table[full % 23];
+  return `${prefixLetter}${digits}${control}`;
+}
+
+/**
+ * Generates registration data for ES's DNI/NIE-based flow — see
+ * tests/p1/registration.spec.ts for why this is a differently-shaped
+ * 3-step flow from UK's (DNI/NIE identity step instead of mobile/DOB, named
+ * "Paso X de 3" steps), even though it still ends up asking for broadly the
+ * same personal/contact/account fields overall.
+ */
+export function generateEsRegistrationData(): EsRegistrationData {
+  const timestamp = Date.now();
+  const firstName = randomFrom(ES_FIRST_NAMES);
+  return {
+    nie: generateNie(),
+    firstName,
+    lastName: randomFrom(ES_LAST_NAMES),
+    dob: generateDOBWithSeparator('-'),
+    gender: randomFrom(['Masculino', 'Femenino', 'Otro'] as const),
+    email: `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
+    mobile: generateSpanishMobile(),
+    username: `TestES_${timestamp}`,
+    password: '5Tandard@1',
+  };
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────

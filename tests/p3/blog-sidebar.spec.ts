@@ -1,11 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * BI: Blog Sidebar
  * Scope: Blog sidebar menu — navigation links route correctly, the menu
  * closes via the hamburger/X toggle, and CTAs open the login/registration
  * widget.
+ * Blog only exists for some GEOs (see helpers/geo-features.ts) — this
+ * suite skips cleanly where it doesn't.
  * Reuses the same open/click/verify pattern as p2/sidebar-navigation.spec.ts
  * but scoped to blog-specific paths. NOT YET VERIFIED against live DOM —
  * blog sidebar may reuse the same SIDEBAR/HAMBURGER classes as the main
@@ -19,9 +23,13 @@ test.describe('P3 - Blog Sidebar', () => {
 
   test.setTimeout(90_000);
 
+  let geoFeatures: ReturnType<typeof currentGeoFeatures>;
+
   test.beforeEach(async ({ page }) => {
+    geoFeatures = currentGeoFeatures();
+    test.skip(!geoFeatures.hasBlog, `Blog does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('/blog/');
+    await page.goto(geoFeatures.blogPath!);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -65,19 +73,30 @@ test.describe('P3 - Blog Sidebar', () => {
       await page.waitForTimeout(800);
     }
 
+    const strings = currentLocaleStrings();
+
     try {
 
     await runStep('Step 1: Links in the blog sidebar lead to expected destination pages', async () => {
       await openSidebar();
-      const bingoLink = page.locator(SIDEBAR + ' a[href*="/blog/bingo/"]').first();
-      await expect(bingoLink).toBeVisible({ timeout: 10_000 });
-      await bingoLink.click();
+      // Category names aren't stable across GEOs — see blog-page.spec.ts's
+      // Step 1 comment (ES has no "Bingo" category at all).
+      const categoryHrefs = await page.locator(`${SIDEBAR} a[href*="/${geoFeatures.blogPath}"]`)
+        .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
+      const categoryHref = [...new Set(categoryHrefs)].find(h => {
+        const path = h.split(geoFeatures.blogPath!)[1] ?? '';
+        return path && !path.startsWith('search') && /^[a-z0-9-]+\/?$/.test(path);
+      });
+      if (!categoryHref) throw new Error('BI-01: no blog category link found in the sidebar');
+      const categoryLink = page.locator(`${SIDEBAR} a[href="${categoryHref}"]`).first();
+      await expect(categoryLink).toBeVisible({ timeout: 10_000 });
+      await categoryLink.click();
       await page.waitForLoadState('domcontentloaded');
-      await expect(page).toHaveURL(/\/blog\/bingo\//, { timeout: 10_000 });
+      await expect(page).toHaveURL(new RegExp(categoryHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), { timeout: 10_000 });
     });
 
     await runStep('Step 2: "X" icon closes the sidebar menu', async () => {
-      await page.goto('/blog/');
+      await page.goto(geoFeatures.blogPath!);
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -94,7 +113,7 @@ test.describe('P3 - Blog Sidebar', () => {
 
     await runStep('Step 3: CTAs in blog sidebar open the login/registration widget', async () => {
       await openSidebar();
-      const loginBtn = page.locator(SIDEBAR + ' button, ' + SIDEBAR + ' a').filter({ hasText: /log in/i }).first();
+      const loginBtn = page.locator(SIDEBAR + ' button, ' + SIDEBAR + ' a').filter({ hasText: strings.loginButton }).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
       await page.waitForTimeout(1_500);

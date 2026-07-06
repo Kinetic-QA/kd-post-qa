@@ -19,6 +19,9 @@ playwright-report/
 .claude/
 memory/
 
+### Local-only Slack update drafts — not part of repo history ###
+docs/updates/
+
 ### OS files ###
 .DS_Store
 Thumbs.db

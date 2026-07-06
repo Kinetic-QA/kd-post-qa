@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * GS-01: Game - Search
@@ -15,7 +16,7 @@ test.describe('P1 - Search', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -59,6 +60,8 @@ test.describe('P1 - Search', () => {
       });
     }
 
+    const strings = currentLocaleStrings();
+
     try {
 
     // ── Step 1: Click Search button in header ────────────────────────────
@@ -72,14 +75,14 @@ test.describe('P1 - Search', () => {
 
     // ── Step 2: Click the search bar ────────────────────────────────────
     await runStep('Step 2: Search bar is clickable', async () => {
-      const searchInput = page.locator('input[placeholder="Search game"]').first();
+      const searchInput = page.getByPlaceholder(strings.searchPlaceholder).first();
       await expect(searchInput).toBeVisible({ timeout: 5_000 });
       await searchInput.click();
     });
 
     // ── Step 3: Type "Casino" ────────────────────────────────────────────
     await runStep('Step 3: Type "Casino" → results appear', async () => {
-      const searchInput = page.locator('input[placeholder="Search game"]').first();
+      const searchInput = page.getByPlaceholder(strings.searchPlaceholder).first();
       await searchInput.press('Control+a');
       await searchInput.fill('Casino');
       await page.waitForTimeout(2_500);
@@ -158,22 +161,22 @@ test.describe('P1 - Search', () => {
       }
       await page.waitForTimeout(1_500); // let animation fully play
 
-      const playItBtn = page.locator(
-        'a:has-text("PLAY IT"), button:has-text("PLAY IT"), ' +
-        'a:has-text("Play it"), button:has-text("Play it"), ' +
-        'a:has-text("PLAY NOW"), button:has-text("PLAY NOW")'
-      ).filter({ visible: true }).first();
+      // Scoped to the search popup — an unscoped page-wide search for this
+      // CTA text can match unrelated content-block buttons elsewhere on the
+      // page (confirmed live: a promo tile also says "A JUGAR" on ES).
+      const searchPopup = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
+      const playItBtn = searchPopup.locator('a, button').filter({ hasText: strings.playCta }).filter({ visible: true }).first();
       await expect(playItBtn).toBeVisible({ timeout: 5_000 });
     });
 
     // ── Step 7: Click PLAY IT → registration modal opens ────────────────
     await runStep('Step 7: Click Play It → registration modal opens', async () => {
-      const playItBtn = page.locator(
-        'a:has-text("PLAY IT"), button:has-text("PLAY IT"), ' +
-        'a:has-text("Play it"), button:has-text("Play it"), ' +
-        'a:has-text("PLAY NOW"), button:has-text("PLAY NOW")'
-      ).filter({ visible: true }).first();
-      await playItBtn.click();
+      // Scoped to the search popup — an unscoped page-wide search for this
+      // CTA text can match unrelated content-block buttons elsewhere on the
+      // page (confirmed live: a promo tile also says "A JUGAR" on ES).
+      const searchPopup = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
+      const playItBtn = searchPopup.locator('a, button').filter({ hasText: strings.playCta }).filter({ visible: true }).first();
+      await playItBtn.click({ force: true });
       await page.waitForTimeout(3_000);
     });
 
@@ -219,7 +222,7 @@ test.describe('P1 - Search', () => {
 
     // ── Step 11: Click Back ──────────────────────────────────────────────
     await runStep('Step 11: Click Back → returns to homepage', async () => {
-      const backBtn = page.getByText('Back', { exact: true }).first();
+      const backBtn = page.getByText(strings.backButtonText, { exact: true }).first();
       await expect(backBtn).toBeVisible({ timeout: 5_000 });
       await backBtn.click();
       await page.waitForTimeout(2_000);

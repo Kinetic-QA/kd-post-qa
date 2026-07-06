@@ -300,6 +300,11 @@ async function main() {
       testParams.QA_BASE_URL = qaUrl;
       console.log(`\n      Pre-check target: ${qaUrl}`);
       console.log(`        Brand: ${testParams.BRAND} | GEO: ${testParams.GEO}`);
+      // playwright.config.ts reads these to resolve baseURL for the spawned
+      // test run — pre-checks always target QA, never production.
+      process.env.TEST_BRAND = testParams.BRAND;
+      process.env.TEST_GEO = testParams.GEO;
+      process.env.TEST_ENV = 'qa';
     } else {
       console.error(`[FAIL] No QA URL found for brand "${testParams.BRAND}" GEO "${testParams.GEO}".`);
       console.error(`       Add this entry to helpers/brand-urls.ts and retry.`);

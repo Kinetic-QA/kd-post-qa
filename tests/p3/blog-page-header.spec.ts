@@ -1,10 +1,14 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * BH: Blog Page Header
  * Scope: Blog-specific header — Login/Join CTAs, search icon routing,
  * brand logo → blog homepage, and hamburger menu open.
+ * Blog only exists for some GEOs (see helpers/geo-features.ts) — this
+ * suite skips cleanly where it doesn't.
  * Blog uses a different header pattern from the main site. Live fetch of
  * /blog/ confirmed "Log in"/"Join" buttons and a search icon are present.
  * NOT YET VERIFIED against live DOM for exact selectors.
@@ -14,9 +18,13 @@ test.describe('P3 - Blog Page Header', () => {
 
   test.setTimeout(90_000);
 
+  let geoFeatures: ReturnType<typeof currentGeoFeatures>;
+
   test.beforeEach(async ({ page }) => {
+    geoFeatures = currentGeoFeatures();
+    test.skip(!geoFeatures.hasBlog, `Blog does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('/blog/');
+    await page.goto(geoFeatures.blogPath!);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -63,10 +71,12 @@ test.describe('P3 - Blog Page Header', () => {
       await expect(page).not.toHaveURL(/#account/, { timeout: 8_000 });
     }
 
+    const strings = currentLocaleStrings();
+
     try {
 
     await runStep('Step 1: LOGIN CTA opens the login form', async () => {
-      const loginBtn = page.getByRole('banner').getByText(/log in/i).first();
+      const loginBtn = page.getByRole('banner').getByText(strings.loginButton).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
       await page.waitForTimeout(1_500);
@@ -76,7 +86,7 @@ test.describe('P3 - Blog Page Header', () => {
 
     await runStep('Step 2: JOIN CTA opens the registration form', async () => {
       await dismissCampaignPopup(page);
-      const joinBtn = page.getByRole('banner').getByText(/^join$/i).first();
+      const joinBtn = page.getByRole('banner').getByText(strings.joinButton).first();
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
       await joinBtn.click();
       await page.waitForTimeout(1_500);
@@ -99,7 +109,7 @@ test.describe('P3 - Blog Page Header', () => {
       // (https://www.slingo.com/), NOT /blog/. Confirmed intentional by the
       // dev team — this behavior is consistent across other brand sites, not
       // a bug — so the checklist's "blog homepage" wording is outdated.
-      await page.goto('/blog/search/');
+      await page.goto(`${geoFeatures.blogPath}search/`);
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -107,7 +117,7 @@ test.describe('P3 - Blog Page Header', () => {
       await expect(logo).toBeVisible({ timeout: 10_000 });
       await logo.click();
       await page.waitForLoadState('domcontentloaded');
-      await expect(page).toHaveURL(/^https:\/\/www\.slingo\.com\/?$/, { timeout: 10_000 });
+      await expect(page).toHaveURL(siteUrl(''), { timeout: 10_000 });
     });
 
     await runStep('Step 5: Sidebar menu opens after clicking the 3-line icon', async () => {

@@ -1,23 +1,29 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * PP: Promotions Page
  * Scope: Campaign CTA deeplinks, Learn More inner-page links, umbrella
  * inlinks, T&C copy visibility, Play Now → login/registration handoff, and
  * the header promo-icon entry point.
- * Paths confirmed via live page fetch: /casino-promotions/, campaign deeplinks
- * like /casino-promotions/free-spins-offer/. CTA selectors are best-effort —
- * run live and adjust before trusting this in CI.
+ * Path is GEO-dependent (see helpers/geo-features.ts) — e.g. UK/ROW/IE use
+ * /casino-promotions/, DE uses /promotions/, ES uses /promociones/. Some
+ * GEOs (e.g. Slingo SE) have no Promotions page at all and this suite skips.
  */
 
 test.describe('P2 - Promotions Page', () => {
 
   test.setTimeout(120_000);
 
+  let promoPath: string | null = null;
+
   test.beforeEach(async ({ page }) => {
+    promoPath = currentGeoFeatures().promotionsPath;
+    test.skip(!promoPath, `Promotions page does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('/casino-promotions/');
+    await page.goto(promoPath!);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -52,13 +58,16 @@ test.describe('P2 - Promotions Page', () => {
       });
     }
 
+    const strings = currentLocaleStrings();
+
     try {
 
-    // Campaign deeplinks have a slug after /casino-promotions/ (e.g. /free-spins-offer/);
-    // the umbrella page itself and the header promo icon both link to bare /casino-promotions/
-    // and must be excluded so we don't click a self-link and break page.goBack().
+    // Campaign deeplinks have a slug after the promotions path (e.g. /free-spins-offer/);
+    // the umbrella page itself and the header promo icon both link to the bare
+    // promotions path and must be excluded so we don't click a self-link and
+    // break page.goBack().
     const campaignLink = () => page.locator(
-      'a[href*="/casino-promotions/"]:not([href$="/casino-promotions/"]):not([href="https://www.slingo.com/casino-promotions/"])'
+      `a[href*="/${promoPath}"]:not([href$="/${promoPath}"]):not([href="${siteUrl(promoPath!)}"])`
     ).filter({ visible: true }).first();
 
     await runStep('Step 1: Promotion CTA opens the expected campaign deeplink', async () => {
@@ -71,7 +80,7 @@ test.describe('P2 - Promotions Page', () => {
       await page.waitForTimeout(2_000);
       console.log('PP-01 Step 1 url after click+wait: ' + page.url());
       expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto('/casino-promotions/');
+      await page.goto(promoPath!);
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -89,7 +98,7 @@ test.describe('P2 - Promotions Page', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_000);
       expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto('/casino-promotions/');
+      await page.goto(promoPath!);
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -103,19 +112,23 @@ test.describe('P2 - Promotions Page', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_000);
       expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto('/casino-promotions/');
+      await page.goto(promoPath!);
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
     });
 
     await runStep('Step 4: Approved T&C text displayed in pop-up banner', async () => {
-      const tncLink = page.getByText(/bonus policy applies|terms and conditions apply/i).first();
+      // Match "and"/"&" (GEOs render this differently, e.g. ROW uses "Terms & Conditions
+      // Apply") and filter to visible only — .first() alone can pick a same-text but
+      // off-screen footer link ahead of the actually-visible banner text in DOM order.
+      const tncLink = page.getByText(strings.bonusPolicyText)
+        .filter({ visible: true }).first();
       await expect(tncLink).toBeVisible({ timeout: 10_000 });
     });
 
     await runStep('Step 5: "Play now"/"Let\'s Play" CTA opens login/registration widget', async () => {
-      const playBtn = page.getByText(/let'?s play/i).first();
+      const playBtn = page.getByText(strings.playCta).first();
       await expect(playBtn).toBeVisible({ timeout: 10_000 });
       await playBtn.click();
       await page.waitForTimeout(1_500);
@@ -124,14 +137,14 @@ test.describe('P2 - Promotions Page', () => {
     });
 
     await runStep('Step 6: Promotion icon in header leads back to Promotions page', async () => {
-      await page.goto('/');
+      await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
-      const promoIcon = page.getByRole('banner').locator('a[href*="promotion" i]').first();
+      const promoIcon = page.getByRole('banner').locator(`a[href*="${promoPath!.replace(/\/$/, '')}"]`).first();
       await expect(promoIcon).toBeVisible({ timeout: 10_000 });
       await promoIcon.click();
       await page.waitForLoadState('domcontentloaded');
-      await expect(page).toHaveURL(/promotion/i, { timeout: 10_000 });
+      await expect(page).toHaveURL(new RegExp(promoPath!.replace(/\/$/, '')), { timeout: 10_000 });
     });
 
     } finally {
