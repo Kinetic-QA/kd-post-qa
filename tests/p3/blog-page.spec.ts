@@ -1,11 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * BP: Blog Page
  * Scope: Blog listing page — category navigation, "Read More" article
  * links, social share icons, tag-filtered links, and side-ad CTA routing
  * to registration.
+ * Blog only exists for some GEOs (see helpers/geo-features.ts — e.g. Slingo
+ * UK/ES) — this suite skips cleanly where it doesn't.
  * Live fetch of /blog/ confirmed category nav (Slingo, Lifestyle, Bingo,
  * Guides, Promotions, Getting Lippy), "Read More" article links, and a
  * "Show me more" load-more button. Social share icons/side-ad CTA were not
@@ -16,9 +20,13 @@ test.describe('P3 - Blog Page', () => {
 
   test.setTimeout(90_000);
 
+  let geoFeatures: ReturnType<typeof currentGeoFeatures>;
+
   test.beforeEach(async ({ page }) => {
+    geoFeatures = currentGeoFeatures();
+    test.skip(!geoFeatures.hasBlog, `Blog does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('/blog/');
+    await page.goto(geoFeatures.blogPath!);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -53,27 +61,40 @@ test.describe('P3 - Blog Page', () => {
       });
     }
 
+    const strings = currentLocaleStrings();
+
     try {
 
     await runStep('Step 1: Blog category nav directs to the expected listing', async () => {
-      const bingoLink = page.locator('a[href*="/blog/bingo/"]').first();
-      await expect(bingoLink).toBeVisible({ timeout: 10_000 });
-      await bingoLink.click();
+      // Category names aren't stable across GEOs (UK has "Bingo"; ES has no
+      // Bingo category at all — confirmed live categories are Juegos
+      // Slingo/Slots/Lifestyle) — pick whichever real category link exists
+      // instead of hardcoding one, since the behavior under test is "clicking
+      // a category leads to that category's listing," not a specific slug.
+      const categoryHrefs = await page.locator(`a[href*="/${geoFeatures.blogPath}"]`)
+        .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
+      const categoryHref = [...new Set(categoryHrefs)].find(h => {
+        const path = h.split(geoFeatures.blogPath!)[1] ?? '';
+        return path && !path.startsWith('search') && /^[a-z0-9-]+\/?$/.test(path);
+      });
+      if (!categoryHref) throw new Error('BP-01: no blog category link found on the listing page');
+      const categoryLink = page.locator(`a[href="${categoryHref}"]`).first();
+      await categoryLink.click();
       await page.waitForLoadState('domcontentloaded');
-      await expect(page).toHaveURL(/\/blog\/bingo\//, { timeout: 10_000 });
+      await expect(page).toHaveURL(new RegExp(categoryHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), { timeout: 10_000 });
       await page.goBack();
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
     });
 
     await runStep('Step 2: Clicking "Read More" directs to the expected blog post', async () => {
-      const readMore = page.getByText('Read More', { exact: false }).first();
+      const readMore = page.getByText(strings.readMoreText, { exact: false }).first();
       await expect(readMore).toBeVisible({ timeout: 10_000 });
       await readMore.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_000);
-      expect(page.url()).not.toBe('https://www.slingo.com/blog/');
-      await page.goto('/blog/');
+      expect(page.url()).not.toBe(siteUrl(geoFeatures.blogPath!));
+      await page.goto(geoFeatures.blogPath!);
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -112,7 +133,7 @@ test.describe('P3 - Blog Page', () => {
       // Confirmed via live DOM probe: the side-ad banner only exists on blog
       // post detail pages ([class*="PostSidebar_banner"]), not the listing
       // page — navigate to a real post first.
-      const readMore = page.getByText('Read More', { exact: false }).first();
+      const readMore = page.getByText(strings.readMoreText, { exact: false }).first();
       await readMore.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_500);

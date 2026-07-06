@@ -1,14 +1,26 @@
-import { test, expect, Page, FrameLocator } from '@playwright/test';
+import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, RegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, RegistrationData, EsRegistrationData } from '../../helpers/testData';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * REG-01: Registration
- * Scope: Full new-player registration journey — Join → mobile/DOB →
- * personal details → address → username/password/consent checkboxes,
- * ending on an enabled "GO PLAY" button. Secondary widget controls (Close,
- * Members Login handoff, Report a Problem) are covered in
- * p2/registration-widget.spec.ts.
+ * Scope: Full new-player registration journey, ending on an enabled final
+ * submit button that is deliberately never clicked (so no real account gets
+ * created) — same intent as UK's "GO PLAY" check, just under whatever name
+ * that button has locally.
+ *
+ * UK: Join → mobile/DOB → personal details → address →
+ * username/password/consents → "GO PLAY".
+ *
+ * ES: Join → DNI/NIE + password → Paso 1/3 (nationality/name/DOB/gender) →
+ * Paso 2/3 (verification method/username/password/consents) → Paso 3/3 (if
+ * any) → "Continuar". Confirmed live this is a genuinely different shape
+ * from UK's, not just translated copy — no mobile/address step, but 3 named
+ * steps instead of UK's 4 unnamed ones. See fillEs* helpers below.
+ *
+ * Secondary widget controls (Close, Members Login handoff, Report a
+ * Problem) are covered in p2/registration-widget.spec.ts (UK-only so far).
  */
 
 type Scope = Page | FrameLocator;
@@ -18,7 +30,7 @@ test.describe('Registration Flow', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded'); // fast load — cookie consent doesn't need networkidle
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -60,13 +72,14 @@ test.describe('Registration Flow', () => {
       });
     }
 
-    const data = generateRegistrationData();
+    // TODO: extend once other GEOs' registration formats are confirmed live —
+    // right now only ES is known to use the DNI/NIE-based flow.
+    const isSpanishFormat = test.info().project.name === 'ES';
+    const strings = currentLocaleStrings();
 
     // ── Step 1: Click Join ───────────────────────────────────────────────
     await runStep('Join button → registration widget opens', async () => {
-      const joinBtn = page.locator(
-        'a:has-text("Join"), button:has-text("Join"), a:has-text("JOIN"), button:has-text("JOIN")'
-      ).first();
+      const joinBtn = page.getByRole('banner').getByRole('button', { name: strings.joinButton }).first();
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
       await dismissCampaignPopup(page);
       await joinBtn.click();
@@ -78,37 +91,260 @@ test.describe('Registration Flow', () => {
 
     const scope = await detectWidgetScope(page);
 
-    // ── Step 2: Step 0 — Mobile + DOB ───────────────────────────────────
-    await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-      await fillStep0WithRetry(page, scope, data);
-    });
+    if (isSpanishFormat) {
+      const esData = generateEsRegistrationData();
 
-    // ── Step 3: Step 1 — Name + Email + Gender ───────────────────────────
-    await runStep('Step 1: Name + Email + Gender → Continue', async () => {
-      await fillStep1(page, scope, data);
-    });
+      // ── Pre-step: DNI/NIE + password → Continuar ────────────────────────
+      await runStep('DNI/NIE + password → Continuar', async () => {
+        await fillEsIdStep(page, scope, esData);
+      });
 
-    // ── Step 4: Step 2 — Address ─────────────────────────────────────────
-    await runStep('Step 2: Address → Continue', async () => {
-      await fillStep2(page, scope, data);
-    });
+      // ── Paso 1 de 3: Nationality + name + DOB + gender ───────────────────
+      await runStep('Paso 1/3: Personal details → Continuar', async () => {
+        await fillEsPersonalDetails(page, scope, esData);
+      });
 
-    // ── Step 5: Step 3 — Username + Password + Checkboxes ────────────────
-    await runStep('Step 3: Username + Password + Checkboxes', async () => {
-      await fillStep3(page, scope, data);
-    });
+      // ── Paso 2 de 3: Address ─────────────────────────────────────────────
+      await runStep('Paso 2/3: Address → Continuar', async () => {
+        await fillEsAddress(page, scope);
+      });
 
-    // ── Step 6: GO PLAY button visible ───────────────────────────────────
-    await runStep('GO PLAY button visible and enabled', async () => {
-      const goPlayBtn = scope.getByRole('button', { name: /go play/i }).first();
-      await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
-      await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
-    });
+      // ── Paso 3 de 3: Email/mobile + username/password + consents ────────
+      // Confirmed live: this last named step's submit button is "JUGAR"
+      // ("PLAY") — ES's exact equivalent of UK's "GO PLAY" — not another
+      // "Continuar". Filled but never clicked, same intent as UK's check.
+      await runStep('Paso 3/3: Email/mobile + username + password + consents', async () => {
+        await fillEsStep2(page, scope, esData);
+      });
+
+      await runStep('JUGAR button visible and enabled', async () => {
+        // Scoped to the modal — the page behind it has its own "Jugar" play
+        // buttons on every game tile (hidden until hover), and .first() on
+        // an unscoped locator grabs one of those instead of the modal's
+        // actual submit button (confirmed live).
+        const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+        const jugarBtn = modal.getByRole('button', { name: /^jugar$/i }).first();
+        await expect(jugarBtn).toBeVisible({ timeout: 15_000 });
+        await expect(jugarBtn).toBeEnabled({ timeout: 5_000 });
+      });
+    } else {
+      const data = generateRegistrationData();
+
+      // ── Step 2: Step 0 — Mobile + DOB ─────────────────────────────────
+      await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
+        await fillStep0WithRetry(page, scope, data);
+      });
+
+      // ── Step 3: Step 1 — Name + Email + Gender ─────────────────────────
+      await runStep('Step 1: Name + Email + Gender → Continue', async () => {
+        await fillStep1(page, scope, data);
+      });
+
+      // ── Step 4: Step 2 — Address ───────────────────────────────────────
+      await runStep('Step 2: Address → Continue', async () => {
+        await fillStep2(page, scope, data);
+      });
+
+      // ── Step 5: Step 3 — Username + Password + Checkboxes ──────────────
+      await runStep('Step 3: Username + Password + Checkboxes', async () => {
+        await fillStep3(page, scope, data);
+      });
+
+      // ── Step 6: GO PLAY button visible ─────────────────────────────────
+      await runStep('GO PLAY button visible and enabled', async () => {
+        const goPlayBtn = scope.getByRole('button', { name: /go play/i }).first();
+        await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
+        await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
+      });
+    }
 
     printSummary();
   });
 
 });
+
+/** Clicks the visible "Continuar" button and waits for `readyLocator` to confirm the next step rendered. */
+async function clickContinuarAndWait(
+  page: Page, scope: Scope, readyLocator: Locator, stepLabel: string,
+): Promise<void> {
+  const continueBtn = scope.locator('button', { hasText: /^Continuar$/ }).filter({ visible: true }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  // force: true — same overlay-interception quirk noted in login.spec.ts.
+  await continueBtn.click({ force: true });
+  await page.waitForTimeout(1_500);
+
+  const advanced = await readyLocator.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false);
+  if (!advanced) {
+    await page.screenshot({ path: `test-results/es-reg-debug-${stepLabel}-${Date.now()}.png` });
+    const inlineError = await page.locator('[class*="error" i]').first().textContent({ timeout: 2_000 }).catch(() => null);
+    throw new Error(`REG-01 (ES): registration did not advance past "${stepLabel}" (inline error: ${inlineError ?? 'none'}) — see debug screenshot`);
+  }
+}
+
+async function fillEsIdStep(page: Page, scope: Scope, data: EsRegistrationData): Promise<void> {
+  console.log('REG-01 (ES) DNI/NIE + password: ' + data.nie);
+
+  const idInput = scope.locator('input[name="personalID"]').first();
+  await expect(idInput).toBeVisible({ timeout: 10_000 });
+  await idInput.click();
+  await idInput.fill(data.nie);
+  await page.waitForTimeout(300);
+
+  const passwordInput = scope.locator('input[type="password"]').filter({ visible: true }).first();
+  await expect(passwordInput).toBeVisible({ timeout: 5_000 });
+  await passwordInput.fill(data.password);
+  await page.waitForTimeout(300);
+
+  // Next screen is the "Paso 1 de 3" personal-details form, which has a
+  // nationality <select> the ID screen doesn't — a reliable "we've actually
+  // advanced" signal, unlike reusing a generic <input> locator that would
+  // already match the still-mounted ID field and false-positive instantly.
+  await clickContinuarAndWait(page, scope, scope.locator('select').first(), 'id-step');
+  console.log('REG-01 (ES) DNI/NIE step complete');
+}
+
+async function fillEsPersonalDetails(page: Page, scope: Scope, data: EsRegistrationData): Promise<void> {
+  console.log('REG-01 (ES) Paso 1/3 personal details');
+
+  // Nationality — a <select>; leave the default if the form already has one
+  // selected, otherwise pick the first real option (index 1, skipping any
+  // blank placeholder at index 0).
+  const nationalitySelect = scope.locator('select').first();
+  if (await nationalitySelect.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    const current = await nationalitySelect.inputValue().catch(() => '');
+    if (!current) {
+      await nationalitySelect.selectOption({ index: 1 }).catch(() => {});
+    }
+    await page.waitForTimeout(200);
+  }
+
+  const inputs = scope.locator('input:not([type="radio"]):not([type="checkbox"])').filter({ visible: true });
+  // Order confirmed live: first name, last name, second last name (optional), DOB.
+  await inputs.nth(0).fill(data.firstName);
+  await page.waitForTimeout(150);
+  await inputs.nth(1).fill(data.lastName);
+  await page.waitForTimeout(150);
+  // Second surname (index 2) is explicitly optional per the form's own
+  // helper text — leave it blank.
+  const dobInput = inputs.nth(3);
+  await dobInput.click();
+  await dobInput.fill(data.dob);
+  await page.waitForTimeout(200);
+
+  const genderBtn = scope.getByText(data.gender, { exact: true }).first();
+  if (await genderBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await genderBtn.click({ force: true });
+    await page.waitForTimeout(200);
+  }
+
+  // Next screen is the "Paso 2 de 3" address form, identified by its
+  // address-search input (placeholder confirmed live: "Comienza a escribir
+  // tu dirección").
+  await clickContinuarAndWait(page, scope, scope.locator('input[placeholder*="dirección" i]').first(), 'personal-details');
+  console.log('REG-01 (ES) Paso 1/3 complete');
+}
+
+async function fillEsAddress(page: Page, scope: Scope): Promise<void> {
+  console.log('REG-01 (ES) Paso 2/3 address');
+
+  // The address field is autocomplete-first with a manual-entry fallback
+  // link ("Introducir dirección") — confirmed live. Autocomplete suggestions
+  // depend on a real address existing, which synthetic test data can't
+  // guarantee, so always use the manual path instead.
+  const manualLink = scope.getByText(/introducir dirección/i).first();
+  await expect(manualLink).toBeVisible({ timeout: 10_000 });
+  await manualLink.click({ force: true });
+  await page.waitForTimeout(1_000);
+
+  // Manual mode confirmed live: Dirección (street), Código postal, Ciudad,
+  // and a Provincia <select> — each needs a real value in its own field,
+  // not a shared placeholder string (a generic "fill every empty input"
+  // pass put "Calle Test 1" into the postcode/city fields too and both
+  // rejected it as invalid format).
+  const addressInput = scope.locator('input[placeholder*="dirección" i]').first();
+  if (await addressInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    const current = await addressInput.inputValue().catch(() => '');
+    if (!current) await addressInput.fill('Calle Test 1');
+    await page.waitForTimeout(200);
+  }
+
+  const postcodeInput = scope.getByLabel(/código postal/i).first();
+  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  await postcodeInput.fill('28001'); // valid real Madrid postal code format
+  await page.waitForTimeout(200);
+
+  const cityInput = scope.getByLabel(/^ciudad$/i).first();
+  await expect(cityInput).toBeVisible({ timeout: 5_000 });
+  await cityInput.fill('Madrid');
+  await page.waitForTimeout(200);
+
+  const provinceSelect = scope.locator('select').first();
+  if (await provinceSelect.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    const current = await provinceSelect.inputValue().catch(() => '');
+    if (!current) {
+      const optionTexts = await provinceSelect.locator('option').allTextContents().catch(() => []);
+      const madridIndex = optionTexts.findIndex(t => /madrid/i.test(t));
+      await provinceSelect.selectOption({ index: madridIndex > 0 ? madridIndex : 1 }).catch(() => {});
+    }
+    await page.waitForTimeout(200);
+  }
+
+  // Next screen is the verification/username/password step (Paso 3 de 3).
+  await clickContinuarAndWait(page, scope, scope.locator('input[name="username"]').first(), 'address');
+  console.log('REG-01 (ES) Paso 2/3 complete');
+}
+
+async function fillEsStep2(page: Page, scope: Scope, data: EsRegistrationData): Promise<void> {
+  console.log('REG-01 (ES) Paso 3/3 email + mobile + username + password + consents');
+
+  const emailInput = scope.getByLabel(/correo electrónico/i).first();
+  await expect(emailInput).toBeVisible({ timeout: 10_000 });
+  await emailInput.fill(data.email);
+  await page.waitForTimeout(200);
+
+  const mobileInput = scope.getByLabel(/número de móvil/i).first();
+  await expect(mobileInput).toBeVisible({ timeout: 5_000 });
+  await mobileInput.fill(data.mobile);
+  await page.waitForTimeout(200);
+
+  // Verification method — only present on some builds/flows; select
+  // whichever option the form offers (e.g. SMS) if it's there.
+  const verificationRadio = scope.locator('input[name="verificationMethod"]').first();
+  if (await verificationRadio.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await verificationRadio.check({ force: true }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+
+  const usernameInput = scope.locator('input[name="username"]').first();
+  await expect(usernameInput).toBeVisible({ timeout: 10_000 });
+  await usernameInput.click();
+  await usernameInput.fill(data.username);
+  await usernameInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  // Two password fields on this step (create + confirm) — fill every
+  // visible one with the same value.
+  const passwordInputs = scope.locator('input[type="password"]').filter({ visible: true });
+  const count = await passwordInputs.count();
+  for (let i = 0; i < count; i++) {
+    await passwordInputs.nth(i).fill(data.password);
+    await page.waitForTimeout(150);
+  }
+
+  // Consent checkboxes — click by their label text (no stable id confirmed yet).
+  const ageCheckbox = scope.getByText(/más de 18 años/i).first();
+  if (await ageCheckbox.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await ageCheckbox.click({ force: true });
+    await page.waitForTimeout(200);
+  }
+  const termsCheckbox = scope.getByText(/términos y condiciones/i).first();
+  if (await termsCheckbox.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await termsCheckbox.click({ force: true });
+    await page.waitForTimeout(200);
+  }
+
+  console.log('REG-01 (ES) Paso 3/3 fields filled');
+}
 
 async function detectWidgetScope(page: Page): Promise<Scope> {
   const iframeSelectors = [

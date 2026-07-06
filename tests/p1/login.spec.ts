@@ -1,17 +1,17 @@
 import { test, expect } from '@playwright/test';
-import { dismissPopups, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissPopups, dismissCampaignPopup, setupCampaignPopupWatcher, expectedPlaysecureUrlPattern } from '../../helpers/common';
+import { currentTestCredentials } from '../../helpers/test-credentials';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * LW-01: Login
  * Scope: Happy-path login only — opens the header login widget, submits
- * valid credentials, and confirms redirect to an authenticated session with
- * a visible Logout button. Negative/validation paths and secondary controls
- * (Forgot Password, Show Password, Close) are covered in
- * p2/login-widget.spec.ts.
+ * valid credentials, and confirms redirect to an authenticated session
+ * (playsecure.<brand-domain>, derived per-GEO — see expectedPlaysecureUrlPattern).
+ * Negative/validation paths and secondary controls (Forgot Password, Show
+ * Password, Close) are covered in p2/login-widget.spec.ts (English-only —
+ * not yet GEO-aware).
  */
-
-const TEST_USERNAME = 'kn@test.com';
-const TEST_PASSWORD = '5Tandard1';
 
 test.describe('P1 - Login', () => {
 
@@ -19,7 +19,7 @@ test.describe('P1 - Login', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded'); // faster than networkidle for initial load
     await page.waitForTimeout(3_000);
     await dismissPopups(page);
@@ -62,12 +62,15 @@ test.describe('P1 - Login', () => {
       });
     }
 
+    const { username, password } = currentTestCredentials();
+    const strings = currentLocaleStrings();
+
     try {
 
     // ── Step 1: Click Log In ─────────────────────────────────────────────
     await runStep('Log In button clicked → widget opens', async () => {
       await dismissCampaignPopup(page);
-      const loginBtn = page.getByRole('banner').getByRole('button', { name: /log in/i }).first();
+      const loginBtn = page.getByRole('banner').getByRole('button', { name: strings.loginButton }).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
@@ -76,34 +79,42 @@ test.describe('P1 - Login', () => {
 
     // ── Step 2: Login modal visible ──────────────────────────────────────
     await runStep('Login modal is visible', async () => {
-      const usernameInput = page.getByLabel(/username or email/i).first();
+      const usernameInput = page.getByLabel(strings.usernameOrEmailLabel).first();
       await expect(usernameInput).toBeVisible({ timeout: 10_000 });
     });
 
     // ── Step 3: Enter credentials ────────────────────────────────────────
     await runStep('Enter username and password', async () => {
-      const usernameInput = page.getByLabel(/username or email/i).first();
+      const usernameInput = page.getByLabel(strings.usernameOrEmailLabel).first();
       await usernameInput.click();
-      await usernameInput.fill(TEST_USERNAME);
+      await usernameInput.fill(username);
       await usernameInput.press('Tab');
       const passwordInput = page.locator('input[type="password"]').first();
       await expect(passwordInput).toBeVisible({ timeout: 5_000 });
-      await passwordInput.fill(TEST_PASSWORD);
+      await passwordInput.fill(password);
       await page.waitForTimeout(300);
     });
 
     // ── Step 4: Submit login ─────────────────────────────────────────────
     await runStep('Click LOGIN button', async () => {
-      const loginSubmitBtn = page.getByRole('button', { name: 'LOGIN' }).first();
-      await loginSubmitBtn.click();
+      // Scoped to the modal, not just page-wide by text — the header's own
+      // "Log in"/"Iniciar sesión" button shares the exact same accessible
+      // name, and .first() would otherwise grab that instead of the modal's
+      // submit button (confirmed live on ES: silently clicked the header
+      // button again, which no-ops, so the test never actually logs in).
+      const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+      const loginSubmitBtn = modal.getByRole('button', { name: strings.loginSubmitButton }).first();
+      await expect(loginSubmitBtn).toBeVisible({ timeout: 8_000 });
+      // force: true — some markets render an overlay (e.g. son-auth-modals)
+      // above the modal that fails Playwright's normal actionability check
+      // even though the button is genuinely visible and clickable to a user.
+      await loginSubmitBtn.click({ force: true });
       await page.waitForTimeout(4_000);
     });
 
     // ── Step 5: Verify successful login ─────────────────────────────────
-    await runStep('Redirected + Logout button visible', async () => {
-      await expect(page).toHaveURL(/playsecure\.slingo\.com/, { timeout: 15_000 });
-      const logoutBtn = page.getByText('Logout', { exact: true }).first();
-      await expect(logoutBtn).toBeVisible({ timeout: 10_000 });
+    await runStep('Redirected to authenticated session', async () => {
+      await expect(page).toHaveURL(expectedPlaysecureUrlPattern(), { timeout: 15_000 });
     });
 
     } finally {

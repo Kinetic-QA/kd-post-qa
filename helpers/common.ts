@@ -1,4 +1,26 @@
-import { Page, expect } from '@playwright/test';
+import { Page, expect, test } from '@playwright/test';
+
+/**
+ * Returns the current Playwright project's configured baseURL (no trailing
+ * slash). playwright.config.ts resolves this per-GEO via TEST_BRAND/TEST_GEO,
+ * so tests must never hardcode a brand domain — use this instead.
+ */
+export function getBaseUrl(): string {
+  const baseURL = test.info().project.use.baseURL;
+  if (!baseURL) throw new Error('No baseURL configured for this Playwright project.');
+  return baseURL.replace(/\/+$/, '');
+}
+
+/**
+ * Builds an absolute URL for a baseURL-relative path (no leading slash —
+ * a leading slash resets to the domain root and drops path-prefixed GEOs
+ * like Slingo ROW (/en-row/) and IE (/en-IE/)).
+ */
+export function siteUrl(path: string = ''): string {
+  const clean = path.replace(/^\/+/, '');
+  const base = getBaseUrl() + '/';
+  return clean ? new URL(clean, base).toString() : base;
+}
 
 async function tryClickCookieConsent(page: Page): Promise<boolean> {
   return page.evaluate(() => {
@@ -8,16 +30,52 @@ async function tryClickCookieConsent(page: Page): Promise<boolean> {
       const sr = (consentEl as any).shadowRoot as ShadowRoot | null;
       if (sr) allButtons.push(...Array.from(sr.querySelectorAll('button')) as HTMLButtonElement[]);
     }
+    // English (UK/ROW/IE/...) and Spanish (ES) confirmed live; add more
+    // locales here as they're confirmed rather than guessing translations.
+    const KNOWN_ACCEPT_TEXTS = [
+      'allow all cookies', 'allow all',
+      'permitir todas las cookies', 'permitir todas', 'aceptar todas',
+    ];
     const target = allButtons.find(b => {
       const t = (b.textContent ?? '').trim().toLowerCase();
-      return t === 'allow all cookies' || t === 'allow all';
+      return KNOWN_ACCEPT_TEXTS.includes(t);
     });
     if (target) { target.scrollIntoView({ behavior: 'instant', block: 'nearest' }); target.click(); return true; }
     return false;
   }).catch(() => false);
 }
 
+/**
+ * After a successful login, every brand/GEO redirects to a "playsecure."
+ * subdomain of its own root domain — e.g. www.slingo.com -> playsecure.slingo.com,
+ * www.slingocasino.es -> playsecure.slingocasino.es. Deriving it from the
+ * current project's baseURL means login.spec.ts doesn't need a hardcoded
+ * domain per GEO.
+ */
+export function expectedPlaysecureUrlPattern(): RegExp {
+  const hostname = new URL(getBaseUrl()).hostname.replace(/^www\./, '');
+  return new RegExp(`playsecure\\.${hostname.replace(/\./g, '\\.')}`);
+}
+
+/**
+ * Confirmed live: the site occasionally shows a generic "SOMETHING WENT
+ * WRONG" error state (a transient rendering glitch, not a real bug) that
+ * leaves the page unusable for the rest of that test. Throwing a clear,
+ * specific error here — rather than letting the test grind on and fail
+ * later on an unrelated timeout — makes the retry (see playwright.config.ts
+ * retries) both faster and obvious in the report as "site glitched, retried"
+ * rather than a confusing unrelated failure.
+ */
+export async function assertNoSiteError(page: Page): Promise<void> {
+  const hasError = await page.getByText('SOMETHING WENT WRONG', { exact: false })
+    .isVisible({ timeout: 500 }).catch(() => false);
+  if (hasError) {
+    throw new Error('Site showed "SOMETHING WENT WRONG" — transient glitch, will retry this test with a fresh page.');
+  }
+}
+
 export async function dismissCookieConsent(page: Page): Promise<void> {
+  await assertNoSiteError(page);
   await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
   await page.waitForTimeout(300);
   // Poll rather than a single check-and-click attempt: under a long
@@ -112,6 +170,7 @@ export async function dismissPopups(page: Page): Promise<void> {
 export async function waitForPageReady(page: Page): Promise<void> {
   await page.waitForLoadState('domcontentloaded');
   await page.waitForLoadState('networkidle').catch(() => {});
+  await assertNoSiteError(page);
 }
 
 export async function goHome(page: Page): Promise<void> {

@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * LW: Login Widget (secondary controls)
@@ -18,7 +20,7 @@ test.describe('P2 - Login Widget', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -53,9 +55,12 @@ test.describe('P2 - Login Widget', () => {
       });
     }
 
+    const strings = currentLocaleStrings();
+    const geoFeatures = currentGeoFeatures();
+
     async function openLoginWidget() {
       await dismissCampaignPopup(page);
-      const loginBtn = page.getByRole('banner').getByRole('button', { name: /log in/i }).first();
+      const loginBtn = page.getByRole('banner').getByRole('button', { name: strings.loginButton }).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
@@ -66,7 +71,7 @@ test.describe('P2 - Login Widget', () => {
 
     await runStep('Step 1: Forgot Password link opens the password reset flow', async () => {
       await openLoginWidget();
-      const forgotLink = page.getByText(/forgot.*password/i).first();
+      const forgotLink = page.getByText(strings.forgotPasswordText).first();
       await expect(forgotLink).toBeVisible({ timeout: 10_000 });
       await forgotLink.click();
       // CONFIRMED via live probing (screenshots + element counts at 1s
@@ -88,7 +93,12 @@ test.describe('P2 - Login Widget', () => {
       // observed render latency before treating the modal as settled, so
       // the form has genuinely finished appearing (and stays on screen
       // long enough to visually confirm) before this step ends.
-      const loginSubmitGone = await page.getByRole('button', { name: 'LOGIN' })
+      // Scoped to the modal — the header's own login button shares the same
+      // accessible name and never truly disappears, so an unscoped locator
+      // would wait on the wrong element forever (see login.spec.ts for the
+      // same class of bug).
+      const modalForForgot = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+      const loginSubmitGone = await modalForForgot.getByRole('button', { name: strings.loginSubmitButton })
         .first().waitFor({ state: 'hidden', timeout: 10_000 }).then(() => true).catch(() => false);
       await page.waitForTimeout(10_000);
       const modalStillOpen = await page.locator('[class*="AccountPopup_account"]')
@@ -97,21 +107,25 @@ test.describe('P2 - Login Widget', () => {
     });
 
     await runStep('Step 2: "Don\'t have an account" link opens the registration form', async () => {
-      await page.goto('/');
+      await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
       await openLoginWidget();
-      const noAccountLink = page.getByText(/don'?t have an account/i).first();
+      const noAccountLink = page.getByText(strings.noAccountText).first();
       await expect(noAccountLink).toBeVisible({ timeout: 10_000 });
       await noAccountLink.click();
       await page.waitForTimeout(1_500);
-      const mobileInput = page.getByRole('textbox', { name: /mobile/i }).first();
-      await expect(mobileInput).toBeVisible({ timeout: 10_000 });
+      // ES's registration format asks for a DNI/NIE field first (no mobile
+      // step at all — see p1/registration.spec.ts) — UK's asks for mobile.
+      const firstFieldLocator = geoFeatures.locale === 'es'
+        ? page.locator('input[name="personalID"]').first()
+        : page.getByRole('textbox', { name: /mobile/i }).first();
+      await expect(firstFieldLocator).toBeVisible({ timeout: 10_000 });
     });
 
     await runStep('Step 3: Show Password icon toggles masked/visible text', async () => {
-      await page.goto('/');
+      await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -136,21 +150,22 @@ test.describe('P2 - Login Widget', () => {
       // "Report a problem" is not shown on the base login form — it only
       // appears after a failed login attempt (same behavior confirmed in
       // p1/feedback-form.spec.ts), so trigger that first.
-      await page.goto('/');
+      await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await openLoginWidget();
-      const usernameInput = page.getByLabel(/username or email/i).first();
+      const usernameInput = page.getByLabel(strings.usernameOrEmailLabel).first();
       await usernameInput.fill('wronguser_test123');
       const passwordField = page.locator('input[type="password"]').first();
       await passwordField.fill('wrongpass_test123');
-      await page.getByRole('button', { name: 'LOGIN' }).first().click();
+      const modalForReport = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+      await modalForReport.getByRole('button', { name: strings.loginSubmitButton }).first().click({ force: true });
       await page.waitForTimeout(3_000);
 
       // Both login- and register-context "Report a problem" buttons exist in
       // the DOM simultaneously; .first() grabs the register one regardless of
       // which is visible, so filter for the actually-visible instance.
-      const reportLink = page.getByText('Report a problem', { exact: true }).filter({ visible: true }).first();
+      const reportLink = page.getByText(strings.reportProblemText, { exact: true }).filter({ visible: true }).first();
       await expect(reportLink).toBeVisible({ timeout: 10_000 });
       await reportLink.click();
       await page.waitForTimeout(2_000);
@@ -160,7 +175,7 @@ test.describe('P2 - Login Widget', () => {
     });
 
     await runStep('Step 5: Close button dismisses the login widget', async () => {
-      await page.goto('/');
+      await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);

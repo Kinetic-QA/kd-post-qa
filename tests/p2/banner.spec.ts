@@ -21,7 +21,7 @@ test.describe('P2 - Banner', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -90,7 +90,7 @@ test.describe('P2 - Banner', () => {
             await page.waitForTimeout(800);
           });
         if (page.url().includes('#account')) {
-          await page.goto('/');
+          await page.goto('');
           await page.waitForLoadState('domcontentloaded');
           await page.waitForTimeout(500);
         }

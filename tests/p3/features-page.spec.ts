@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * FP: Features Page
@@ -19,7 +20,7 @@ test.describe('P3 - Features Page', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -27,12 +28,13 @@ test.describe('P3 - Features Page', () => {
     await page.waitForTimeout(500);
 
     // Entry point: hamburger -> sidebar -> Features link (not a direct goto)
+    const featuresPath = currentGeoFeatures().featuresPath ?? 'casino-features/';
     await page.evaluate((sel) => {
       const el = document.querySelector(sel);
       (el as HTMLElement | null)?.click();
     }, HAMBURGER);
     await page.waitForTimeout(800);
-    const featuresLink = page.locator(SIDEBAR + ' a[href*="/casino-features/"]').first();
+    const featuresLink = page.locator(SIDEBAR + ` a[href*="/${featuresPath}"]`).first();
     await featuresLink.click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1_000);
@@ -66,12 +68,14 @@ test.describe('P3 - Features Page', () => {
       });
     }
 
+    const featuresPath = currentGeoFeatures().featuresPath ?? 'casino-features/';
+
     try {
 
-    // Features hub links have a slug after /casino-features/ (e.g. /daily-picks/);
+    // Features hub links have a slug after the features path (e.g. /daily-picks/);
     // exclude the umbrella page's own self-link so goBack()/re-navigation stays sane.
     const featureLink = () => page.locator(
-      'a[href*="/casino-features/"]:not([href$="/casino-features/"]):not([href="https://www.slingo.com/casino-features/"])'
+      `a[href*="/${featuresPath}"]:not([href$="/${featuresPath}"]):not([href="${siteUrl(featuresPath)}"])`
     ).filter({ visible: true }).first();
 
     await runStep('Step 1: "LEARN MORE" CTA leads to expected features inner page', async () => {
@@ -82,7 +86,7 @@ test.describe('P3 - Features Page', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_000);
       expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto('/casino-features/');
+      await page.goto(featuresPath);
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);

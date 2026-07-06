@@ -39,7 +39,7 @@ test.describe('P2 - Footer Regulations', () => {
     }
 
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1_000);
     await dismissCookieConsent(page);

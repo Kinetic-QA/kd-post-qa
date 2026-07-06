@@ -1,17 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * GIM-01: Game Information Modal
  * Scope: Full game info modal flow — open from a tile click, Play It →
  * registration handoff, opening the game in a new tab, geo currency display
  * inside the modal, closing/reopening, and hover-triggered Play It routing.
- * CURRENCY: UK='£'  EU='€'  CA='$'
+ * Currency symbol is GEO-dependent — see helpers/geo-features.ts.
  * Steps 6-7: window.open() used as equivalent of "Open link in new tab"
  */
 
-const EXPECTED_CURRENCY = '£'; // pound sign - change for other geos
-const GAME_TITLE = 'Slingo Super Spin';
+// Deliberately not hardcoding a specific game title — catalogs differ per
+// GEO (confirmed live: this exact title doesn't reliably exist on ES), so
+// every step below always operates on whichever game tile is first/visible.
 
 test.describe('P1 - Game Information Modal', () => {
 
@@ -19,7 +22,7 @@ test.describe('P1 - Game Information Modal', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -29,6 +32,9 @@ test.describe('P1 - Game Information Modal', () => {
 
   test('GIM-01: Game information modal full flow', async ({ page }) => {
     test.setTimeout(120_000);
+
+    const EXPECTED_CURRENCY = currentGeoFeatures().currencySymbol;
+    const strings = currentLocaleStrings();
 
     const results: { label: string; status: string }[] = [];
     function record(label: string, passed: boolean) {
@@ -56,10 +62,15 @@ test.describe('P1 - Game Information Modal', () => {
     }
 
     async function findGameLink() {
-      const exact = page.getByText(GAME_TITLE, { exact: true }).first();
-      if (await exact.isVisible({ timeout: 3_000 }).catch(() => false)) return exact;
       const vh = page.viewportSize()?.height ?? 720;
-      const links = page.locator('a[href*="/slingo/"], a[href*="/slots/"]');
+      // Exclude the bare category nav links themselves (e.g. href="/slingo/"
+      // with no game slug after it) — on some GEOs (confirmed ES) the
+      // sidebar's own "Slingo"/"Slots" category link matches this selector
+      // too and sorts ahead of any real game tile, so the fallback silently
+      // opened the category page instead of a game's info modal.
+      const links = page.locator(
+        'a[href*="/slingo/"]:not([href$="/slingo/"]), a[href*="/slots/"]:not([href$="/slots/"])'
+      );
       const count = await links.count();
       for (let i = 0; i < Math.min(count, 30); i++) {
         const box = await links.nth(i).boundingBox().catch(() => null);
@@ -72,7 +83,7 @@ test.describe('P1 - Game Information Modal', () => {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(1_000);
       if (page.url().includes('gamepage')) {
-        await page.evaluate(() => history.pushState({}, '', '/'));
+        await page.evaluate(() => history.pushState({}, '', location.pathname));
         await page.waitForTimeout(500);
       }
     }
@@ -81,7 +92,7 @@ test.describe('P1 - Game Information Modal', () => {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(1_200);
       if (!page.url().includes('#account')) return;
-      await page.goto('/');
+      await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
     }
@@ -109,12 +120,14 @@ test.describe('P1 - Game Information Modal', () => {
     });
 
     await runStep('Step 3b: Click Play It -> registration modal opens', async () => {
-      const playItBtn = page.locator(
-        'a:has-text("PLAY IT"), button:has-text("PLAY IT"), ' +
-        'a:has-text("Play it"), button:has-text("Play it")'
-      ).filter({ visible: true }).first();
+      // Scoped to the open game-info modal — an unscoped page-wide search
+      // for this CTA text can match unrelated content-block buttons
+      // elsewhere on the page (confirmed live: a "Content_block-center"
+      // promo tile also says "A JUGAR" on ES).
+      const modal = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
+      const playItBtn = modal.locator('a, button').filter({ hasText: strings.playCta }).filter({ visible: true }).first();
       await expect(playItBtn).toBeVisible({ timeout: 8_000 });
-      await playItBtn.click();
+      await playItBtn.click({ force: true });
       await page.waitForTimeout(2_000);
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
     });
@@ -133,7 +146,8 @@ test.describe('P1 - Game Information Modal', () => {
       const link = await findGameLink();
       await link.scrollIntoViewIfNeeded();
       const href = await link.getAttribute('href') ?? '/';
-      const fullUrl = href.startsWith('http') ? href : 'https://www.slingo.com' + href;
+      const fullUrl = new URL(href, page.url()).toString();
+      const hrefPath = new URL(href, page.url()).pathname;
       const [newTab] = await Promise.all([
         page.context().waitForEvent('page'),
         page.evaluate((url: string) => window.open(url, '_blank'), fullUrl)
@@ -142,7 +156,7 @@ test.describe('P1 - Game Information Modal', () => {
       await page.waitForTimeout(1_500);
       const newTabUrl = newTab.url();
       console.log('GIM-01 new tab URL: ' + newTabUrl);
-      const hasSlug = newTabUrl.includes('#gamepage/') || newTabUrl.includes(href.replace('https://www.slingo.com', ''));
+      const hasSlug = newTabUrl.includes('#gamepage/') || newTabUrl.includes(hrefPath);
       expect(hasSlug).toBe(true);
       await newTab.close();
       await page.waitForTimeout(500);
@@ -175,9 +189,9 @@ test.describe('P1 - Game Information Modal', () => {
       console.log('GIM-01 URL after modal close: ' + page.url());
     });
 
-    await runStep('Steps 14-16: Hover Slingo Super Spin -> Play It -> registration modal', async () => {
+    await runStep('Steps 14-16: Hover first game tile -> Play CTA -> registration modal', async () => {
       // Full navigation to properly unmount the React GamePopup component
-      await page.goto('/');
+      await page.goto('');
       await page.waitForLoadState('domcontentloaded');
 
       // Campaign popup appears ~3s after page load. Wait for it, then dismiss.
@@ -197,47 +211,50 @@ test.describe('P1 - Game Information Modal', () => {
       await page.locator('[class*="GamePopup"]').waitFor({ state: 'detached', timeout: 5_000 }).catch(() => {});
       await page.waitForTimeout(300);
 
-      const targetImg = page.locator('img[alt="Slingo Super Spin"]').first();
-      const fallbackImg = page.locator('img[alt*="Slingo"]').first();
-      const img = (await targetImg.isVisible({ timeout: 3_000 }).catch(() => false))
-        ? targetImg : fallbackImg;
-
-      await img.scrollIntoViewIfNeeded();
+      // Catalogs differ per GEO — always operate on the first real game
+      // tile rather than a hardcoded title (see findGameLink for why).
+      const gameLink = await findGameLink();
+      await gameLink.scrollIntoViewIfNeeded();
       await page.waitForTimeout(500);
 
-      const box = await img.boundingBox().catch(() => null);
+      const box = await gameLink.boundingBox().catch(() => null);
       if (box) {
         await page.mouse.move(50, 50);
         await page.waitForTimeout(300);
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 30 });
       }
-      await img.hover();
+      await gameLink.hover();
       await page.waitForTimeout(1_500);
 
-      // Use JavaScript to click the Play it button within the Slingo Super Spin tile
-      // This bypasses the anchor link that would otherwise intercept the click
-      const clicked = await page.evaluate(() => {
-        const img = document.querySelector('img[alt="Slingo Super Spin"]');
-        if (!img) return false;
-        // Find the game tile container (parent or ancestor)
-        let container: Element | null = img.parentElement;
-        while (container && !container.querySelector('button')) {
-          container = container.parentElement;
-        }
-        const btn = container?.querySelector('button');
-        if (btn) { (btn as HTMLElement).click(); return true; }
-        return false;
-      }).catch(() => false);
+      // Confirmed live: the hover "JUGAR" text is just an image/text swap on
+      // the SAME tile link, not a separate element — so clicking it goes
+      // wherever that tile's link normally goes. That's not consistent
+      // per-game: some tiles route straight to registration when logged
+      // out, others open the game info modal first (same as a plain click,
+      // per Step 1). Try the distinct-overlay case first in case a
+      // particular tile does have one; either way, fall through to the
+      // modal's own Play CTA (same button confirmed working in Step 3b) so
+      // this step reaches registration regardless of which tile landed us
+      // in the modal.
+      const tileCta = gameLink.locator('xpath=..').locator('a, button')
+        .filter({ hasText: strings.playCta }).filter({ visible: true }).first();
+      const ctaVisible = await tileCta.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (ctaVisible) {
+        await tileCta.click({ force: true });
+      } else {
+        await gameLink.click({ force: true });
+      }
+      console.log('GIM-01 Play CTA found on tile: ' + ctaVisible);
+      await page.waitForTimeout(2_000);
 
-      if (!clicked) {
-        // Fallback: click by mouse at image coordinates (hover must still be active)
-        const imgBox2 = await img.boundingBox().catch(() => null);
-        if (imgBox2) {
-          await page.mouse.click(imgBox2.x + imgBox2.width / 2, imgBox2.y + imgBox2.height / 2);
+      if (page.url().includes('#gamepage/')) {
+        const modal = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
+        const modalPlayCta = modal.locator('a, button').filter({ hasText: strings.playCta }).filter({ visible: true }).first();
+        if (await modalPlayCta.isVisible({ timeout: 5_000 }).catch(() => false)) {
+          await modalPlayCta.click({ force: true });
+          await page.waitForTimeout(2_000);
         }
       }
-      console.log('GIM-01 Play It clicked, clicked=' + clicked);
-      await page.waitForTimeout(2_000);
     });
 
     await runStep('Step 17: Registration modal visible + URL has /#account', async () => {
@@ -249,7 +266,7 @@ test.describe('P1 - Game Information Modal', () => {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(1_200);
       if (page.url().includes('#account')) {
-        await page.goto('/');
+        await page.goto('');
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
       }

@@ -24,6 +24,29 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-06
+
+### Added
+
+- **Spain (ES) is now fully covered by the automated test suite** — all 24 checks that already ran against the UK site now also run against the Spanish site, and both pass end-to-end. This included rebuilding the sign-up test almost from scratch, since Spain's sign-up form is genuinely different from the UK's (it asks for a Spanish national ID number instead of a mobile number, and has a different number of steps).
+- **One Excel file, one tab per country** — running the suite for more than one country at once (e.g. UK and Spain together) now produces a single results file with each country on its own labeled tab, instead of separate files with no way to tell them apart.
+- **Error messages in the Excel report are now in plain English** — a new "What Went Wrong" column explains failures in everyday language (e.g. "Couldn't find this on the page — it may not exist for this market"), with the original technical error kept in a second column for anyone who needs it.
+- **The Excel report now shows total run time**, not just how long each individual test took.
+- **Tests now recover automatically from a rare site glitch** — if the site briefly shows a generic "Something Went Wrong" error page mid-test, the test refreshes and tries itself again once, instead of being marked as failed. The rest of the suite is unaffected either way.
+
+### Changed
+
+- **Login test rebuilt to work correctly in any country** — it now uses each country's own button wording (e.g. "Log in" vs. Spanish "Iniciar sesión") and figures out the correct post-login redirect address automatically instead of assuming it's always the UK one.
+- **Sign-up and several other tests generalized to stop assuming UK-only page layouts** — things like the "Features" page address, the payment page, and the blog's category names are now looked up per-country instead of hardcoded, so they keep working as more countries are tested.
+
+### Fixed
+
+- **Root cause of nearly every country-specific test failure:** a bug meant the test suite could lose track of which country it was actually checking when running more than one country in the same session — it would silently keep testing the UK version of a page even while labeled as testing a different country. This is now fixed, and it's likely responsible for a lot of quietly-wrong results in past multi-country runs.
+- **The cookie pop-up dismiss logic only recognized English wording** ("allow all cookies"), so on the Spanish site it silently failed to close the pop-up and blocked every click after it. Now recognizes both languages.
+- **A handful of tests were clicking the wrong thing on the page** — a promotional banner button or a leftover menu link happened to have the same wording as the button the test actually meant to click, so it clicked the wrong one. These are now scoped to the correct area of the page so this can't happen.
+
+---
+
 ## [Unreleased] - 2026-07-02 (2)
 
 ### Fixed

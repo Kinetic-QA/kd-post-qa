@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * SN: Sidebar Navigation
@@ -20,7 +22,6 @@ import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher }
  * 4. history.pushState clears hash without triggering popup
  */
 
-const BASE = 'https://www.slingo.com';
 const SIDEBAR = '[class*="MainMenu_main-menu"]';
 const HAMBURGER = '[class*="hamburger"]';
 
@@ -30,6 +31,7 @@ test.describe('P2 - Sidebar Navigation', () => {
 
   test('SN-01: Sidebar navigation full flow', async ({ page }) => {
 
+    const strings = currentLocaleStrings();
     const results: { label: string; status: string }[] = [];
     function record(label: string, passed: boolean) {
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
@@ -50,7 +52,7 @@ test.describe('P2 - Sidebar Navigation', () => {
 
     // -- Setup: ONE page.goto('/') -----------------------------------------
     await setupCampaignPopupWatcher(page);
-    await page.goto('/');
+    await page.goto('');
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1_000);
     await dismissCookieConsent(page);
@@ -125,7 +127,7 @@ test.describe('P2 - Sidebar Navigation', () => {
     // -- Steps 5-8: LOG IN CTA -> /#account -------------------------------
     await test.step('Steps 5-8: LOG IN CTA opens login modal', async () => {
       await openSidebar();
-      const loginBtn = page.locator(SIDEBAR + ' button').filter({ hasText: /log in/i }).first();
+      const loginBtn = page.locator(SIDEBAR + ' button').filter({ hasText: strings.loginButton }).first();
       await loginBtn.click();
       await page.waitForTimeout(2_000);
       const hasAccount = page.url().includes('#account');
@@ -146,7 +148,7 @@ test.describe('P2 - Sidebar Navigation', () => {
     // -- Steps 9-11: JOIN CTA -> /#account --------------------------------
     await test.step('Steps 9-11: JOIN CTA opens registration modal', async () => {
       await openSidebar();
-      const joinBtn = page.locator(SIDEBAR + ' button').filter({ hasText: /^join$/i }).first();
+      const joinBtn = page.locator(SIDEBAR + ' button').filter({ hasText: strings.joinButton }).first();
       await joinBtn.click();
       await page.waitForTimeout(2_000);
       const hasAccount = page.url().includes('#account');
@@ -164,37 +166,48 @@ test.describe('P2 - Sidebar Navigation', () => {
     });
 
     // -- Steps 12-14: Promotions -------------------------------------------
-    await navStep('Promotions -> /casino-promotions/', '/casino-promotions/', '/casino-promotions/');
+    const geoFeatures = currentGeoFeatures();
+    if (geoFeatures.promotionsPath) {
+      const promoPath = geoFeatures.promotionsPath;
+      await navStep(`Promotions -> /${promoPath}`, `/${promoPath}`, `/${promoPath}`);
+    } else {
+      test.skip(true, `Promotions page does not exist for this GEO (${test.info().project.name})`);
+    }
 
     // -- Steps 15-17: Slingo Logo -> homepage -----------------------------
     await test.step('Steps 15-17: Slingo logo -> homepage (no slug)', async () => {
       await openSidebar();
       // Slingo logo is the second <a href="/"> in sidebar (first is hamburger toggle)
-      const slingoLogo = page.locator(SIDEBAR + ' a[href="https://www.slingo.com/"]').first();
+      const slingoLogo = page.locator(SIDEBAR + ` a[href="${siteUrl('')}"]`).first();
       await slingoLogo.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
       const url = page.url();
-      const isHome = url === BASE + '/' || url === BASE;
+      const isHome = url === siteUrl('');
       record('Slingo logo -> homepage (no slug)', isHome);
       console.log((isHome ? 'PASS' : 'FAIL') + ' | Slingo logo | ' + url);
-      await expect.soft(page).toHaveURL(BASE + '/', { timeout: 8_000 });
+      await expect.soft(page).toHaveURL(siteUrl(''), { timeout: 8_000 });
     });
 
     // -- Steps 18-20: Features ---------------------------------------------
-    await navStep('Features -> /casino-features/', '/casino-features/', '/casino-features/');
+    if (geoFeatures.featuresPath) {
+      const featuresPath = geoFeatures.featuresPath;
+      await navStep(`Features -> /${featuresPath}`, `/${featuresPath}`, `/${featuresPath}`);
+    } else {
+      test.skip(true, `Features page path not confirmed for this GEO (${test.info().project.name})`);
+    }
 
     // -- Steps 21-23: Home -------------------------------------------------
     await test.step('Steps 21-23: Home link -> homepage (no slug)', async () => {
       await openSidebar();
-      const homeLink = page.locator(SIDEBAR + ' a[href="https://www.slingo.com/"]').filter({ hasText: "Home" }).first();
+      const homeLink = page.locator(SIDEBAR + ` a[href="${siteUrl('')}"]`).filter({ hasText: strings.homeLinkText }).first();
       await homeLink.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
       const url = page.url();
-      const isHome = url === BASE + '/' || url === BASE;
+      const isHome = url === siteUrl('');
       record('Home link -> homepage (no slug)', isHome);
-      await expect.soft(page).toHaveURL(BASE + '/', { timeout: 8_000 });
+      await expect.soft(page).toHaveURL(siteUrl(''), { timeout: 8_000 });
     });
 
     // -- Steps 24-26: Slingo -----------------------------------------------
@@ -219,7 +232,12 @@ test.describe('P2 - Sidebar Navigation', () => {
     await navStep('About us -> /about-us/', '/about-us/', '/about-us/');
 
     // -- Step 45: Blog -> /blog/ -------------------------------------------
-    await navStep('Blog -> /blog/', '/blog/', '/blog/');
+    if (geoFeatures.hasBlog && geoFeatures.blogPath) {
+      const blogPath = geoFeatures.blogPath;
+      await navStep(`Blog -> /${blogPath}`, `/${blogPath}`, `/${blogPath}`);
+    } else {
+      record('Blog link (skipped — no Blog for this GEO)', true);
+    }
 
     // -- Step 46: Final hamburger -> sidebar opens -------------------------
     await test.step('Step 46: Final hamburger click -> sidebar opens', async () => {

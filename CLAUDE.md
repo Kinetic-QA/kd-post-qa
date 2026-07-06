@@ -19,6 +19,7 @@ After every end-of-session push, create a new file at `docs/updates/YYYY-MM-DD-u
 - Cover: what changed today, why it matters, and anything the team should know or watch for (e.g. a pending finding, a decision made, next steps)
 - Keep it tight — a few short bullets beat a wall of text
 - If multiple sessions happen on the same date, append to that day's existing file rather than overwriting it
+- **Local-only — never commit this file.** `docs/updates/` is gitignored on purpose; these drafts stay on the user's machine for copy-pasting into Slack and are not part of repo history.
 
 ---
 
