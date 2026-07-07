@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * FN: Footer Navigation
@@ -55,7 +56,7 @@ test.describe('P3 - Footer Navigation', () => {
 
     // ── Helper: click footer link and verify URL ──────────────────────────
     // Footer persists across all pages — no navigation back to homepage needed
-    async function footerStep(label: string, linkText: string, expectedPath: string) {
+    async function footerStep(label: string, linkText: string | RegExp, expectedPath: string) {
       // Smart poll: check for popup every 800ms up to 4s, exit early if found
       for (let i = 0; i < 5; i++) {
         const hasPopup = await page.locator('[class*="OfferPopup_close"]')
@@ -63,8 +64,11 @@ test.describe('P3 - Footer Navigation', () => {
         if (hasPopup) { await dismissCampaignPopup(page); break; }
         await page.waitForTimeout(300);
       }
+      const textMatch = typeof linkText === 'string'
+        ? new RegExp('^' + linkText.replace(/[()]/g, '\\$&') + '$', 'i')
+        : linkText;
       const link = page.locator(FOOTER + ' a')
-        .filter({ hasText: new RegExp('^' + linkText.replace(/[()]/g, '\\$&') + '$', 'i') })
+        .filter({ hasText: textMatch })
         .first();
       // Some categories/pages don't exist for every GEO (e.g. no Bingo nav on
       // Slingo ROW) — detect absence and skip that one item instead of a hard
@@ -114,19 +118,20 @@ test.describe('P3 - Footer Navigation', () => {
     await footerStep('Casino -> /casino/', 'Casino', '/casino/');
 
     // ── Steps 10-11: Responsible Gaming ──────────────────────────────────
-    await footerStep('Responsible Gaming -> /responsible-gaming/', 'Responsible Gaming', '/responsible-gaming/');
+    const strings = currentLocaleStrings();
+    await footerStep('Responsible Gaming -> /responsible-gaming/', strings.footerResponsibleGamingText, '/responsible-gaming/');
 
     // ── Steps 12-13: Bonus Policy ─────────────────────────────────────────
-    await footerStep('Bonus Policy -> /bonus-policy/', 'Bonus Policy', '/bonus-policy/');
+    await footerStep('Bonus Policy -> /bonus-policy/', strings.footerBonusPolicyText, '/bonus-policy/');
 
     // ── Steps 14-15: Terms and Conditions ─────────────────────────────────
-    await footerStep('Terms and Conditions -> /terms/', 'Terms and Conditions', '/terms/');
+    await footerStep('Terms and Conditions -> /terms/', strings.footerTermsText, '/terms/');
 
     // ── Steps 16-17: Privacy Policy ───────────────────────────────────────
-    await footerStep('Privacy Policy -> /privacy/', 'Privacy Policy', '/privacy/');
+    await footerStep('Privacy Policy -> /privacy/', strings.footerPrivacyPolicyText, '/privacy/');
 
     // ── Steps 18-19: About us ─────────────────────────────────────────────
-    await footerStep('About us -> /about-us/', 'About us', '/about-us/');
+    await footerStep('About us -> /about-us/', strings.footerAboutUsText, '/about-us/');
 
     // ── Steps 20-21: Promotions ───────────────────────────────────────────
     const geoFeatures = currentGeoFeatures();
@@ -137,22 +142,22 @@ test.describe('P3 - Footer Navigation', () => {
     }
 
     // ── Steps 22-23: Payment Options ──────────────────────────────────────
-    await footerStep('Payment Options -> /payment-methods/', 'Payment Options', '/payment-methods/');
+    await footerStep('Payment Options -> /payment-methods/', strings.footerPaymentOptionsText, '/payment-methods/');
 
     // ── Steps 24-25: Affiliates ───────────────────────────────────────────
-    await footerStep('Affiliates -> /affiliates/', 'Affiliates', '/affiliates/');
+    await footerStep('Affiliates -> /affiliates/', strings.footerAffiliatesText, '/affiliates/');
 
     // ── Steps 26-27: Help ─────────────────────────────────────────────────
     await footerStep('Help -> /help/', 'Help', '/help/');
 
     // ── Steps 28-29: Contact us ───────────────────────────────────────────
-    await footerStep('Contact us -> /contact/', 'Contact us', '/contact/');
+    await footerStep('Contact us -> /contact/', strings.footerContactUsText, '/contact/');
 
     // ── Steps 30-31: Mobile App ───────────────────────────────────────────
-    await footerStep('Mobile App -> /mobile-app/', 'Mobile App', '/mobile-app/');
+    await footerStep(`Mobile App -> /${geoFeatures.mobileAppPath}`, strings.footerMobileAppText, `/${geoFeatures.mobileAppPath}`);
 
     // ── Steps 32-33: Bingo Card Generator ────────────────────────────────
-    await footerStep('Bingo Card Generator -> /bingo-card-generator/', 'Bingo Card Generator', '/bingo-card-generator/');
+    await footerStep(`Bingo Card Generator -> /${geoFeatures.bingoCardGeneratorPath}`, strings.footerBingoCardGeneratorText, `/${geoFeatures.bingoCardGeneratorPath}`);
 
     // ── Steps 34-35: Blog ─────────────────────────────────────────────────
     if (geoFeatures.hasBlog && geoFeatures.blogPath) {
