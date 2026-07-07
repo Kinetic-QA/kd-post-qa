@@ -27,6 +27,16 @@ export interface LocaleStrings {
   searchPlaceholder: RegExp;   // Header search input placeholder
   feedbackTextareaPlaceholder: RegExp; // Feedback widget's free-text answer box
   homeLinkText: RegExp;        // Sidebar "Home" link (distinct from the brand logo link)
+  footerResponsibleGamingText: RegExp; // Footer "Responsible Gaming" link
+  footerBonusPolicyText: RegExp;       // Footer "Bonus Policy" link
+  footerTermsText: RegExp;             // Footer "Terms and Conditions" link
+  footerPrivacyPolicyText: RegExp;     // Footer "Privacy Policy" link
+  footerAboutUsText: RegExp;           // Footer "About us" link
+  footerPaymentOptionsText: RegExp;    // Footer "Payment Options" link
+  footerAffiliatesText: RegExp;        // Footer "Affiliates" link
+  footerContactUsText: RegExp;         // Footer "Contact us" link
+  footerMobileAppText: RegExp;         // Footer "Mobile App" link
+  footerBingoCardGeneratorText: RegExp; // Footer "Bingo Card Generator" link
 }
 
 const EN: LocaleStrings = {
@@ -49,6 +59,16 @@ const EN: LocaleStrings = {
   searchPlaceholder: /^search game$/i,
   feedbackTextareaPlaceholder: /type your answer here/i,
   homeLinkText: /^home$/i,
+  footerResponsibleGamingText: /^responsible gaming$/i,
+  footerBonusPolicyText: /^bonus policy$/i,
+  footerTermsText: /^terms and conditions$/i,
+  footerPrivacyPolicyText: /^privacy policy$/i,
+  footerAboutUsText: /^about us$/i,
+  footerPaymentOptionsText: /^payment options$/i,
+  footerAffiliatesText: /^affiliates$/i,
+  footerContactUsText: /^contact us$/i,
+  footerMobileAppText: /^mobile app$/i,
+  footerBingoCardGeneratorText: /^bingo card generator$/i,
 };
 
 const STRINGS: Record<string, LocaleStrings> = {
@@ -74,6 +94,17 @@ const STRINGS: Record<string, LocaleStrings> = {
     searchPlaceholder: /^buscar juego$/i,
     feedbackTextareaPlaceholder: /escribe aquí tu respuesta/i,
     homeLinkText: /^inicio$/i,
+    // Confirmed via live DOM inspection of slingocasino.es footer.
+    footerResponsibleGamingText: /^juego más seguro$/i,
+    footerBonusPolicyText: /^política de bono$/i,
+    footerTermsText: /^términos y condiciones$/i,
+    footerPrivacyPolicyText: /^política de privacidad$/i,
+    footerAboutUsText: /^quiénes somos$/i,
+    footerPaymentOptionsText: /^métodos de pago$/i,
+    footerAffiliatesText: /^afiliados$/i,
+    footerContactUsText: /^contacto$/i,
+    footerMobileAppText: /^app casino movil$/i,
+    footerBingoCardGeneratorText: /^generador cartones bingo$/i,
   },
 };
 

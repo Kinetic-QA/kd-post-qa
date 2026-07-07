@@ -40,6 +40,7 @@ Each release or change set uses this structure:
 - **Blog-related tests were jumping straight to the blog page by typing in the address**, which isn't how a real visitor gets there. Fixed so these tests open the side menu and click "Blog," the same way a real visitor would.
 - **The blog side menu test only ever checked one menu link (and only the Login button) before finishing**, even though it's supposed to check every link in the menu. Fixed to go through every link, one at a time.
 - **A rare "Something Went Wrong" site glitch could flash on-screen right at the very end of the footer navigation test**, after every other check had already passed, without anyone catching it. Added one more check at the end so this no longer slips through unnoticed.
+- **The footer navigation test on the Spanish site was skipping 10 out of 18 links** — it was only looking for the English wording ("Responsible Gaming," "Bonus Policy," "Terms and Conditions," etc.), so on the Spanish site it silently reported most of these as "not available in this country" instead of actually checking them, even though they're really there in Spanish. Also found that Spain's "Mobile App" and "Bingo Card Generator" links use different web addresses than the UK's. Both are now fixed — the test recognizes the Spanish wording and the correct Spanish addresses, so it genuinely checks all the links that exist for each country instead of skipping most of them.
 
 ---
 
