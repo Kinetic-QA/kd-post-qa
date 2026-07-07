@@ -127,6 +127,21 @@ export async function setupCampaignPopupWatcher(page: Page): Promise<void> {
     let cooldown = false;
     function checkAndDismiss() {
       if (cooldown) return;
+
+      // New popup: OfferPopup close button — click it directly, no Escape
+      // needed. Runs on every DOM mutation so a popup that appears mid-test
+      // (not just on initial load) still gets dismissed automatically.
+      const offerClose = document.querySelector(
+        '[class*="OfferPopup_close"], [class*="Popup_close"][class*="OfferPopup"]',
+      ) as HTMLElement | null;
+      if (offerClose && offerClose.offsetParent !== null) {
+        cooldown = true;
+        offerClose.click();
+        setTimeout(() => { cooldown = false; }, 2000);
+        return;
+      }
+
+      // Old popup: img[alt="close"] inside a[href="#account"] — use Escape.
       const closeImg = document.querySelector('img[alt="close"]');
       if (closeImg && closeImg.closest('a[href*="#account"]')) {
         cooldown = true;
@@ -177,6 +192,39 @@ export async function goHome(page: Page): Promise<void> {
   await page.goto('/');
   await waitForPageReady(page);
   await dismissPopups(page);
+}
+
+const SIDEBAR_SELECTOR = '[class*="MainMenu_main-menu"]';
+const HAMBURGER_SELECTOR = '[class*="hamburger"]';
+
+/**
+ * Confirmed live: real visitors only ever reach the blog through the
+ * sidebar's Blog link — there's no header/footer entry point exercised in
+ * normal browsing. Blog specs must reach it the same way rather than
+ * page.goto()-ing the blog path directly, or they're testing a page load
+ * that doesn't reflect how the page is actually navigated to.
+ */
+export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Promise<void> {
+  await page.goto('');
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1_000);
+  await dismissCookieConsent(page);
+  await page.waitForTimeout(2_000);
+  await dismissCampaignPopup(page);
+
+  // Hamburger toggle — React requires a JS click, same as sidebar-navigation.spec.ts.
+  await page.evaluate((sel) => {
+    (document.querySelector(sel) as HTMLElement | null)?.click();
+  }, HAMBURGER_SELECTOR);
+  await page.waitForTimeout(600);
+  await dismissCampaignPopup(page);
+
+  const blogLink = page.locator(`${SIDEBAR_SELECTOR} a[href*="${blogPath}"]`).first();
+  await expect(blogLink).toBeVisible({ timeout: 10_000 });
+  await blogLink.click();
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(1_000);
+  await dismissCampaignPopup(page);
 }
 
 export async function openLoginWidget(page: Page): Promise<void> {

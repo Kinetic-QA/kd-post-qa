@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError, navigateToBlogViaSidebar } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 
@@ -29,12 +29,7 @@ test.describe('P3 - Blog Sidebar', () => {
     geoFeatures = currentGeoFeatures();
     test.skip(!geoFeatures.hasBlog, `Blog does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto(geoFeatures.blogPath!);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3_000);
-    await dismissCookieConsent(page);
-    await dismissCampaignPopup(page);
-    await page.waitForTimeout(500);
+    await navigateToBlogViaSidebar(page, geoFeatures.blogPath!);
   });
 
   test('BI-01: Blog sidebar full flow', async ({ page }) => {
@@ -59,7 +54,7 @@ test.describe('P3 - Blog Sidebar', () => {
     }
     async function runStep(label: string, fn: () => Promise<void>) {
       await test.step(label, async () => {
-        try { await fn(); record(label, true); }
+        try { await fn(); await assertNoSiteError(page); record(label, true); }
         catch (e) { record(label, false); throw e; }
       });
     }
@@ -77,22 +72,52 @@ test.describe('P3 - Blog Sidebar', () => {
 
     try {
 
-    await runStep('Step 1: Links in the blog sidebar lead to expected destination pages', async () => {
+    await test.step('Step 1: Every blog sidebar navigation link leads to its expected destination', async () => {
       await openSidebar();
       // Category names aren't stable across GEOs — see blog-page.spec.ts's
-      // Step 1 comment (ES has no "Bingo" category at all).
-      const categoryHrefs = await page.locator(`${SIDEBAR} a[href*="/${geoFeatures.blogPath}"]`)
-        .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
-      const categoryHref = [...new Set(categoryHrefs)].find(h => {
-        const path = h.split(geoFeatures.blogPath!)[1] ?? '';
-        return path && !path.startsWith('search') && /^[a-z0-9-]+\/?$/.test(path);
+      // Step 1 comment (ES has no "Bingo" category at all) — so enumerate
+      // whatever category links actually exist instead of hardcoding names.
+      // Capture both href (to verify the destination URL) and visible text
+      // (to re-find the link after navigating away and back) — the href
+      // attribute's exact string form isn't stable across renders (absolute
+      // vs relative, trailing slash), but the label is.
+      const categories = await page.locator(`${SIDEBAR} a[href*="/${geoFeatures.blogPath}"]`)
+        .evaluateAll(els => els
+          .map(a => ({ href: a.getAttribute('href') ?? '', text: (a.textContent ?? '').trim() }))
+          .filter(c => c.href && c.text)
+        );
+      const seen = new Set<string>();
+      const uniqueCategories = categories.filter(c => {
+        const path = c.href.split(geoFeatures.blogPath!)[1] ?? '';
+        const valid = path && !path.startsWith('search') && /^[a-z0-9-]+\/?$/.test(path);
+        if (!valid || seen.has(c.text)) return false;
+        seen.add(c.text);
+        return true;
       });
-      if (!categoryHref) throw new Error('BI-01: no blog category link found in the sidebar');
-      const categoryLink = page.locator(`${SIDEBAR} a[href="${categoryHref}"]`).first();
-      await expect(categoryLink).toBeVisible({ timeout: 10_000 });
-      await categoryLink.click();
-      await page.waitForLoadState('domcontentloaded');
-      await expect(page).toHaveURL(new RegExp(categoryHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), { timeout: 10_000 });
+      if (uniqueCategories.length === 0) throw new Error('BI-01: no blog category links found in the sidebar');
+
+      for (const { href, text } of uniqueCategories) {
+        const label = `Sidebar link "${text}" -> ${href}`;
+        try {
+          const categoryLink = page.locator(SIDEBAR).getByRole('link', { name: text, exact: true }).first();
+          await expect(categoryLink).toBeVisible({ timeout: 10_000 });
+          await categoryLink.click();
+          await page.waitForLoadState('domcontentloaded');
+          await expect(page).toHaveURL(new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), { timeout: 10_000 });
+          await assertNoSiteError(page);
+          record(label, true);
+        } catch (e) {
+          record(label, false);
+          throw e;
+        } finally {
+          // Back to the blog listing and reopen the sidebar for the next link.
+          await page.goto(geoFeatures.blogPath!);
+          await page.waitForLoadState('domcontentloaded');
+          await page.waitForTimeout(800);
+          await dismissCampaignPopup(page);
+          await openSidebar();
+        }
+      }
     });
 
     await runStep('Step 2: "X" icon closes the sidebar menu', async () => {

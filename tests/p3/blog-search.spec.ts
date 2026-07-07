@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
@@ -58,6 +58,7 @@ test.describe('P3 - Blog Search', () => {
       await test.step(label, async () => {
         try {
           await fn();
+          await assertNoSiteError(page);
           record(label, true);
         } catch (e) {
           record(label, false);

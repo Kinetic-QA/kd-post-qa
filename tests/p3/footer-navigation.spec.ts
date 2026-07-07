@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
@@ -79,6 +79,7 @@ test.describe('P3 - Footer Navigation', () => {
       await link.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
+      await assertNoSiteError(page);
       const actualUrl = page.url();
       const passed = actualUrl.includes(expectedPath);
       record(label, passed);
@@ -159,6 +160,15 @@ test.describe('P3 - Footer Navigation', () => {
     } else {
       record('Blog footer link (skipped — no Blog for this GEO)', true);
     }
+
+    // Confirmed live: the "SOMETHING WENT WRONG" glitch can flash in
+    // right at the tail end of the test — after the last real check but
+    // before the browser context tears down — with no failing step to
+    // catch it. A final check here ensures that window isn't a blind spot:
+    // if it's already glitched by now, fail and let playwright.config.ts's
+    // retry give the whole spec a fresh page, per the standing rule that
+    // any "SOMETHING WENT WRONG" sighting means refresh-and-retest.
+    await assertNoSiteError(page);
 
     } finally {
       printSummary();
