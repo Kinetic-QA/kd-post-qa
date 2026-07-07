@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -50,7 +50,7 @@ test.describe('P2 - Login Widget', () => {
     }
     async function runStep(label: string, fn: () => Promise<void>) {
       await test.step(label, async () => {
-        try { await fn(); record(label, true); }
+        try { await fn(); await assertNoSiteError(page); record(label, true); }
         catch (e) { record(label, false); throw e; }
       });
     }

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl, assertNoSiteError } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 
@@ -95,6 +95,7 @@ test.describe('P2 - Sidebar Navigation', () => {
       await link.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
+      await assertNoSiteError(page);
       const actualUrl = page.url();
       const passed = actualUrl.includes(expectedPath);
       record(label, passed);

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl, assertNoSiteError } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
@@ -63,7 +63,7 @@ test.describe('P3 - Features Page', () => {
     }
     async function runStep(label: string, fn: () => Promise<void>) {
       await test.step(label, async () => {
-        try { await fn(); record(label, true); }
+        try { await fn(); await assertNoSiteError(page); record(label, true); }
         catch (e) { record(label, false); throw e; }
       });
     }

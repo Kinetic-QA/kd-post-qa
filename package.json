@@ -7,6 +7,8 @@
     "test:p1": "playwright test tests/p1/",
     "test:p2": "playwright test tests/p2/",
     "test:p3": "playwright test tests/p3/",
+    "test:uk": "cross-env TEST_GEO=UK playwright test tests/p1 tests/p2 tests/p3",
+    "test:es": "cross-env TEST_GEO=ES playwright test tests/p1 tests/p2 tests/p3",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "report": "playwright show-report",
@@ -23,6 +25,7 @@
   "devDependencies": {
     "@playwright/test": "^1.44.0",
     "@types/node": "^25.9.1",
+    "cross-env": "^10.1.0",
     "exceljs": "^4.4.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.4.5"

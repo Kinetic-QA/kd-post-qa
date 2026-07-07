@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl, assertNoSiteError, navigateToBlogViaSidebar } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 
@@ -24,12 +24,7 @@ test.describe('P3 - Blog Page Header', () => {
     geoFeatures = currentGeoFeatures();
     test.skip(!geoFeatures.hasBlog, `Blog does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto(geoFeatures.blogPath!);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3_000);
-    await dismissCookieConsent(page);
-    await dismissCampaignPopup(page);
-    await page.waitForTimeout(500);
+    await navigateToBlogViaSidebar(page, geoFeatures.blogPath!);
   });
 
   test('BH-01: Blog page header full flow', async ({ page }) => {
@@ -54,7 +49,7 @@ test.describe('P3 - Blog Page Header', () => {
     }
     async function runStep(label: string, fn: () => Promise<void>) {
       await test.step(label, async () => {
-        try { await fn(); record(label, true); }
+        try { await fn(); await assertNoSiteError(page); record(label, true); }
         catch (e) { record(label, false); throw e; }
       });
     }

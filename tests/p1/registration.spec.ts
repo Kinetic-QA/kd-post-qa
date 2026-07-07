@@ -331,16 +331,25 @@ async function fillEsStep2(page: Page, scope: Scope, data: EsRegistrationData): 
     await page.waitForTimeout(150);
   }
 
-  // Consent checkboxes — click by their label text (no stable id confirmed yet).
-  const ageCheckbox = scope.getByText(/más de 18 años/i).first();
-  if (await ageCheckbox.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await ageCheckbox.click({ force: true });
+  // Consent checkboxes — confirmed live: over_18, gdpr, terms_accept. Click
+  // via their <label for="..."> at a fixed offset (not by matching the
+  // label's visible text) — the terms_accept label wraps a "Términos y
+  // Condiciones" link, and text-matching that link swallows the click
+  // instead of toggling the checkbox.
+  const esCheckboxIds = ['over_18', 'gdpr', 'terms_accept'];
+  for (const id of esCheckboxIds) {
+    const label = scope.locator(`label[for="${id}"]`).first();
+    if (await label.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await label.click({ position: { x: 5, y: 10 }, force: true });
+    } else {
+      await scope.locator(`input[id="${id}"]`).first().check({ force: true }).catch(() => {});
+    }
     await page.waitForTimeout(200);
   }
-  const termsCheckbox = scope.getByText(/términos y condiciones/i).first();
-  if (await termsCheckbox.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await termsCheckbox.click({ force: true });
-    await page.waitForTimeout(200);
+
+  for (const id of esCheckboxIds) {
+    const checked = await scope.locator(`input[id="${id}"]`).first().isChecked().catch(() => false);
+    if (!checked) throw new Error(`REG-01 (ES): consent checkbox "${id}" did not get checked`);
   }
 
   console.log('REG-01 (ES) Paso 3/3 fields filled');
@@ -588,6 +597,24 @@ async function fillStep3(page: Page, scope: Scope, data: RegistrationData): Prom
         await page.waitForTimeout(500);
       }
     } catch { /* try next checkbox */ }
+  }
+
+  for (const id of checkboxIds) {
+    const checked = await page.evaluate((cbId) => {
+      function findInShadow(root: ShadowRoot | Document): HTMLInputElement | null {
+        const el = root.querySelector(`#${cbId}`) as HTMLInputElement;
+        if (el) return el;
+        for (const node of Array.from(root.querySelectorAll('*'))) {
+          if ((node as Element).shadowRoot) {
+            const found = findInShadow((node as Element).shadowRoot!);
+            if (found) return found;
+          }
+        }
+        return null;
+      }
+      return findInShadow(document)?.checked ?? false;
+    }, id);
+    if (!checked) throw new Error(`REG-01: consent checkbox "${id}" did not get checked`);
   }
 
   console.log('REG-01 Step 3/3 complete');

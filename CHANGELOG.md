@@ -24,6 +24,25 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-07
+
+### Added
+
+- **New shortcuts to run the full check-list for one country at a time** (`npm run test:uk` and `npm run test:es`) that always produce the results spreadsheet. Running the checks the old way could silently skip generating the spreadsheet if two unrelated tracking tests happened to be included in the run — these shortcuts avoid that entirely.
+- **The sign-up test now double-checks that every required tick-box is actually ticked**, not just that it was clicked. On the Spanish site this caught a real bug (see Fixed below); the same safety check was added to the UK version too so this can't quietly slip through there either.
+
+### Fixed
+
+- **Spanish sign-up form was only ticking one of three required boxes** (age confirmation, data-privacy consent, and terms & conditions) — the other two were never actually ticked, even though the test reported success. Now all three are ticked and verified.
+- **The "social media icons" and "regulator logos" checks were only reading the button's address, never actually clicking it.** Rebuilt both to genuinely click each icon/logo and confirm the correct page opens, rather than trusting an address that could be wrong or outdated without anyone noticing.
+- **The footer's licensing/regulator logos test was checking the wrong thing entirely** — it was clicking a "Responsible Gaming" text link instead of the actual regulator logos (GamCare, Gamstop, UK Gambling Commission, GambleAware, etc.) in the bottom-right of the footer. Rebuilt to click every real regulator logo and confirm it opens the right regulator's website, for both UK and Spain (Spain has a different set of logos, including a self-exclusion link that opens in the same tab instead of a new one — now handled correctly).
+- **A promotional pop-up could reappear partway through any test and silently swallow the next click**, without failing the test. The pop-up watcher now keeps checking for and dismissing it for the entire test, not just when the page first loads.
+- **Blog-related tests were jumping straight to the blog page by typing in the address**, which isn't how a real visitor gets there. Fixed so these tests open the side menu and click "Blog," the same way a real visitor would.
+- **The blog side menu test only ever checked one menu link (and only the Login button) before finishing**, even though it's supposed to check every link in the menu. Fixed to go through every link, one at a time.
+- **A rare "Something Went Wrong" site glitch could flash on-screen right at the very end of the footer navigation test**, after every other check had already passed, without anyone catching it. Added one more check at the end so this no longer slips through unnoticed.
+
+---
+
 ## [Unreleased] - 2026-07-06
 
 ### Added
