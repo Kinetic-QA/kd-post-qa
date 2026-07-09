@@ -68,10 +68,45 @@ test.describe('P1 - Website Header', () => {
 
     const strings = currentLocaleStrings();
     const geoFeatures = currentGeoFeatures();
+    const isMobile = test.info().project.name.endsWith('-mobile');
+
+    // Mobile has no Login/Join in the header itself — both live inside the
+    // hamburger sidebar (confirmed live: same [class*="MainMenu_main-menu"]
+    // container Step 5 already checks). The sidebar is permanently in the
+    // DOM with a real (nonzero) bounding box, just translated off-screen
+    // when closed — Playwright's isVisible() doesn't check on-screen
+    // position, so it reports "visible" even while off-canvas. Checking the
+    // actual rect avoids treating a closed sidebar as already open.
+    async function isMobileMenuOnScreen(): Promise<boolean> {
+      return await page.evaluate(() => {
+        const el = document.querySelector('[class*="MainMenu_main-menu"]');
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
+      });
+    }
+
+    async function openMobileMenuIfNeeded() {
+      if (!isMobile) return;
+      if (await isMobileMenuOnScreen()) return;
+      await page.evaluate(() => {
+        (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+      });
+      await page.waitForTimeout(800);
+    }
 
     try {
 
     await runStep('Step 1: LOGIN CTA opens login widget (/#account)', async () => {
+      // Mobile has no standalone Login button — it only exists inside the
+      // hamburger sidebar alongside Join (confirmed live), so there's no
+      // single "Login CTA" entry point to test in isolation the way desktop
+      // has. Covered instead by Step 5 (hamburger reveals both) and the
+      // mobile-only PLAY step below.
+      if (isMobile) {
+        console.log('WH-01 Step 1 skipped on mobile — no standalone Login CTA, see Step 5 and PLAY step');
+        return;
+      }
       const loginBtn = page.getByRole('banner').getByRole('button', { name: strings.loginButton }).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
@@ -80,6 +115,10 @@ test.describe('P1 - Website Header', () => {
     });
 
     await runStep('Step 2: JOIN CTA opens registration widget (/#account)', async () => {
+      if (isMobile) {
+        console.log('WH-01 Step 2 skipped on mobile — no standalone Join CTA, see Step 5 and PLAY step');
+        return;
+      }
       await dismissCampaignPopup(page);
       const joinBtn = page.getByRole('banner').getByRole('button', { name: strings.joinButton }).first();
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
@@ -88,14 +127,48 @@ test.describe('P1 - Website Header', () => {
       await closeAccountModal();
     });
 
+    await runStep('Step 2b: PLAY button opens account widget (mobile only)', async () => {
+      if (!isMobile) return;
+      await dismissCampaignPopup(page);
+      // Bottom-nav PLAY is mobile's single entry point covering both
+      // Login/Join — per live confirmation, which widget it opens can
+      // depend on whichever was last used in the session, so this only
+      // asserts the widget opens, not which specific form it lands on.
+      const playBtn = page.locator('[class*="MobileFooter"] button.play, [class*="MobileMenu_play-but"] button').first();
+      await expect(playBtn).toBeVisible({ timeout: 10_000 });
+      await playBtn.scrollIntoViewIfNeeded();
+      await playBtn.click();
+      await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
+      // closeAccountModal() targets a desktop-only class — re-navigating is
+      // a reliable reset here rather than chasing the mobile modal's close
+      // button (this fullscreen mobile takeover, unlike desktop's popup, has
+      // its own separate DOM structure).
+      await page.goto('');
+      await page.waitForLoadState('domcontentloaded');
+      await dismissCampaignPopup(page);
+    });
+
     await runStep('Step 3: Search icon opens search panel (/#search)', async () => {
       await dismissCampaignPopup(page);
-      const searchLink = page.locator('a[href="#search"]').first();
+      // Mobile's visible search icon lives in the sticky bottom nav — the
+      // header's own #search link is still in the DOM but CSS-hidden at
+      // mobile breakpoints (confirmed live), so an unscoped .first() would
+      // grab the wrong, invisible one.
+      const searchLink = isMobile
+        ? page.locator('[class*="MobileFooter"] a[href="#search"]').first()
+        : page.locator('a[href="#search"]').first();
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
       await searchLink.click({ force: true });
       await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
       await page.waitForTimeout(1_500);
-      const backBtn = page.getByText(strings.backButtonText, { exact: true }).first();
+      // The visible "Back" text is screen-reader-only (0x0 on screen) — the
+      // real clickable element is this button (confirmed live). Closing via
+      // Escape/history.pushState instead changes the URL but leaves the
+      // search-cover overlay at full size, which then blocks clicks on
+      // whatever step runs next.
+      const backBtn = isMobile
+        ? page.locator('[class*="SearchBar_search-back"]').first()
+        : page.getByText(strings.backButtonText, { exact: true }).first();
       if (await backBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await backBtn.click();
         await page.waitForTimeout(1_000);
@@ -119,7 +192,14 @@ test.describe('P1 - Website Header', () => {
       await dismissCampaignPopup(page);
       // href*="promotion" is English-domain-path-only (e.g. "casino-promotions") —
       // ES's promotions path is "promociones" and doesn't contain that substring.
-      const promoLink = page.getByRole('banner').locator(`a[href*="${geoFeatures.promotionsPath.replace(/\/$/, '')}"]`).first();
+      // Mobile's visible entry point is the gift icon in the bottom nav
+      // (confirmed live: [class*="MobileMenu_promos-but"]) — the header's
+      // own promotions icon is CSS-hidden at mobile breakpoints, and there's
+      // also a real (but off-screen unless scrolled) footer link with the
+      // same href, so an unscoped .first() picks the wrong one on mobile.
+      const promoLink = isMobile
+        ? page.locator(`[class*="MobileMenu_promos-but"] a[href*="${geoFeatures.promotionsPath.replace(/\/$/, '')}"]`).first()
+        : page.getByRole('banner').locator(`a[href*="${geoFeatures.promotionsPath.replace(/\/$/, '')}"]`).first();
       await expect(promoLink).toBeVisible({ timeout: 10_000 });
       await promoLink.click();
       await page.waitForLoadState('domcontentloaded');
@@ -138,7 +218,11 @@ test.describe('P1 - Website Header', () => {
         (el as HTMLElement | null)?.click();
       });
       await page.waitForTimeout(800);
-      const sidebarVisible = await page.locator('[class*="MainMenu_main-menu"]').isVisible({ timeout: 5_000 }).catch(() => false);
+      // Not page.locator(...).isVisible() — the sidebar has a real, nonzero
+      // bounding box even while closed (just translated off-screen), so
+      // that check reports "visible" regardless of open state. Confirming
+      // it's actually on-screen is what makes this assertion meaningful.
+      const sidebarVisible = await isMobileMenuOnScreen();
       expect(sidebarVisible).toBe(true);
       await page.evaluate(() => {
         const el = document.querySelector('[class*="hamburger" i]');

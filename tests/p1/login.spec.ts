@@ -64,13 +64,36 @@ test.describe('P1 - Login', () => {
 
     const { username, password } = currentTestCredentials();
     const strings = currentLocaleStrings();
+    const isMobile = test.info().project.name.endsWith('-mobile');
+
+    // Mobile has no standalone Login button in the header — it lives inside
+    // the hamburger sidebar (confirmed live, same as website-header.spec.ts).
+    // The sidebar has a real nonzero bounding box even while closed (just
+    // translated off-screen), so Playwright's isVisible() alone can't tell
+    // open from closed — check the actual on-screen position instead.
+    async function isMobileMenuOnScreen(): Promise<boolean> {
+      return await page.evaluate(() => {
+        const el = document.querySelector('[class*="MainMenu_main-menu"]');
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
+      });
+    }
 
     try {
 
     // ── Step 1: Click Log In ─────────────────────────────────────────────
     await runStep('Log In button clicked → widget opens', async () => {
       await dismissCampaignPopup(page);
-      const loginBtn = page.getByRole('banner').getByRole('button', { name: strings.loginButton }).first();
+      if (isMobile && !(await isMobileMenuOnScreen())) {
+        await page.evaluate(() => {
+          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+        });
+        await page.waitForTimeout(800);
+      }
+      const loginBtn = isMobile
+        ? page.locator('[class*="MainMenu_main-menu"]').getByRole('button', { name: strings.loginButton }).first()
+        : page.getByRole('banner').getByRole('button', { name: strings.loginButton }).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });

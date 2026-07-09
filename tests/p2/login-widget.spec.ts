@@ -57,10 +57,33 @@ test.describe('P2 - Login Widget', () => {
 
     const strings = currentLocaleStrings();
     const geoFeatures = currentGeoFeatures();
+    const isMobile = test.info().project.name.endsWith('-mobile');
+
+    // Mobile has no standalone Login button in the header — it lives inside
+    // the hamburger sidebar (confirmed live, see login.spec.ts). The sidebar
+    // has a real nonzero bounding box even while closed (just translated
+    // off-screen), so Playwright's isVisible() alone can't tell open from
+    // closed — check the actual on-screen position instead.
+    async function isMobileMenuOnScreen(): Promise<boolean> {
+      return await page.evaluate(() => {
+        const el = document.querySelector('[class*="MainMenu_main-menu"]');
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
+      });
+    }
 
     async function openLoginWidget() {
       await dismissCampaignPopup(page);
-      const loginBtn = page.getByRole('banner').getByRole('button', { name: strings.loginButton }).first();
+      if (isMobile && !(await isMobileMenuOnScreen())) {
+        await page.evaluate(() => {
+          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+        });
+        await page.waitForTimeout(800);
+      }
+      const loginBtn = isMobile
+        ? page.locator('[class*="MainMenu_main-menu"]').getByRole('button', { name: strings.loginButton }).first()
+        : page.getByRole('banner').getByRole('button', { name: strings.loginButton }).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
@@ -180,14 +203,25 @@ test.describe('P2 - Login Widget', () => {
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
       await openLoginWidget();
-      const modal = page.locator('[class*="Popup_popup"], [class*="AccountPopup"]').filter({ visible: true }).first();
-      const box = await modal.boundingBox().catch(() => null);
-      if (box) {
-        await page.mouse.click(box.x + box.width - 20, box.y + 20);
-        await page.waitForTimeout(1_000);
+      if (isMobile) {
+        // Mobile's login widget is a fullscreen takeover with its own DOM
+        // (unlabeled button>img close icon, confirmed live) rather than
+        // desktop's small popup — re-navigating is a reliable reset here
+        // rather than chasing that icon's exact coordinates (same approach
+        // used for the mobile PLAY-opened widget in website-header.spec.ts).
+        await page.goto('');
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(500);
       } else {
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(1_000);
+        const modal = page.locator('[class*="Popup_popup"], [class*="AccountPopup"]').filter({ visible: true }).first();
+        const box = await modal.boundingBox().catch(() => null);
+        if (box) {
+          await page.mouse.click(box.x + box.width - 20, box.y + 20);
+          await page.waitForTimeout(1_000);
+        } else {
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(1_000);
+        }
       }
       await expect(page).not.toHaveURL(/#account/, { timeout: 8_000 });
     });

@@ -7,7 +7,7 @@ import { test } from '@playwright/test';
  * TEST_CREDENTIALS_<GEO>_USERNAME/PASSWORD pair before a GEO's
  * login.spec.ts run can pass; unmapped GEOs fall back to UK's.
  */
-const KNOWN_GEOS = ['UK', 'ES'];
+const KNOWN_GEOS = ['UK', 'ES', 'IE'];
 
 function credentialsFor(geo: string): { username: string; password: string } {
   const username = process.env[`TEST_CREDENTIALS_${geo}_USERNAME`];
@@ -23,6 +23,10 @@ function credentialsFor(geo: string): { username: string; password: string } {
 
 /** Must be called from inside a running test/hook (uses test.info()). */
 export function currentTestCredentials(): { username: string; password: string } {
-  const geo = test.info().project.name;
+  // Mobile projects are named "<geo>-mobile" (see playwright.config.ts) —
+  // strip the suffix so mobile runs resolve the same per-GEO credentials as
+  // desktop instead of silently falling back to UK's (confirmed live: an
+  // ES-mobile run logged in with the UK test account and got geo-blocked).
+  const geo = test.info().project.name.replace(/-mobile$/, '');
   return credentialsFor(KNOWN_GEOS.includes(geo) ? geo : 'UK');
 }

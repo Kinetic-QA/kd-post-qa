@@ -61,12 +61,19 @@ test.describe('P1 - Search', () => {
     }
 
     const strings = currentLocaleStrings();
+    const isMobile = test.info().project.name.endsWith('-mobile');
 
     try {
 
     // ── Step 1: Click Search button in header ────────────────────────────
     await runStep('Step 1: Search button → search panel opens', async () => {
-      const searchLink = page.locator('a[href="#search"]').first();
+      // Header's own #search link is CSS-hidden at mobile breakpoints
+      // (confirmed live in website-header.spec.ts) — mobile's visible one
+      // lives in the sticky bottom nav, so an unscoped .first() grabs the
+      // wrong, invisible one.
+      const searchLink = isMobile
+        ? page.locator('[class*="MobileFooter"] a[href="#search"]').first()
+        : page.locator('a[href="#search"]').first();
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
       await searchLink.click({ force: true });
       await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
@@ -213,7 +220,9 @@ test.describe('P1 - Search', () => {
     // ── Step 10: Click Search button again ───────────────────────────────
     await runStep('Step 10: Click Search button again → panel reopens', async () => {
       await dismissCampaignPopup(page);
-      const searchLink = page.locator('a[href="#search"]').first();
+      const searchLink = isMobile
+        ? page.locator('[class*="MobileFooter"] a[href="#search"]').first()
+        : page.locator('a[href="#search"]').first();
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
       await searchLink.click({ force: true });
       await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
@@ -222,7 +231,12 @@ test.describe('P1 - Search', () => {
 
     // ── Step 11: Click Back ──────────────────────────────────────────────
     await runStep('Step 11: Click Back → returns to homepage', async () => {
-      const backBtn = page.getByText(strings.backButtonText, { exact: true }).first();
+      // The visible "Back" text is screen-reader-only (0x0 on screen,
+      // confirmed live in website-header.spec.ts) — the real clickable
+      // element is this button.
+      const backBtn = isMobile
+        ? page.locator('[class*="SearchBar_search-back"]').first()
+        : page.getByText(strings.backButtonText, { exact: true }).first();
       await expect(backBtn).toBeVisible({ timeout: 5_000 });
       await backBtn.click();
       await page.waitForTimeout(2_000);

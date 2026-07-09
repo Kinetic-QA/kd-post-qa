@@ -83,13 +83,23 @@ export async function dismissCookieConsent(page: Page): Promise<void> {
   // sometimes loads a beat later than usual, so a one-shot attempt can find
   // nothing and leave the banner to appear afterwards, silently intercepting
   // every later click for the rest of that test.
-  for (let attempt = 0; attempt < 8; attempt++) {
+  //
+  // Confirmed live: deep into a long full-suite run (20+ tests, one
+  // long-lived browser process, video/trace/screenshot recording on for
+  // every test), this script's mount can slow down well past the original
+  // 8-attempt/~500ms budget (~6-8s total) — the failure screenshot showed
+  // the real "Allow all cookies" button, fully rendered with exact matching
+  // text, still sitting there unclicked. Not a wrong selector, just not
+  // enough budget under load. 20 attempts/~800ms (~16s) absorbs that
+  // slowdown without lengthening the common case, since this returns the
+  // moment a click lands.
+  for (let attempt = 0; attempt < 20; attempt++) {
     const clicked = await tryClickCookieConsent(page);
     if (clicked) {
       await page.waitForTimeout(700);
       return;
     }
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(800);
   }
 }
 
@@ -125,6 +135,15 @@ export async function setupCampaignPopupWatcher(page: Page): Promise<void> {
   });
   await page.addInitScript(() => {
     let cooldown = false;
+    // Bounding-box + computed-style check — more reliable than offsetParent
+    // for elements that toggle visibility via a class/style flip rather than
+    // being added/removed from the DOM (this popup's case, see below).
+    function isReallyVisible(el: HTMLElement): boolean {
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return false;
+      const style = window.getComputedStyle(el);
+      return style.visibility !== 'hidden' && style.display !== 'none';
+    }
     function checkAndDismiss() {
       if (cooldown) return;
 
@@ -134,7 +153,7 @@ export async function setupCampaignPopupWatcher(page: Page): Promise<void> {
       const offerClose = document.querySelector(
         '[class*="OfferPopup_close"], [class*="Popup_close"][class*="OfferPopup"]',
       ) as HTMLElement | null;
-      if (offerClose && offerClose.offsetParent !== null) {
+      if (offerClose && isReallyVisible(offerClose)) {
         cooldown = true;
         offerClose.click();
         setTimeout(() => { cooldown = false; }, 2000);
@@ -150,8 +169,25 @@ export async function setupCampaignPopupWatcher(page: Page): Promise<void> {
         });
       }
     }
+    // Confirmed live: this popup's element is present in the DOM from
+    // initial load (collapsed to 0x0) and only becomes visible a few
+    // seconds later via a class/style attribute flip, not a childList
+    // mutation — childList/subtree alone never fired for it. Watching
+    // attributes covers that; the 500ms interval is a belt-and-braces
+    // fallback for any transition style not covered by class/style either.
+    //
+    // Observe `document`, not `document.documentElement` — addInitScript
+    // runs before the page has an <html> element yet, so documentElement is
+    // null at this point and .observe() throws synchronously, silently
+    // killing the rest of this script (including the code below) on every
+    // navigation. This was a pre-existing bug: the watcher has never
+    // actually run — only the explicit dismissCampaignPopup() calls
+    // scattered through each spec have been doing the real dismissal work.
     const observer = new MutationObserver(checkAndDismiss);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    observer.observe(document, {
+      childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'],
+    });
+    setInterval(checkAndDismiss, 500);
     if (document.readyState !== 'loading') {
       checkAndDismiss();
     } else {

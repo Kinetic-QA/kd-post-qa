@@ -59,6 +59,7 @@ test.describe('P2 - Promotions Page', () => {
     }
 
     const strings = currentLocaleStrings();
+    const isMobile = test.info().project.name.endsWith('-mobile');
 
     try {
 
@@ -128,7 +129,11 @@ test.describe('P2 - Promotions Page', () => {
     });
 
     await runStep('Step 5: "Play now"/"Let\'s Play" CTA opens login/registration widget', async () => {
-      const playBtn = page.getByText(strings.playCta).first();
+      // .filter({visible:true}) — confirmed live on mobile: multiple
+      // elements match this text (some are desktop-only and CSS-hidden at
+      // mobile breakpoints), and .first() alone can grab a hidden one
+      // (same ambiguity already handled this way in search.spec.ts).
+      const playBtn = page.getByText(strings.playCta).filter({ visible: true }).first();
       await expect(playBtn).toBeVisible({ timeout: 10_000 });
       await playBtn.click();
       await page.waitForTimeout(1_500);
@@ -140,7 +145,12 @@ test.describe('P2 - Promotions Page', () => {
       await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
-      const promoIcon = page.getByRole('banner').locator(`a[href*="${promoPath!.replace(/\/$/, '')}"]`).first();
+      // Mobile's visible entry point is the gift icon in the bottom nav
+      // (confirmed live in website-header.spec.ts) — the header's own
+      // promotions icon is CSS-hidden at mobile breakpoints.
+      const promoIcon = isMobile
+        ? page.locator(`[class*="MobileMenu_promos-but"] a[href*="${promoPath!.replace(/\/$/, '')}"]`).first()
+        : page.getByRole('banner').locator(`a[href*="${promoPath!.replace(/\/$/, '')}"]`).first();
       await expect(promoIcon).toBeVisible({ timeout: 10_000 });
       await promoIcon.click();
       await page.waitForLoadState('domcontentloaded');

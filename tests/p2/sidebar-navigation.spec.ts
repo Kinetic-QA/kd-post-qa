@@ -32,6 +32,7 @@ test.describe('P2 - Sidebar Navigation', () => {
   test('SN-01: Sidebar navigation full flow', async ({ page }) => {
 
     const strings = currentLocaleStrings();
+    const isMobile = test.info().project.name.endsWith('-mobile');
     const results: { label: string; status: string }[] = [];
     function record(label: string, passed: boolean) {
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
@@ -88,6 +89,29 @@ test.describe('P2 - Sidebar Navigation', () => {
       await clickHamburger();
     }
 
+    // Mobile's login/registration widget is a fullscreen takeover with its
+    // own DOM (confirmed live in login-widget.spec.ts) — the desktop
+    // Escape/corner-click close never actually dismisses it there, leaving
+    // it in the DOM to intercept clicks on whatever step runs next.
+    // Re-navigating is a reliable reset instead of chasing that widget's
+    // close control.
+    async function closeAccountModal() {
+      if (isMobile) {
+        await page.goto('');
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(500);
+        return;
+      }
+      await page.keyboard.press('Escape');
+      await page.locator('[class*="AccountPopup_account"]').waitFor({ state: 'detached', timeout: 5_000 }).catch(async () => {
+        const modal = page.locator('[class*="AccountPopup_account"]').first();
+        const box = await modal.boundingBox().catch(() => null);
+        if (box) await page.mouse.click(box.x + box.width - 20, box.y + 20);
+        await page.waitForTimeout(800);
+      });
+      await page.waitForTimeout(300);
+    }
+
     // navStep: open sidebar -> click link by href -> verify URL
     async function navStep(label: string, href: string, expectedPath: string) {
       await openSidebar();
@@ -134,16 +158,7 @@ test.describe('P2 - Sidebar Navigation', () => {
       const hasAccount = page.url().includes('#account');
       record('LOG IN CTA opens login modal (/#account)', hasAccount);
       await expect.soft(page).toHaveURL(/#account/, { timeout: 8_000 });
-      // Wait for modal to actually unmount from DOM, not just URL change
-      await page.keyboard.press('Escape');
-      await page.locator('[class*="AccountPopup_account"]').waitFor({ state: 'detached', timeout: 5_000 }).catch(async () => {
-        // If still there, click top-right corner to close
-        const modal = page.locator('[class*="AccountPopup_account"]').first();
-        const box = await modal.boundingBox().catch(() => null);
-        if (box) await page.mouse.click(box.x + box.width - 20, box.y + 20);
-        await page.waitForTimeout(800);
-      });
-      await page.waitForTimeout(300);
+      await closeAccountModal();
     });
 
     // -- Steps 9-11: JOIN CTA -> /#account --------------------------------
@@ -155,15 +170,7 @@ test.describe('P2 - Sidebar Navigation', () => {
       const hasAccount = page.url().includes('#account');
       record('JOIN CTA opens registration modal (/#account)', hasAccount);
       await expect.soft(page).toHaveURL(/#account/, { timeout: 8_000 });
-      // Wait for modal to actually unmount from DOM
-      await page.keyboard.press('Escape');
-      await page.locator('[class*="AccountPopup_account"]').waitFor({ state: 'detached', timeout: 5_000 }).catch(async () => {
-        const modal = page.locator('[class*="AccountPopup_account"]').first();
-        const box = await modal.boundingBox().catch(() => null);
-        if (box) await page.mouse.click(box.x + box.width - 20, box.y + 20);
-        await page.waitForTimeout(800);
-      });
-      await page.waitForTimeout(300);
+      await closeAccountModal();
     });
 
     // -- Steps 12-14: Promotions -------------------------------------------

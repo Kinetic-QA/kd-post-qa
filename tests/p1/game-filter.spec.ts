@@ -54,6 +54,8 @@ test.describe('P1 - Game Filter', () => {
       });
     }
 
+    const isMobile = test.info().project.name.endsWith('-mobile');
+
     try {
 
     await runStep('Step 1: Game filter category rows are visible with correct games', async () => {
@@ -68,6 +70,16 @@ test.describe('P1 - Game Filter', () => {
     });
 
     await runStep('Step 2: Caret buttons scroll the filter row', async () => {
+      if (isMobile) {
+        // Confirmed live: caret nav is CSS-hidden at mobile breakpoints —
+        // the row scrolls via touch swipe instead. Playwright's synthetic
+        // mouse-drag doesn't trigger this swipe library's touch listeners
+        // (confirmed: scrollLeft stayed 0 after a simulated drag), so this
+        // isn't reliably automatable here — skip rather than force a flaky
+        // workaround, same as the Load More soft-skip below.
+        console.log('GF-01 Step 2 skipped on mobile — carets are desktop-only, row scrolls via touch swipe');
+        return;
+      }
       const row = page.locator('[class*="GamesSlider_wrapper"]').first();
       const nextCaret = row.locator('[class*="Slider_next"]').first();
       const prevCaret = row.locator('[class*="Slider_prev"]').first();
@@ -86,11 +98,23 @@ test.describe('P1 - Game Filter', () => {
       const loadMoreBtn = page.getByText(/load more|see all|show more/i).first();
       const visible = await loadMoreBtn.isVisible({ timeout: 5_000 }).catch(() => false);
       if (visible) {
+        // Confirmed live on mobile: this row's "See All" is a real link to
+        // the category page (e.g. /slingo/), not an in-place expand — the
+        // tile-count comparison below only makes sense if the click didn't
+        // navigate away.
+        const urlBefore = page.url();
         const tilesBefore = await page.locator('a[href*="/slots/"], a[href*="/casino/"]').count();
         await loadMoreBtn.click();
         await page.waitForTimeout(1_500);
-        const tilesAfter = await page.locator('a[href*="/slots/"], a[href*="/casino/"]').count();
-        record('Load more/See all expands visible games', tilesAfter > tilesBefore);
+        if (page.url() !== urlBefore) {
+          record('Load more/See all expands visible games (navigates to category page)', true);
+          await page.goBack();
+          await page.waitForLoadState('domcontentloaded');
+          await page.waitForTimeout(500);
+        } else {
+          const tilesAfter = await page.locator('a[href*="/slots/"], a[href*="/casino/"]').count();
+          record('Load more/See all expands visible games', tilesAfter > tilesBefore);
+        }
       } else {
         console.log('GF-01 no Load More/See All control present on this page — confirmed absent on homepage and /slots/, skipping');
       }
