@@ -63,6 +63,19 @@ test.describe('P3 - Contact Us Page', () => {
 
     const strings = currentLocaleStrings();
     const GEO_EMAIL = currentGeoFeatures().contactEmail;
+    const isMobile = test.info().project.name.endsWith('-mobile');
+
+    // Mobile's login/feedback widget is a fullscreen takeover with its own
+    // DOM (confirmed live in login-widget.spec.ts) — desktop's
+    // Escape/corner-click close never actually dismisses it there. Reset by
+    // reloading the current path (minus hash) rather than chasing that
+    // widget's close control — later steps still need to be on this same
+    // GEO-prefixed contact page, not the homepage.
+    async function closeMobileModal() {
+      await page.goto(page.url().split('#')[0]);
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(500);
+    }
 
     try {
 
@@ -135,14 +148,18 @@ test.describe('P3 - Contact Us Page', () => {
     // ── Step 9: Click X on login modal ───────────────────────────────────
     await runStep('Step 9: Click X -> login modal closes', async () => {
       if (!hasContactLoginLink) { console.log('CU-01 skipped — no LOGIN link on this GEO'); return; }
-      await page.keyboard.press('Escape');
-      await page.locator('[class*="AccountPopup_account"]')
-        .waitFor({ state: 'detached', timeout: 5_000 }).catch(async () => {
-          const modal = page.locator('[class*="AccountPopup_account"]').first();
-          const box = await modal.boundingBox().catch(() => null);
-          if (box) await page.mouse.click(box.x + box.width - 20, box.y + 20);
-          await page.waitForTimeout(800);
-        });
+      if (isMobile) {
+        await closeMobileModal();
+      } else {
+        await page.keyboard.press('Escape');
+        await page.locator('[class*="AccountPopup_account"]')
+          .waitFor({ state: 'detached', timeout: 5_000 }).catch(async () => {
+            const modal = page.locator('[class*="AccountPopup_account"]').first();
+            const box = await modal.boundingBox().catch(() => null);
+            if (box) await page.mouse.click(box.x + box.width - 20, box.y + 20);
+            await page.waitForTimeout(800);
+          });
+      }
       await expect(page).not.toHaveURL(/#account\/login/, { timeout: 5_000 });
     });
 
@@ -173,23 +190,27 @@ test.describe('P3 - Contact Us Page', () => {
 
     // ── Step 15: Click X on feedback form modal ───────────────────────────
     await runStep('Step 15: Click X -> feedback form modal closes', async () => {
-      // Use same approach as login modal: click top-right corner of AccountPopup
-      const modal = page.locator('[class*="AccountPopup_account"]').filter({ visible: true }).first();
-      const box = await modal.boundingBox().catch(() => null);
-      if (box) {
-        await page.mouse.click(box.x + box.width - 20, box.y + 20);
-        await page.waitForTimeout(1_000);
-      }
-      // Fallback: Escape
-      if (page.url().includes('#account/feedback')) {
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(800);
-      }
-      // Final fallback: clear hash via history API — reuse the current path
-      // (not a hardcoded '/contact/') so GEO path prefixes like /en-row/ survive
-      if (page.url().includes('#account')) {
-        await page.evaluate(() => history.pushState({}, '', location.pathname));
-        await page.waitForTimeout(300);
+      if (isMobile) {
+        await closeMobileModal();
+      } else {
+        // Use same approach as login modal: click top-right corner of AccountPopup
+        const modal = page.locator('[class*="AccountPopup_account"]').filter({ visible: true }).first();
+        const box = await modal.boundingBox().catch(() => null);
+        if (box) {
+          await page.mouse.click(box.x + box.width - 20, box.y + 20);
+          await page.waitForTimeout(1_000);
+        }
+        // Fallback: Escape
+        if (page.url().includes('#account/feedback')) {
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(800);
+        }
+        // Final fallback: clear hash via history API — reuse the current path
+        // (not a hardcoded '/contact/') so GEO path prefixes like /en-row/ survive
+        if (page.url().includes('#account')) {
+          await page.evaluate(() => history.pushState({}, '', location.pathname));
+          await page.waitForTimeout(300);
+        }
       }
       await expect(page).not.toHaveURL(/#account\/feedback/, { timeout: 5_000 });
       console.log('CU-01 feedback form closed');

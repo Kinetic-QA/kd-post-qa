@@ -40,7 +40,10 @@ export interface LocaleStrings {
 }
 
 const EN: LocaleStrings = {
-  loginButton: /log in/i,
+  // \s* (not a literal space) — confirmed live: the header CTA reads "Log
+  // in" but the contact page's own link reads "LOGIN" (no space); a bare
+  // "log in" substring match silently never matched the latter.
+  loginButton: /log\s*in/i,
   loginSubmitButton: /^login$/i,
   usernameOrEmailLabel: /username or email/i,
   joinButton: /join/i,

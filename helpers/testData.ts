@@ -109,6 +109,18 @@ const UK_ADDRESSES: UKAddress[] = [
   },
 ];
 
+/**
+ * Hardcoded valid Irish addresses — Eircodes (not UK-style postcodes)
+ * confirmed live: IE's address step has no separate house-number field
+ * (unlike UK's), so houseNumber here is unused by fillIEAddress but kept
+ * for RegistrationData shape compatibility.
+ */
+const IE_ADDRESSES: UKAddress[] = [
+  { houseNumber: '', street: 'Grafton Street', postcode: 'D02 XY45', city: 'Dublin', country: 'IRELAND' },
+  { houseNumber: '', street: 'Patrick Street', postcode: 'T12 XY67', city: 'Cork', country: 'IRELAND' },
+  { houseNumber: '', street: 'Shop Street', postcode: 'H91 XY89', city: 'Galway', country: 'IRELAND' },
+];
+
 // ── Generators ───────────────────────────────────────────────────────────────
 
 function randomFrom<T>(arr: T[]): T {
@@ -138,6 +150,19 @@ export function generateUKMobile(): string {
   const secondDigit = randomFrom([4, 5, 7, 8, 9]);
   const rest = Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
   return `7${secondDigit}${rest}`;
+}
+
+/**
+ * Generates a random valid Irish mobile number WITHOUT the leading 0. The
+ * form shows "+353" as the country code prefix, so we supply the 9-digit
+ * national number — Irish mobiles are 08X XXX XXXX nationally (start with
+ * 8, not UK's 7 — confirmed live, a different format from UK despite the
+ * otherwise near-identical registration flow).
+ */
+export function generateIrishMobile(): string {
+  const secondDigit = randomFrom([3, 5, 6, 7, 8, 9]);
+  const rest = Array.from({ length: 7 }, () => Math.floor(Math.random() * 10)).join('');
+  return `8${secondDigit}${rest}`;
 }
 
 /**
@@ -224,6 +249,30 @@ export function generateRegistrationData(): RegistrationData {
     email:     `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
     address:   randomFrom(UK_ADDRESSES),
     username:  `Test_${firstName[0]}${timestamp}`,
+    password:  '5Tandard@1',
+  };
+}
+
+/**
+ * Generates registration data for IE — reuses UK's names/gender/DOB pools
+ * (same English-language flow, confirmed live near-identical to UK's) but
+ * with an Irish mobile number and address, per registration.spec.ts's
+ * isIrishFormat branch.
+ */
+export function generateIERegistrationData(): RegistrationData {
+  const firstName = randomFrom(FIRST_NAMES);
+  const lastName  = randomFrom(LAST_NAMES);
+  const timestamp = Date.now();
+
+  return {
+    mobile:    generateIrishMobile(),
+    dob:       generateDOB(),
+    firstName,
+    lastName,
+    gender:    randomFrom(['Male', 'Female'] as const),
+    email:     `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
+    address:   randomFrom(IE_ADDRESSES),
+    username:  `TestIE_${firstName[0]}${timestamp}`,
     password:  '5Tandard@1',
   };
 }

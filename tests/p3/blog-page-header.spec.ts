@@ -54,7 +54,42 @@ test.describe('P3 - Blog Page Header', () => {
       });
     }
 
+    const strings = currentLocaleStrings();
+    const isMobile = test.info().project.name.endsWith('-mobile');
+
+    // Mobile has no standalone Login/Join in the header — both live inside
+    // the hamburger sidebar (confirmed live, see login.spec.ts). The
+    // sidebar has a real nonzero bounding box even while closed (just
+    // translated off-screen), so Playwright's isVisible() alone can't tell
+    // open from closed — check the actual on-screen position instead.
+    async function isMobileMenuOnScreen(): Promise<boolean> {
+      return await page.evaluate(() => {
+        const el = document.querySelector('[class*="MainMenu_main-menu"]');
+        if (!el) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
+      });
+    }
+
+    async function openMobileMenuIfNeeded() {
+      if (!isMobile) return;
+      if (await isMobileMenuOnScreen()) return;
+      await page.evaluate(() => {
+        (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+      });
+      await page.waitForTimeout(800);
+    }
+
     async function closeAccountModal() {
+      if (isMobile) {
+        // Mobile's login/registration widget is a fullscreen takeover with
+        // its own DOM (confirmed live in login-widget.spec.ts) — desktop's
+        // Escape/corner-click close never actually dismisses it there.
+        await page.goto(page.url().split('#')[0]);
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(500);
+        return;
+      }
       await page.keyboard.press('Escape');
       await page.locator('[class*="AccountPopup_account"]')
         .waitFor({ state: 'detached', timeout: 5_000 }).catch(async () => {
@@ -66,12 +101,13 @@ test.describe('P3 - Blog Page Header', () => {
       await expect(page).not.toHaveURL(/#account/, { timeout: 8_000 });
     }
 
-    const strings = currentLocaleStrings();
-
     try {
 
     await runStep('Step 1: LOGIN CTA opens the login form', async () => {
-      const loginBtn = page.getByRole('banner').getByText(strings.loginButton).first();
+      await openMobileMenuIfNeeded();
+      const loginBtn = isMobile
+        ? page.locator('[class*="MainMenu_main-menu"]').getByText(strings.loginButton).first()
+        : page.getByRole('banner').getByText(strings.loginButton).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
       await page.waitForTimeout(1_500);
@@ -81,7 +117,10 @@ test.describe('P3 - Blog Page Header', () => {
 
     await runStep('Step 2: JOIN CTA opens the registration form', async () => {
       await dismissCampaignPopup(page);
-      const joinBtn = page.getByRole('banner').getByText(strings.joinButton).first();
+      await openMobileMenuIfNeeded();
+      const joinBtn = isMobile
+        ? page.locator('[class*="MainMenu_main-menu"]').getByText(strings.joinButton).first()
+        : page.getByRole('banner').getByText(strings.joinButton).first();
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
       await joinBtn.click();
       await page.waitForTimeout(1_500);
@@ -91,7 +130,13 @@ test.describe('P3 - Blog Page Header', () => {
 
     await runStep('Step 3: Search icon redirects to the blog search page', async () => {
       await dismissCampaignPopup(page);
-      const searchIcon = page.locator('a[href*="/blog/search"], [class*="search" i] a').first();
+      // Blog's own desktop-style header search icon (BlogHeader_search-demi)
+      // is CSS-hidden at mobile breakpoints (confirmed live, same pattern as
+      // the main site) — mobile's visible one lives in the blog's own
+      // MobileFooter bottom nav instead.
+      const searchIcon = isMobile
+        ? page.locator('[class*="MobileFooter_search-but"] a[href*="/blog/search"]').first()
+        : page.locator('a[href*="/blog/search"], [class*="search" i] a').first();
       await expect(searchIcon).toBeVisible({ timeout: 10_000 });
       await searchIcon.click();
       await page.waitForTimeout(1_000);

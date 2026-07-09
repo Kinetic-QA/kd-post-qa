@@ -24,6 +24,23 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-09
+
+### Added
+
+- **The whole test suite now runs on mobile phone screens, not just desktop.** All 24 checks for the UK and Spanish sites now pass on a phone-sized view as well as desktop — this covers things like the slide-out menu, the bottom navigation bar, and the sign-up form, all of which look and behave differently on mobile.
+- **Ireland (IE) is now covered by the test suite on desktop.** Sign-in and sign-up both work — sign-up needed its own rebuild since Ireland's form is a little different from the UK's (different phone number format, no separate "house number" field, and one fewer tick-box).
+
+### Fixed
+
+- **The pop-up that closes the special-offer banner could silently fail to close itself if it showed up slowly**, which became more likely the longer a test run went on. It now waits longer and tries more times before giving up, so a slow pop-up doesn't block whatever the test was about to do next.
+- **On mobile, "Log In" and "Join" aren't separate buttons up top like on desktop — they're inside the slide-out side menu.** Every test that needs to log in or sign up on mobile now knows to open that menu first.
+- **Testing a country other than the UK on mobile was silently logging in with the UK test account instead of that country's own account**, which caused a "wrong region" error. Now it always uses the right account for whichever country is being tested.
+- **The "Terms & Conditions apply" link under the homepage banner was being reported as missing on some markets, when it was actually there** — the check required it to be visibly on-screen, but this link is intentionally tucked out of sight until expanded. Now it's checked for correctly either way.
+- **On the Spanish site, a "LOGIN" link on the Contact Us page wasn't being recognized** because the check was only looking for "Log in" (with a space) — this also would have affected every other market with a similar wording difference.
+
+---
+
 ## [Unreleased] - 2026-07-07
 
 ### Added

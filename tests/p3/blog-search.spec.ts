@@ -83,7 +83,22 @@ test.describe('P3 - Blog Search', () => {
         '[class*="menu-toggle"], [class*="MenuToggle"]'
       ).first();
       await expect(hamburger).toBeVisible({ timeout: 10_000 });
-      await hamburger.click();
+      // Not hamburger.click() — this toggle anchor sits permanently
+      // off-canvas (translated via CSS, not display:none), so it passes
+      // toBeVisible() (non-empty bounding box) but Playwright's click()
+      // actionability check requires genuine in-viewport position and
+      // times out trying to scroll to an element it can't reach. A JS
+      // click bypasses that check and reaches the same handler (confirmed
+      // live — same pattern already used in sidebar-navigation.spec.ts).
+      await page.evaluate(() => {
+        const el = document.querySelector(
+          'button[aria-label*="menu" i], button[aria-label*="hamburger" i], ' +
+          '[class*="hamburger"], [class*="Hamburger"], [class*="burger"], ' +
+          '[class*="sidebar-toggle"], [class*="SidebarToggle"], ' +
+          '[class*="menu-toggle"], [class*="MenuToggle"]'
+        ) as HTMLElement | null;
+        el?.click();
+      });
       await page.waitForTimeout(1_500);
     });
 

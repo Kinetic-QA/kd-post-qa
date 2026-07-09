@@ -24,6 +24,12 @@ const TEST_GEOS = process.env.TEST_GEOS
   .map(g => g.trim())
   .filter(Boolean);
 
+// TEST_MOBILE=true adds a single "<geo>-mobile" project (Pixel 5 / Chrome,
+// same engine as the desktop projects to keep selector behaviour
+// comparable) alongside the desktop one(s). Opt-in only — default runs are
+// desktop-only and unaffected.
+const TEST_MOBILE = process.env.TEST_MOBILE === 'true';
+
 function resolveUrl(brand: string, geo: string): string {
   const url = TEST_ENV === 'qa' ? getQAUrl(brand, geo) : getLiveUrl(brand, geo);
   if (!url) {
@@ -47,6 +53,19 @@ const projects = TEST_GEOS && TEST_GEOS.length > 0
       use: { ...devices['Desktop Chrome'], baseURL: resolveUrl(TEST_BRAND, TEST_GEO) },
     }];
 
+if (TEST_MOBILE) {
+  projects.push({
+    name: `${TEST_GEO}-mobile`,
+    use: { ...devices['Pixel 5'], baseURL: resolveUrl(TEST_BRAND, TEST_GEO) },
+    // Playwright's mobile emulation (isMobile/hasTouch/deviceScaleFactor)
+    // relies on a CDP device-metrics override that's incompatible with
+    // resizing the actual OS browser window to match (viewport: null
+    // errors on all three) — confirmed live, not fixable via config. The
+    // headed window will show gray space around the emulated content;
+    // that's cosmetic only and doesn't affect selectors or test results.
+  });
+}
+
 export default defineConfig({
   globalSetup: './global-setup',
   testDir: './tests',
@@ -62,7 +81,7 @@ export default defineConfig({
   retries: 1,
   workers: 1,
   reporter: [
-    ['html', { outputFolder: 'playwright-report', open: 'on-failure' }],
+    ['html', { outputFolder: 'playwright-report', open: 'always' }],
     ['json', { outputFile: 'test-results/results.json' }],
     ['list'],
     ['./excel-reporter.cjs'],
@@ -72,7 +91,7 @@ export default defineConfig({
     headless: false,
     viewport: { width: 1280, height: 720 },
     screenshot: 'on',
-    video: 'on',
+    video: { mode: 'on', size: { width: 1280, height: 720 } },
     trace: 'on',
     actionTimeout: 10_000,
     navigationTimeout: 15_000,

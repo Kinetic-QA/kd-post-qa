@@ -116,7 +116,15 @@ test.describe('P2 - Footer Regulations', () => {
             // verify via the query/hash fragment that actually identifies
             // the destination, since the path itself is unchanged (SPA
             // hash routing).
-            await link.click();
+            //
+            // noWaitAfter — confirmed live on mobile: this click also
+            // triggers ad-tracking iframe navigations (partytown sandbox),
+            // and Playwright's default post-click wait hangs waiting for
+            // ALL frame navigations to settle, not just the main one. The
+            // actual page navigation itself completes within ~1s regardless
+            // (confirmed via framenavigated events) — the explicit URL check
+            // below is what actually verifies success, not this wait.
+            await link.click({ noWaitAfter: true });
             await page.waitForTimeout(1_500);
             const expectedFragment = resolved.hash || resolved.search;
             expect(page.url()).toContain(expectedFragment);

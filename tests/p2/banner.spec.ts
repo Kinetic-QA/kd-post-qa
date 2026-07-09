@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
+import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
  * BN: Banner
@@ -56,6 +57,8 @@ test.describe('P2 - Banner', () => {
       });
     }
 
+    const strings = currentLocaleStrings();
+
     try {
 
     await runStep('Step 1: Banner image is displayed on the page', async () => {
@@ -68,7 +71,10 @@ test.describe('P2 - Banner', () => {
       // ("Automatically credited on 1st Deposit...", "Bonus Policy applies.")
       // rather than a collapsible accordion — no expand/collapse toggle exists
       // to check here, so this verifies presence of the disclaimer copy.
-      const tncText = page.getByText(/bonus policy applies/i).first();
+      // Locale-aware — a hardcoded English regex here was a false negative
+      // on ES (copy reads "Política de Bonos aplica"), same class of bug as
+      // the loginButton regex fix in helpers/locale-strings.ts.
+      const tncText = page.getByText(strings.bonusPolicyText).first();
       const visible = await tncText.isVisible({ timeout: 5_000 }).catch(() => false);
       record('T&C disclaimer text present on banner', visible);
       if (!visible) console.log('BN-01 T&C disclaimer text not found on homepage banner — verify live');
@@ -98,8 +104,13 @@ test.describe('P2 - Banner', () => {
     });
 
     await runStep('Step 4: Bonus policy link in T&C redirects to bonus policy page', async () => {
+      // .count() > 0, not isVisible() — confirmed live on IE: this link's
+      // panel renders collapsed to 0x0 by default (the "can't be clicked
+      // even with force" comment below already knew this), so requiring
+      // Playwright-visible before verifying the href contradicts this
+      // step's own point — check DOM presence instead of visibility.
       const bonusLink = page.locator('a[href*="/bonus-policy/"]').first();
-      const visible = await bonusLink.isVisible({ timeout: 5_000 }).catch(() => false);
+      const visible = await bonusLink.count().then(c => c > 0).catch(() => false);
       if (visible) {
         // Link sits inside a collapsed T&C panel (0-height/overflow-hidden by
         // default), so it can't be clicked even with force. Verify the href

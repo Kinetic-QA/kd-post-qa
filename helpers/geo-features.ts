@@ -90,6 +90,9 @@ export function getGeoFeatures(brand: string, geo: string): GeoFeatureConfig {
  */
 export function currentGeoFeatures(): GeoFeatureConfig {
   const brand = process.env.TEST_BRAND ?? 'SC';
-  const geo = test.info().project.name;
+  // Mobile projects are named "<geo>-mobile" (see playwright.config.ts) so
+  // they can be targeted separately via --project; strip the suffix so GEO
+  // resolution is unaffected by which viewport is running.
+  const geo = test.info().project.name.replace(/-mobile$/, '');
   return getGeoFeatures(brand, geo);
 }
