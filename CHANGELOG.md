@@ -30,10 +30,18 @@ Each release or change set uses this structure:
 
 - **Wrote down our team's coding rules and testing know-how in one shareable file** (`AGENT-STANDARDS.md`), so everyone on the QA team gets the same guidance no matter which tool they use to write tests — instead of that knowledge living only in one person's head or one person's chat history.
 - **Added a short "how to use RevWright" guide** (`docs/USING-REVWRIGHT.md`) explaining what to expect day-to-day — like it always asking for a specific Jira ticket before touching Jira, and pausing to ask you to switch your VPN when testing more than one country in a row.
+- **Rest of World (ROW) is now covered by the test suite, on both desktop and mobile.** Sign-up needed its own fix since ROW's sign-up form checks the phone number against whichever country your connection is really coming from, not a fixed country — so it needed real South-Africa-formatted numbers to work during testing, plus the same "no house number field, one fewer tick-box" pattern already found on the Ireland site.
+- **Test results for a country now include both the desktop and mobile results in a single results file**, on two separate tabs, instead of two separate files — easier to review and won't get overwritten by accident.
 
 ### Changed
 
 - **Added a note in our project rules** about keeping the shared knowledge file up to date after changes get merged in, so the version everyone's using doesn't quietly fall behind.
+- **The social media icons check now skips entirely for countries that don't show social icons at all** (Ireland, ROW), instead of running the check and discovering that partway through.
+
+### Fixed
+
+- **A footer link ("Payment Options") could occasionally show as broken when it wasn't** — clicking it right after clicking a different footer link could land on the wrong page if the earlier click's page-load was still catching up. The check now properly waits for each click to fully land before checking the next one.
+- **The search feature's "search for a game, then sign up" check could occasionally fail on phone screens, ending up on a game preview page instead of the sign-up form.** This turned out to be a testing-only issue (not something a real visitor would ever hit) — our test was doing a "hover" motion before clicking, which doesn't make sense on a phone (phones don't have hover), and a leftover pop-up from an earlier step wasn't always fully closing before the next click. Both are now fixed, verified with over a dozen repeated test runs with no failures.
 
 ---
 

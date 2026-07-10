@@ -1,6 +1,6 @@
 import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, RegistrationData, EsRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, RegistrationData, EsRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 
 /**
@@ -80,6 +80,7 @@ test.describe('Registration Flow', () => {
     // helpers below. DE/SE not yet confirmed at all.
     const isSpanishFormat = test.info().project.name.replace(/-mobile$/, '') === 'ES';
     const isIrishFormat = test.info().project.name.replace(/-mobile$/, '') === 'IE';
+    const isRowFormat = test.info().project.name.replace(/-mobile$/, '') === 'ROW';
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
 
@@ -211,6 +212,116 @@ test.describe('Registration Flow', () => {
       });
 
       await runStep('Step 3: Username + Password + Checkboxes', async () => {
+        await fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept']);
+      });
+
+      await runStep('GO PLAY button visible and enabled', async () => {
+        const goPlayBtn = scope.getByRole('button', { name: /go play/i }).first();
+        await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
+        await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
+      });
+    } else if (isIrishFormat && isMobile) {
+      // IE mobile — same 5-step shape as UK mobile, with IE's confirmed
+      // desktop differences carried over: Irish mobile format
+      // (generateIrishMobile), no house-number field on the address step
+      // (fillMobileStep2GenderEmailIE / fillMobileStep3AddressIE), and only
+      // 3 consent checkboxes instead of UK's 4.
+      const data = generateIERegistrationData();
+
+      await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
+        await fillStep0WithRetry(page, scope, data, generateIrishMobile);
+      });
+
+      await runStep('Step 1 of 5: First/Last name → Continue', async () => {
+        await fillMobileStep1Name(page, scope, data);
+      });
+
+      await runStep('Step 2 of 5: Gender + Email → Continue', async () => {
+        await fillMobileStep2GenderEmailIE(page, scope, data);
+      });
+
+      await runStep('Step 3 of 5: Address → Continue', async () => {
+        await fillMobileStep3AddressIE(page, scope, data);
+      });
+
+      await runStep('Step 4 of 5: Username + Password → Continue', async () => {
+        await fillMobileStep4Credentials(page, scope, data);
+      });
+
+      await runStep('Step 5 of 5: Deposit limit + consents', async () => {
+        await fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept']);
+      });
+
+      await runStep('GO PLAY button visible and enabled', async () => {
+        const goPlayBtn = scope.getByRole('button', { name: /go play/i }).first();
+        await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
+        await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
+      });
+    } else if (isRowFormat && isMobile) {
+      // ROW mobile — same 5-step shape as UK mobile, with ROW's confirmed
+      // desktop differences carried over: South African mobile format
+      // (generateSouthAfricanMobile), no house-number field on the address
+      // step (fillMobileStep2GenderEmailROW / fillMobileStep3AddressROW),
+      // country select left alone (reflects the tester's real IP rather
+      // than a fixed GEO), and only 3 consent checkboxes instead of UK's 4.
+      const data = generateROWRegistrationData();
+
+      await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
+        await fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile);
+      });
+
+      await runStep('Step 1 of 5: First/Last name → Continue', async () => {
+        await fillMobileStep1Name(page, scope, data);
+      });
+
+      await runStep('Step 2 of 5: Gender + Email → Continue', async () => {
+        await fillMobileStep2GenderEmailROW(page, scope, data);
+      });
+
+      await runStep('Step 3 of 5: Address → Continue', async () => {
+        await fillMobileStep3AddressROW(page, scope, data);
+      });
+
+      await runStep('Step 4 of 5: Username + Password → Continue', async () => {
+        await fillMobileStep4Credentials(page, scope, data);
+      });
+
+      await runStep('Step 5 of 5: Deposit limit + consents', async () => {
+        await fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept']);
+      });
+
+      await runStep('GO PLAY button visible and enabled', async () => {
+        const goPlayBtn = scope.getByRole('button', { name: /go play/i }).first();
+        await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
+        await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
+      });
+    } else if (isRowFormat && !isMobile) {
+      // ROW desktop — confirmed live: both the mobile country-code selector
+      // and the address step's country select auto-detect from the
+      // tester's real IP (showed "+27"/"South Africa" [selected] on this
+      // session's South Africa VPN) rather than being fixed, so a
+      // UK-format mobile number gets rejected, and — like IE — the address
+      // step has no house-number field. Country is only verified, never
+      // forced, since "correct" depends on wherever the tester is actually
+      // connecting from, not a single fixed GEO.
+      const data = generateROWRegistrationData();
+
+      await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
+        await fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile);
+      });
+
+      await runStep('Step 1: Name + Email + Gender → Continue', async () => {
+        await fillStep1(page, scope, data, scope.getByPlaceholder('Start typing your address').first());
+      });
+
+      await runStep('Step 2: Address → Continue', async () => {
+        await fillROWAddress(page, scope, data);
+      });
+
+      await runStep('Step 3: Username + Password + Checkboxes', async () => {
+        // Confirmed live: no gdprBingo checkbox here (same 3-checkbox
+        // shape as IE) — Bingo consent presumably doesn't apply outside
+        // markets where Slingo offers Bingo directly.
         await fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept']);
       });
 
@@ -886,6 +997,46 @@ async function fillIEAddress(page: Page, scope: Scope, data: RegistrationData): 
   console.log('REG-01 (IE) Step 2/3 complete');
 }
 
+/** ROW's address step — same shape as IE's (no house-number field), except the country select
+ * defaults to whatever the tester's real IP resolves to (confirmed live: "South Africa" on this
+ * session's VPN) rather than a single fixed GEO, so it's left alone entirely rather than
+ * verified/forced against a specific expected country. */
+async function fillROWAddress(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (ROW) Step 2/3 address');
+
+  const addr = data.address;
+
+  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  await expect(streetInput).toBeVisible({ timeout: 10_000 });
+  await streetInput.click();
+  await streetInput.fill(addr.street);
+  await streetInput.press('Tab');
+  await page.waitForTimeout(800);
+
+  const postcodeInput = scope.getByRole('textbox', { name: 'Postcode' }).first();
+  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  await postcodeInput.click();
+  await postcodeInput.fill(addr.postcode);
+  await postcodeInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  const cityInput = scope.getByRole('textbox', { name: 'City' }).first();
+  await expect(cityInput).toBeVisible({ timeout: 5_000 });
+  await cityInput.click();
+  await cityInput.fill(addr.city);
+  await cityInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.getByRole('textbox', { name: /username/i })
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+
+  console.log('REG-01 (ROW) Step 2/3 complete');
+}
+
 async function fillStep3(
   page: Page, scope: Scope, data: RegistrationData,
   checkboxIds: string[] = ['over_18', 'gdpr', 'gdprBingo', 'terms_accept'],
@@ -1036,6 +1187,138 @@ async function fillMobileStep2GenderEmail(page: Page, scope: Scope, data: Regist
   console.log('REG-01 (mobile) Step 2/5 complete');
 }
 
+/** IE mobile "STEP 2 OF 5": same as UK mobile's Gender + Email step, but the next screen has
+ * no house-number field (same IE difference confirmed on desktop's fillIEAddress) — wait on
+ * the street address input instead of the "House No./Name" placeholder. */
+async function fillMobileStep2GenderEmailIE(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (IE mobile) Step 2/5 gender + email');
+
+  const genderBtn = scope.getByText(data.gender, { exact: true }).first();
+  await expect(genderBtn).toBeVisible({ timeout: 10_000 });
+  await genderBtn.click();
+  await page.waitForTimeout(200);
+
+  const emailInput = scope.locator('#email').first();
+  await expect(emailInput).toBeVisible({ timeout: 5_000 });
+  await emailInput.click();
+  await emailInput.fill(data.email);
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.getByPlaceholder('Start typing your address')
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (IE mobile) Step 2/5 complete');
+}
+
+/** IE mobile "STEP 3 OF 5": same fields as UK mobile's address step, but no house-number field
+ * and the country select already defaults to Ireland (same differences confirmed on desktop's
+ * fillIEAddress). */
+async function fillMobileStep3AddressIE(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (IE mobile) Step 3/5 address');
+
+  const addr = data.address;
+
+  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  await expect(streetInput).toBeVisible({ timeout: 10_000 });
+  await streetInput.click();
+  await streetInput.fill(addr.street);
+  await page.waitForTimeout(800);
+
+  const postcodeInput = scope.locator('#zipCode').first();
+  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  await postcodeInput.click();
+  await postcodeInput.fill(addr.postcode);
+  await page.waitForTimeout(300);
+
+  const cityInput = scope.locator('#city').first();
+  await expect(cityInput).toBeVisible({ timeout: 5_000 });
+  await cityInput.click();
+  await cityInput.fill(addr.city);
+  await page.waitForTimeout(300);
+
+  try {
+    const countrySelect = scope.locator('#country').first();
+    if (await countrySelect.isVisible({ timeout: 2_000 })) {
+      const val = await countrySelect.inputValue().catch(() => '');
+      if (!val.toLowerCase().includes('ireland')) {
+        await countrySelect.selectOption({ label: 'IRELAND' }).catch(() => {});
+      }
+    }
+  } catch { /* already correct — confirmed live on desktop it defaults to Ireland */ }
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.locator('#username')
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (IE mobile) Step 3/5 complete');
+}
+
+/** ROW mobile "STEP 2 OF 5": same as UK mobile's Gender + Email step, but the next screen has
+ * no house-number field (same ROW difference confirmed on desktop's fillROWAddress) — wait on
+ * the street address input instead of the "House No./Name" placeholder. */
+async function fillMobileStep2GenderEmailROW(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (ROW mobile) Step 2/5 gender + email');
+
+  const genderBtn = scope.getByText(data.gender, { exact: true }).first();
+  await expect(genderBtn).toBeVisible({ timeout: 10_000 });
+  await genderBtn.click();
+  await page.waitForTimeout(200);
+
+  const emailInput = scope.locator('#email').first();
+  await expect(emailInput).toBeVisible({ timeout: 5_000 });
+  await emailInput.click();
+  await emailInput.fill(data.email);
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.getByPlaceholder('Start typing your address')
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (ROW mobile) Step 2/5 complete');
+}
+
+/** ROW mobile "STEP 3 OF 5": same fields as UK mobile's address step, but no house-number field
+ * and the country select is left alone entirely (same differences confirmed on desktop's
+ * fillROWAddress — "correct" depends on the tester's real IP, not a fixed GEO). */
+async function fillMobileStep3AddressROW(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (ROW mobile) Step 3/5 address');
+
+  const addr = data.address;
+
+  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  await expect(streetInput).toBeVisible({ timeout: 10_000 });
+  await streetInput.click();
+  await streetInput.fill(addr.street);
+  await page.waitForTimeout(800);
+
+  const postcodeInput = scope.locator('#zipCode').first();
+  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  await postcodeInput.click();
+  await postcodeInput.fill(addr.postcode);
+  await page.waitForTimeout(300);
+
+  const cityInput = scope.locator('#city').first();
+  await expect(cityInput).toBeVisible({ timeout: 5_000 });
+  await cityInput.click();
+  await cityInput.fill(addr.city);
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.locator('#username')
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (ROW mobile) Step 3/5 complete');
+}
+
 /** Mobile "STEP 3 OF 5": Address — same fields as desktop's Step 2, confirmed live, but located by
  * id rather than accessible name since the postcode/city fields have no native placeholder on mobile. */
 async function fillMobileStep3Address(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
@@ -1124,8 +1407,13 @@ async function fillMobileStep4Credentials(page: Page, scope: Scope, data: Regist
 }
 
 /** Mobile "STEP 5 OF 5": Deposit limit (No) + consent checkboxes, ending on "GO PLAY" — same
- * checkbox ids as desktop's Step 3, confirmed live, just under different visible copy. */
-async function fillMobileStep5Final(page: Page, scope: Scope): Promise<void> {
+ * checkbox ids as desktop's Step 3, confirmed live, just under different visible copy.
+ * checkboxIds defaults to UK's 4; IE mobile passes its own 3 (no gdprBingo), same as IE
+ * desktop's fillStep3 call. */
+async function fillMobileStep5Final(
+  page: Page, scope: Scope,
+  checkboxIds: string[] = ['over_18', 'gdpr', 'gdprBingo', 'terms_accept'],
+): Promise<void> {
   console.log('REG-01 (mobile) Step 5/5 deposit limit + consents');
 
   const noBtn = scope.getByText('No', { exact: true }).first();
@@ -1133,7 +1421,6 @@ async function fillMobileStep5Final(page: Page, scope: Scope): Promise<void> {
   await noBtn.click();
   await page.waitForTimeout(300);
 
-  const checkboxIds = ['over_18', 'gdpr', 'gdprBingo', 'terms_accept'];
   for (const id of checkboxIds) {
     try {
       const label = page.locator(`label[for="${id}"]`).first();
