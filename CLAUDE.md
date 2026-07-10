@@ -58,6 +58,23 @@ Every push **must** include a CHANGELOG.md update. The CI will hard-block any PR
 
 ---
 
+## AGENT-STANDARDS.md Sync Rule
+
+`AGENT-STANDARDS.md` is the team-wide knowledge base uploaded to the RevWright
+Claude Project's Project Knowledge, so every teammate (on claude.ai or CLI)
+codes from the same standards. Project Knowledge does not auto-sync with git.
+
+- If a PR modifies `AGENT-STANDARDS.md`, review that diff like any other code
+  change before merging.
+- After merging any PR that changed `AGENT-STANDARDS.md` to `main`/`develop`,
+  the merger (currently Reeve) re-uploads the merged version to RevWright's
+  Project Knowledge, replacing the previous file.
+- This is not a per-session or per-push step — only when the file itself
+  actually changed. Check `git log -- AGENT-STANDARDS.md` if unsure whether
+  the uploaded copy is behind.
+
+---
+
 ## Coding Standards (from CONTRIBUTING.md)
 
 - TypeScript strict mode — no `any` unless truly necessary

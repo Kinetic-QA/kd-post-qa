@@ -24,6 +24,19 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-10
+
+### Added
+
+- **Wrote down our team's coding rules and testing know-how in one shareable file** (`AGENT-STANDARDS.md`), so everyone on the QA team gets the same guidance no matter which tool they use to write tests — instead of that knowledge living only in one person's head or one person's chat history.
+- **Added a short "how to use RevWright" guide** (`docs/USING-REVWRIGHT.md`) explaining what to expect day-to-day — like it always asking for a specific Jira ticket before touching Jira, and pausing to ask you to switch your VPN when testing more than one country in a row.
+
+### Changed
+
+- **Added a note in our project rules** about keeping the shared knowledge file up to date after changes get merged in, so the version everyone's using doesn't quietly fall behind.
+
+---
+
 ## [Unreleased] - 2026-07-09
 
 ### Added
