@@ -166,6 +166,23 @@ export function generateIrishMobile(): string {
 }
 
 /**
+ * Generates a random valid South African mobile number WITHOUT the leading
+ * 0. ROW's registration form country-code selector auto-detects from the
+ * tester's real IP (confirmed live: showed "+27" when tested from a South
+ * Africa VPN — same IP-based detection pattern as ES/UK's baseURL), so a
+ * UK-format number gets rejected there. South African mobiles are
+ * 0XX XXX XXXX nationally (9 digits after the leading 0, starting 6/7/8).
+ * NOTE: ROW's country-code field isn't fixed to South Africa — it reflects
+ * whichever country the tester's IP resolves to, so this generator is only
+ * correct while testing ROW from a South Africa IP/VPN.
+ */
+export function generateSouthAfricanMobile(): string {
+  const firstDigit = randomFrom([6, 7, 8]);
+  const rest = Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
+  return `${firstDigit}${rest}`;
+}
+
+/**
  * Generates a random date of birth for a person aged 25–50, joined with the
  * given separator (UK's form wants DD/MM/YYYY, ES's wants DD-MM-YYYY).
  */
@@ -273,6 +290,31 @@ export function generateIERegistrationData(): RegistrationData {
     email:     `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
     address:   randomFrom(IE_ADDRESSES),
     username:  `TestIE_${firstName[0]}${timestamp}`,
+    password:  '5Tandard@1',
+  };
+}
+
+/**
+ * Generates registration data for ROW — reuses UK's names/gender/DOB/address
+ * pools (registration.spec.ts's ROW branch currently assumes the same form
+ * shape as UK's, unconfirmed beyond the mobile-number step) with a South
+ * African mobile number, since ROW's country-code selector reflects the
+ * tester's real IP rather than a fixed country (see generateSouthAfricanMobile).
+ */
+export function generateROWRegistrationData(): RegistrationData {
+  const firstName = randomFrom(FIRST_NAMES);
+  const lastName  = randomFrom(LAST_NAMES);
+  const timestamp = Date.now();
+
+  return {
+    mobile:    generateSouthAfricanMobile(),
+    dob:       generateDOB(),
+    firstName,
+    lastName,
+    gender:    randomFrom(['Male', 'Female'] as const),
+    email:     `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
+    address:   randomFrom(UK_ADDRESSES),
+    username:  `TestROW_${firstName[0]}${timestamp}`,
     password:  '5Tandard@1',
   };
 }

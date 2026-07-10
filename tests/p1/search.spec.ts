@@ -119,22 +119,42 @@ test.describe('P1 - Search', () => {
 
     // ── Step 5: Click X on the game info modal ───────────────────────────
     await runStep('Step 5: Click X → game info modal closes', async () => {
-      const closeBtn = page.locator(
+      // Scoped to the game popup overlay itself (class contains
+      // "GamePopup") — confirmed live the broad, unscoped close-button
+      // selector previously used here could match an unrelated element
+      // elsewhere on the page instead of this modal's real close button,
+      // silently doing nothing while still reporting "found a close
+      // button" — leaving the modal fully open, not just fading out.
+      const gamePopup = page.locator('[class*="GamePopup"]').filter({ visible: true }).first();
+      const closeBtn = gamePopup.locator(
         '[class*="close" i][class*="button" i], [class*="Close"][class*="Button"], ' +
         'button[aria-label*="close" i], button[aria-label*="Close"], ' +
-        '[class*="modal"] [class*="close" i], [class*="gamepage"] [class*="close" i], ' +
-        '[class*="Close_"], [class*="close_"]'
+        '[class*="close" i], [class*="Close_"], [class*="close_"]'
       ).filter({ visible: true }).first();
 
-      const closeBtnVisible = await closeBtn.isVisible({ timeout: 5_000 }).catch(() => false);
-      if (closeBtnVisible) {
-        await closeBtn.click();
-      } else {
-        // Fallback: Escape key
-        await page.keyboard.press('Escape');
+      // Confirmed live: the close click (or Escape fallback) can silently
+      // no-op on the first attempt — same "click lands before the element
+      // is truly interactive" quirk seen on the consent checkboxes
+      // elsewhere in this suite. Retry-and-verify instead of trusting one
+      // attempt; a lingering overlay here physically intercepts the next
+      // step's click, landing on ITS OWN leftover "Play it" link (for
+      // whatever game was just closed) instead of the live search result.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const closeBtnVisible = await closeBtn.isVisible({ timeout: 3_000 }).catch(() => false);
+        if (closeBtnVisible) {
+          await closeBtn.click({ force: true }).catch(() => {});
+        } else {
+          await page.keyboard.press('Escape');
+        }
+        await page.waitForTimeout(1_000);
+        const stillOpen = await gamePopup.isVisible({ timeout: 1_000 }).catch(() => false);
+        if (!stillOpen) break;
       }
-      await page.waitForTimeout(1_500);
+      await page.waitForTimeout(500);
       await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
+      // Fail loudly here rather than silently continuing with it still
+      // open — a silent timeout previously let the two-steps-later bug through.
+      await expect(gamePopup).toBeHidden({ timeout: 5_000 });
     });
 
     // ── Step 6: Hover a game → PLAY IT visible ───────────────────────────
@@ -150,23 +170,34 @@ test.describe('P1 - Search', () => {
           break;
         }
       }
-      const gameImg = titleLink.locator('xpath=preceding::img[1]').first();
       await titleLink.scrollIntoViewIfNeeded();
       await page.waitForTimeout(500);
 
-      // Smooth mouse movement so hover animation is visually visible
-      // Start from top-left corner so the glide across the screen is clearly seen
-      const imgBox = await gameImg.boundingBox().catch(() => null);
-      const targetBox = (imgBox && imgBox.y > 50 && imgBox.y < vh) ? imgBox
-        : await titleLink.boundingBox().catch(() => null);
-      if (targetBox) {
-        const cx = targetBox.x + targetBox.width / 2;
-        const cy = targetBox.y + targetBox.height / 2;
-        await page.mouse.move(50, 50);                   // start far from target
-        await page.waitForTimeout(200);
-        await page.mouse.move(cx, cy, { steps: 30 });   // slow glide to game tile
+      // Confirmed live: touch devices have no hover state at all — the Play
+      // It CTA already renders statically without any hover, and real mobile
+      // users go straight to #account on tap. Simulating a desktop-style
+      // page.mouse hover on a touch-emulated (hasTouch: true) page sends a
+      // hybrid input signal no real device produces — confirmed this was
+      // actually causing the click below to land on the game info modal
+      // (#search-gamepage/) instead of registration, not just being
+      // redundant. Desktop genuinely needs the hover to reveal the CTA via
+      // CSS :hover, so this stays unchanged there.
+      if (!isMobile) {
+        const gameImg = titleLink.locator('xpath=preceding::img[1]').first();
+        // Smooth mouse movement so hover animation is visually visible
+        // Start from top-left corner so the glide across the screen is clearly seen
+        const imgBox = await gameImg.boundingBox().catch(() => null);
+        const targetBox = (imgBox && imgBox.y > 50 && imgBox.y < vh) ? imgBox
+          : await titleLink.boundingBox().catch(() => null);
+        if (targetBox) {
+          const cx = targetBox.x + targetBox.width / 2;
+          const cy = targetBox.y + targetBox.height / 2;
+          await page.mouse.move(50, 50);                   // start far from target
+          await page.waitForTimeout(200);
+          await page.mouse.move(cx, cy, { steps: 30 });   // slow glide to game tile
+        }
+        await page.waitForTimeout(1_500); // let animation fully play
       }
-      await page.waitForTimeout(1_500); // let animation fully play
 
       // Scoped to the search popup — an unscoped page-wide search for this
       // CTA text can match unrelated content-block buttons elsewhere on the

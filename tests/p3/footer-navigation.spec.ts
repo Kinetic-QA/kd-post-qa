@@ -81,6 +81,15 @@ test.describe('P3 - Footer Navigation', () => {
       }
       await link.scrollIntoViewIfNeeded();
       await link.click();
+      // Confirmed live: under higher network latency, the PREVIOUS
+      // footerStep's navigation can still be in flight when this click
+      // fires — waitForLoadState('domcontentloaded') + a fixed timeout
+      // doesn't guarantee THIS click's navigation is what actually lands,
+      // so a slower earlier response can arrive after and clobber the URL
+      // back to the previous page. Wait for the expected path specifically
+      // (falling through to the old fixed wait if it never arrives, so a
+      // genuine mismatch still reports the real wrong URL below).
+      await page.waitForURL(new RegExp(expectedPath.replace(/\//g, '\\/')), { timeout: 10_000 }).catch(() => {});
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
       await assertNoSiteError(page);

@@ -22,6 +22,11 @@ test.describe('P3 - Footer Social Media Strip', () => {
   test('FS-01: Footer social media strip full flow', async ({ page }) => {
     test.setTimeout(90_000);
 
+    // Confirmed live: ROW and IE have no social icon strip on the homepage
+    // at all — skip the whole test rather than loading the page just to
+    // discover that per icon (see helpers/geo-features.ts hasSocialMedia).
+    test.skip(!currentGeoFeatures().hasSocialMedia, `No social media strip for this GEO (${test.info().project.name})`);
+
     const results: { label: string; status: string }[] = [];
     function record(label: string, passed: boolean) {
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
