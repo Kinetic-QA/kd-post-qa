@@ -99,29 +99,73 @@ class ExcelReporter {
       return;
     }
 
-    const wb = new ExcelJS.Workbook();
+    const outDir = path.join(__dirname, 'test-results');
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
     const geos = [...new Set(rows.map(r => r.geo))];
+
+    // EXCEL_REPORT_FILE opts into append mode — used for a multi-session
+    // combined report (e.g. one GEO per paused run, VPN switched between
+    // each) where every run should land as new tabs in the SAME workbook
+    // instead of each run producing its own new timestamped file. Without
+    // it, behavior is unchanged: a fresh file per run, named/timestamped as
+    // before — this is what agent.ts's per-ticket runs and any single-shot
+    // dev run still rely on.
+    //
+    // Lives in its own directory, NOT test-results/ — Playwright wipes its
+    // configured outputDir (test-results/) at the start of every run
+    // (confirmed live: a combined file placed there was gone before the
+    // second run's onEnd() could read it back in), which would silently
+    // destroy this file before it could ever be appended to.
+    const appendFile = process.env.EXCEL_REPORT_FILE;
+    const wb = new ExcelJS.Workbook();
+    let outPath;
+
+    if (appendFile) {
+      const combinedDir = path.join(__dirname, 'combined-reports');
+      if (!fs.existsSync(combinedDir)) fs.mkdirSync(combinedDir, { recursive: true });
+      outPath = path.join(combinedDir, appendFile.endsWith('.xlsx') ? appendFile : `${appendFile}.xlsx`);
+      if (fs.existsSync(outPath)) {
+        await wb.xlsx.readFile(outPath);
+        // Re-running the same GEO into an existing combined report should
+        // replace that GEO's old tab, not leave a stale duplicate/error on
+        // a clashing sheet name.
+        for (const geo of geos) {
+          const existing = wb.getWorksheet(geo.substring(0, 31));
+          if (existing) wb.removeWorksheet(existing.id);
+        }
+      }
+    }
+
     for (const geo of geos) {
       const sheetName = geo.substring(0, 31);
       const ws = wb.addWorksheet(sheetName);
       this._writeSheet(ws, rows.filter(r => r.geo === geo));
     }
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 23);
+    if (!appendFile) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 23);
+      const uniqueSuites = [...new Set(rows.map(r => r.file).filter(Boolean))];
+      // Desktop+mobile runs of the same GEO produce project names like "DE"
+      // and "DE-mobile" — strip the "-mobile" suffix before deduping so a
+      // combined run is still recognized as a single-GEO run.
+      const baseGeos = [...new Set(geos.map(g => g.replace(/-mobile$/, '')))];
+      const baseName = uniqueSuites.length === 1
+        ? uniqueSuites[0]
+            .replace(/^(p[12]|sample)\s*[-–]\s*/i, '')  // strip "P1 - ", "P2 - ", "Sample - "
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '')
+        // Full desktop+mobile suite run of one GEO — use the GEO acronym
+        // (e.g. "DE") instead of the uninformative "all-tests", so the
+        // filename actually identifies which market the report covers.
+        : baseGeos.length === 1
+        ? baseGeos[0].toLowerCase().replace(/[^a-z0-9-]/g, '')
+        : 'all-tests';
+      outPath = path.join(outDir, `${baseName}_${timestamp}.xlsx`);
+    }
 
-    const uniqueSuites = [...new Set(rows.map(r => r.file).filter(Boolean))];
-    const baseName = uniqueSuites.length === 1
-      ? uniqueSuites[0]
-          .replace(/^(p[12]|sample)\s*[-–]\s*/i, '')  // strip "P1 - ", "P2 - ", "Sample - "
-          .trim()
-          .toLowerCase()
-          .replace(/\s+/g, '-')
-          .replace(/[^a-z0-9-]/g, '')
-      : 'all-tests';
-
-    const outDir = path.join(__dirname, 'test-results');
-    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-    const outPath = path.join(outDir, `${baseName}_${timestamp}.xlsx`);
     await wb.xlsx.writeFile(outPath);
     console.log(`\n[Excel Reporter] Report saved: ${outPath}\n`);
   }

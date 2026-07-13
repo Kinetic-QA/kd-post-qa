@@ -19,6 +19,8 @@ test.describe('P3 - Features Page', () => {
   test.setTimeout(90_000);
 
   test.beforeEach(async ({ page }) => {
+    const featuresPathCheck = currentGeoFeatures().featuresPath;
+    test.skip(!featuresPathCheck, `Features page does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
     await page.goto('');
     await page.waitForLoadState('domcontentloaded');

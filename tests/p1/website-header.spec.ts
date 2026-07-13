@@ -107,6 +107,10 @@ test.describe('P1 - Website Header', () => {
         console.log('WH-01 Step 1 skipped on mobile — no standalone Login CTA, see Step 5 and PLAY step');
         return;
       }
+      if (!geoFeatures.hasAccountModal) {
+        console.log('WH-01 Step 1 skipped — no login/account modal for this GEO');
+        return;
+      }
       const loginBtn = page.getByRole('banner').getByRole('button', { name: strings.loginButton }).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
@@ -119,6 +123,10 @@ test.describe('P1 - Website Header', () => {
         console.log('WH-01 Step 2 skipped on mobile — no standalone Join CTA, see Step 5 and PLAY step');
         return;
       }
+      if (!geoFeatures.hasAccountModal) {
+        console.log('WH-01 Step 2 skipped — no login/account modal for this GEO');
+        return;
+      }
       await dismissCampaignPopup(page);
       const joinBtn = page.getByRole('banner').getByRole('button', { name: strings.joinButton }).first();
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
@@ -129,6 +137,10 @@ test.describe('P1 - Website Header', () => {
 
     await runStep('Step 2b: PLAY button opens account widget (mobile only)', async () => {
       if (!isMobile) return;
+      if (!geoFeatures.hasAccountModal) {
+        console.log('WH-01 Step 2b skipped — no login/account modal for this GEO');
+        return;
+      }
       await dismissCampaignPopup(page);
       // Bottom-nav PLAY is mobile's single entry point covering both
       // Login/Join — per live confirmation, which widget it opens can
@@ -243,15 +255,25 @@ test.describe('P1 - Website Header', () => {
     });
 
     await runStep('Step 7: Header sticks to top only while scrolling', async () => {
+      // Mobile has no sticky top header by design — the persistent nav on
+      // mobile is the fixed bottom bar (MobileFooter), not the top header,
+      // which is expected to scroll away with the page (confirmed live).
+      const pinnedLocator = isMobile
+        ? page.locator('[class*="MobileFooter"]').first()
+        : page.getByRole('banner').first();
+      const label = isMobile
+        ? 'Bottom nav remains pinned in place across scroll depths'
+        : 'Header remains pinned in place across scroll depths';
+
       await page.evaluate(() => window.scrollTo(0, 1200));
       await page.waitForTimeout(500);
-      const boxAt1200 = await page.getByRole('banner').first().boundingBox().catch(() => null);
+      const boxAt1200 = await pinnedLocator.boundingBox().catch(() => null);
       await page.evaluate(() => window.scrollTo(0, 2200));
       await page.waitForTimeout(500);
-      const boxAt2200 = await page.getByRole('banner').first().boundingBox().catch(() => null);
+      const boxAt2200 = await pinnedLocator.boundingBox().catch(() => null);
       const sticky = !!boxAt1200 && !!boxAt2200 && Math.abs(boxAt1200.y - boxAt2200.y) < 2;
-      console.log(`WH-01 header y at scroll 1200: ${boxAt1200?.y}, at scroll 2200: ${boxAt2200?.y}`);
-      record('Header remains pinned in place across scroll depths', sticky);
+      console.log(`WH-01 ${isMobile ? 'bottom nav' : 'header'} y at scroll 1200: ${boxAt1200?.y}, at scroll 2200: ${boxAt2200?.y}`);
+      record(label, sticky);
       await page.evaluate(() => window.scrollTo(0, 0));
     });
 

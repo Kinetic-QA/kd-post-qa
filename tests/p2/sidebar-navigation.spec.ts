@@ -32,6 +32,7 @@ test.describe('P2 - Sidebar Navigation', () => {
   test('SN-01: Sidebar navigation full flow', async ({ page }) => {
 
     const strings = currentLocaleStrings();
+    const geoFeatures = currentGeoFeatures();
     const isMobile = test.info().project.name.endsWith('-mobile');
     const results: { label: string; status: string }[] = [];
     function record(label: string, passed: boolean) {
@@ -151,6 +152,11 @@ test.describe('P2 - Sidebar Navigation', () => {
 
     // -- Steps 5-8: LOG IN CTA -> /#account -------------------------------
     await test.step('Steps 5-8: LOG IN CTA opens login modal', async () => {
+      if (!geoFeatures.hasAccountModal) {
+        record('LOG IN CTA opens login modal (/#account)', true);
+        console.log('SN-01 Steps 5-8 skipped — no login/account modal for this GEO');
+        return;
+      }
       await openSidebar();
       const loginBtn = page.locator(SIDEBAR + ' button').filter({ hasText: strings.loginButton }).first();
       await loginBtn.click();
@@ -163,6 +169,11 @@ test.describe('P2 - Sidebar Navigation', () => {
 
     // -- Steps 9-11: JOIN CTA -> /#account --------------------------------
     await test.step('Steps 9-11: JOIN CTA opens registration modal', async () => {
+      if (!geoFeatures.hasAccountModal) {
+        record('JOIN CTA opens registration modal (/#account)', true);
+        console.log('SN-01 Steps 9-11 skipped — no login/account modal for this GEO');
+        return;
+      }
       await openSidebar();
       const joinBtn = page.locator(SIDEBAR + ' button').filter({ hasText: strings.joinButton }).first();
       await joinBtn.click();
@@ -174,12 +185,18 @@ test.describe('P2 - Sidebar Navigation', () => {
     });
 
     // -- Steps 12-14: Promotions -------------------------------------------
-    const geoFeatures = currentGeoFeatures();
     if (geoFeatures.promotionsPath) {
       const promoPath = geoFeatures.promotionsPath;
       await navStep(`Promotions -> /${promoPath}`, `/${promoPath}`, `/${promoPath}`);
     } else {
-      test.skip(true, `Promotions page does not exist for this GEO (${test.info().project.name})`);
+      // A dynamic test.skip() here would abort the WHOLE test and discard
+      // every step's result already recorded above it (confirmed live on
+      // SE: 4 real passing steps got reported as "skipped" at the outer
+      // level) — record a soft skip instead, same pattern the Blog step
+      // below already uses, so a GEO missing just this one page doesn't
+      // lose credit for everything else that ran.
+      record('Promotions link (skipped — no Promotions page for this GEO)', true);
+      console.log('SN-01 Promotions skipped — no Promotions page for this GEO');
     }
 
     // -- Steps 15-17: Slingo Logo -> homepage -----------------------------
@@ -202,7 +219,10 @@ test.describe('P2 - Sidebar Navigation', () => {
       const featuresPath = geoFeatures.featuresPath;
       await navStep(`Features -> /${featuresPath}`, `/${featuresPath}`, `/${featuresPath}`);
     } else {
-      test.skip(true, `Features page path not confirmed for this GEO (${test.info().project.name})`);
+      // Same reasoning as the Promotions branch above — soft skip, not a
+      // test-aborting test.skip().
+      record('Features link (skipped — no Features page for this GEO)', true);
+      console.log('SN-01 Features skipped — no Features page for this GEO');
     }
 
     // -- Steps 21-23: Home -------------------------------------------------

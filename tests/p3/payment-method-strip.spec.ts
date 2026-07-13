@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * PM: Payment Method Strip
@@ -16,6 +17,7 @@ test.describe('P3 - Payment Method Strip', () => {
   test.setTimeout(90_000);
 
   test.beforeEach(async ({ page }) => {
+    test.skip(!currentGeoFeatures().hasPaymentMethodsPage, `No Payment Methods page for this GEO (${test.info().project.name}) — confirmed 404`);
     await setupCampaignPopupWatcher(page);
     await page.goto('payment-methods/');
     await page.waitForLoadState('domcontentloaded');

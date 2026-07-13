@@ -2,10 +2,9 @@ import { currentGeoFeatures } from './geo-features';
 
 /**
  * Localized UI copy used by text-based locators. geo-features.ts's
- * uiLocalized flag marks which GEOs need this — currently only ES has a
- * fully confirmed entry; DE/SE still fall back to English and will keep
- * failing any English-text assertion until someone confirms their real
- * copy live.
+ * uiLocalized flag marks which GEOs need this — ES and DE have confirmed
+ * entries; SE still falls back to English and will keep failing any
+ * English-text assertion until someone confirms its real copy live.
  */
 export interface LocaleStrings {
   loginButton: RegExp;       // Header "Log in" CTA
@@ -108,6 +107,76 @@ const STRINGS: Record<string, LocaleStrings> = {
     footerContactUsText: /^contacto$/i,
     footerMobileAppText: /^app casino movil$/i,
     footerBingoCardGeneratorText: /^generador cartones bingo$/i,
+  },
+  // Confirmed live 2026-07-13 against slingospiel.de, except where noted.
+  de: {
+    loginButton: /einloggen/i,
+    loginSubmitButton: /^einloggen$/i,
+    usernameOrEmailLabel: /benutzername oder e-?mail/i,
+    joinButton: /anmelden/i,
+    loginErrorText: /die eingegebenen anmeldedaten sind nicht korrekt/i,
+    reportProblemText: /problem melden/i, // not exercised — DE has no feedback form (hasFeedbackForm: false)
+    membersLoginText: /mitglieder-anmeldung/i,
+    backButtonText: /^zurück$/i,
+    playCta: /^spielen$/i,
+    bonusPolicyText: /bonusbedingungen/i,
+    readMoreText: /weiterlesen/i, // not exercised — DE has no Blog
+    // NOT yet confirmed live — best-guess translations for the feedback widget.
+    feedbackNext: /^weiter$/i,
+    feedbackOther: /^andere[s]?$/i,
+    feedbackSubmit: /^absenden$/i,
+    forgotPasswordText: /passwort vergessen/i,
+    noAccountText: /konto erstellen/i,
+    searchPlaceholder: /^spiel suchen$/i,
+    feedbackTextareaPlaceholder: /gib deine antwort hier ein/i, // NOT yet confirmed live
+    homeLinkText: /^home$/i, // confirmed live — sidebar uses the English word "Home", not translated
+    footerResponsibleGamingText: /^verantwortungsvolles spielen$/i,
+    footerBonusPolicyText: /^bonuspolitik$/i,
+    footerTermsText: /^agb$/i,
+    footerPrivacyPolicyText: /^datenschutzrichtlinie$/i,
+    footerAboutUsText: /^über uns$/i,
+    footerPaymentOptionsText: /^zahlungsoptionen$/i,
+    footerAffiliatesText: /^werbepartner$/i,
+    footerContactUsText: /^kontakt$/i,
+    footerMobileAppText: /^mobile app$/i, // not exercised — DE has no Mobile App footer link
+    footerBingoCardGeneratorText: /^bingo card generator$/i, // not exercised — DE has no Bingo Card Generator footer link
+  },
+  // Confirmed live 2026-07-13 against se.slingo.com. SE has no traditional
+  // login/registration (Pay N Play/Trustly deposit model, hasLoginRegistration:
+  // false) — loginButton/joinButton/loginSubmitButton/etc. are not exercised
+  // by any spec and left as reasonable placeholders rather than guessed
+  // translations, since there's nothing live to verify them against.
+  sv: {
+    loginButton: /logga in/i, // not exercised — SE has no login CTA (hasLoginRegistration: false)
+    loginSubmitButton: /^logga in$/i, // not exercised
+    usernameOrEmailLabel: /användarnamn eller e-post/i, // not exercised
+    joinButton: /gå med/i, // not exercised
+    loginErrorText: /felaktiga inloggningsuppgifter/i, // not exercised
+    reportProblemText: /rapportera ett problem/i, // not exercised — SE has no feedback form (hasFeedbackForm: false)
+    membersLoginText: /medlem.*logga in/i, // not exercised
+    backButtonText: /^tillbaka$/i,
+    playCta: /^spela$/i,
+    bonusPolicyText: /bonusvillkor/i, // NOT confirmed live — SE's homepage banner has no visible T&C/bonus disclaimer text at all (image-only banner), so this pattern isn't exercised by BN-01's T&C check either
+    readMoreText: /läs mer/i, // not exercised — SE has no Blog
+    // NOT yet confirmed live — best-guess translations for the feedback widget (not exercised, hasFeedbackForm: false).
+    feedbackNext: /^nästa$/i,
+    feedbackOther: /^annat$/i,
+    feedbackSubmit: /^skicka$/i,
+    forgotPasswordText: /glömt lösenordet/i, // not exercised
+    noAccountText: /skapa konto/i, // not exercised
+    searchPlaceholder: /^sök spel$/i,
+    feedbackTextareaPlaceholder: /skriv ditt svar här/i, // not exercised
+    homeLinkText: /^hem$/i,
+    footerResponsibleGamingText: /^ansvarsfullt spelande$/i,
+    footerBonusPolicyText: /^bonuspolicy$/i, // NOT confirmed live — no such footer link found (SE's footer has no separate Bonus Policy link)
+    footerTermsText: /^regler och villkor$/i,
+    footerPrivacyPolicyText: /^integritet$/i,
+    footerAboutUsText: /^om oss$/i,
+    footerPaymentOptionsText: /^betalningsalternativ$/i, // not exercised — SE has no Payment Options page (404, hasPaymentMethodsPage: false)
+    footerAffiliatesText: /^affiliateprogram$/i,
+    footerContactUsText: /^kontakt$/i,
+    footerMobileAppText: /^mobilapp$/i, // not exercised — SE has no Mobile App footer link
+    footerBingoCardGeneratorText: /^bingokortsgenerator$/i, // not exercised — SE has no Bingo Card Generator footer link
   },
 };
 

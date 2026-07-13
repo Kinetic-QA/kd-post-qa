@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * RW: Registration Widget (secondary controls)
@@ -14,6 +15,7 @@ test.describe('P2 - Registration Widget', () => {
   test.setTimeout(90_000);
 
   test.beforeEach(async ({ page }) => {
+    test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional registration widget for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
     await page.goto('');
     await page.waitForLoadState('domcontentloaded');
@@ -51,6 +53,7 @@ test.describe('P2 - Registration Widget', () => {
     }
 
     const strings = currentLocaleStrings();
+    const geoFeatures = currentGeoFeatures();
     const isMobile = test.info().project.name.endsWith('-mobile');
 
     // Mobile has no standalone Join button in the header — it lives inside
@@ -97,6 +100,10 @@ test.describe('P2 - Registration Widget', () => {
     });
 
     await runStep('Step 2: "Report a Problem" link opens the Feedback Form', async () => {
+      if (!geoFeatures.hasFeedbackForm) {
+        console.log('RW-01 Step 2 skipped — no feedback form for this GEO');
+        return;
+      }
       await page.goto('');
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);

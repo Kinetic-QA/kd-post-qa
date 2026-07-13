@@ -41,30 +41,38 @@ function resolveUrl(brand: string, geo: string): string {
   return url;
 }
 
-const projects = TEST_GEOS && TEST_GEOS.length > 0
-  ? TEST_GEOS.map(geo => ({
-      name: geo,
-      use: { ...devices['Desktop Chrome'], baseURL: resolveUrl(TEST_BRAND, geo) },
-    }))
-  : [{
-      // Named after the GEO (not "chromium") so helpers/geo-features.ts can
-      // resolve the active GEO from test.info().project.name in both modes.
-      name: TEST_GEO,
-      use: { ...devices['Desktop Chrome'], baseURL: resolveUrl(TEST_BRAND, TEST_GEO) },
-    }];
+// One GEO per entry in TEST_GEOS (multi-GEO mode) or just TEST_GEO otherwise.
+const geosToRun = TEST_GEOS && TEST_GEOS.length > 0 ? TEST_GEOS : [TEST_GEO];
 
-if (TEST_MOBILE) {
-  projects.push({
-    name: `${TEST_GEO}-mobile`,
-    use: { ...devices['Pixel 5'], baseURL: resolveUrl(TEST_BRAND, TEST_GEO) },
-    // Playwright's mobile emulation (isMobile/hasTouch/deviceScaleFactor)
-    // relies on a CDP device-metrics override that's incompatible with
-    // resizing the actual OS browser window to match (viewport: null
-    // errors on all three) — confirmed live, not fixable via config. The
-    // headed window will show gray space around the emulated content;
-    // that's cosmetic only and doesn't affect selectors or test results.
-  });
-}
+// Each GEO contributes a desktop project and, when TEST_MOBILE is set, its
+// own "<geo>-mobile" project immediately after it — interleaved (UK,
+// UK-mobile, ES, ES-mobile, ...) rather than all desktop projects followed
+// by all mobile ones, so excel-reporter.cjs's tabs land in that same order.
+// BUG FIXED 2026-07-13: previously the TEST_MOBILE block only ever pushed a
+// single `${TEST_GEO}-mobile` project (the scalar env var, not the
+// TEST_GEOS list), so a multi-GEO + TEST_MOBILE run silently produced only
+// one mobile project total instead of one per GEO.
+const projects = geosToRun.flatMap(geo => {
+  const geoProjects = [{
+    // Named after the GEO (not "chromium") so helpers/geo-features.ts can
+    // resolve the active GEO from test.info().project.name in both modes.
+    name: geo,
+    use: { ...devices['Desktop Chrome'], baseURL: resolveUrl(TEST_BRAND, geo) },
+  }];
+  if (TEST_MOBILE) {
+    geoProjects.push({
+      name: `${geo}-mobile`,
+      use: { ...devices['Pixel 5'], baseURL: resolveUrl(TEST_BRAND, geo) },
+      // Playwright's mobile emulation (isMobile/hasTouch/deviceScaleFactor)
+      // relies on a CDP device-metrics override that's incompatible with
+      // resizing the actual OS browser window to match (viewport: null
+      // errors on all three) — confirmed live, not fixable via config. The
+      // headed window will show gray space around the emulated content;
+      // that's cosmetic only and doesn't affect selectors or test results.
+    });
+  }
+  return geoProjects;
+});
 
 export default defineConfig({
   globalSetup: './global-setup',
