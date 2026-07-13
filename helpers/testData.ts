@@ -45,6 +45,33 @@ export interface EsRegistrationData {
   password: string;      // Always 5Tandard@1 (min 10 chars required by the form)
 }
 
+/**
+ * DE (Slingo, slingospiel.de) has a genuinely different registration shape
+ * from UK/IE/ROW — confirmed live 2026-07-13 (cross-checked against
+ * RevWright Claude.ai's independent walkthrough): extra KYC fields required
+ * by German gambling regulation (place of birth, nationality, state/Bundesland,
+ * a dependent city dropdown), and a house-number field IS present (unlike
+ * IE/ROW, which omit it).
+ */
+export interface DeRegistrationData {
+  mobile: string;        // national number, no leading 0 (form defaults country code to +49)
+  dob: string;            // DD.MM.YYYY (placeholder confirmed live: "dd.mm.yyyy")
+  firstName: string;
+  lastName: string;
+  birthPlace: string;     // "Geburtsort" — required, no equivalent in UK's flow
+  gender: 'Männlich' | 'Weiblich';
+  email: string;
+  zipCode: string;
+  buildingName: string;   // "Hausnr." — DE has this, unlike IE/ROW
+  street: string;
+  state: string;          // "Bundesland" <select> option label
+  city: string;           // "Stadt" <select> — cascades from state, must be set after
+  username: string;
+  password: string;       // DE's live rule checklist confirmed 2026-07-13: special
+                           // char must be one of "!?$" specifically — the suite's
+                           // usual 5Tandard@1 (with "@") would FAIL this GEO's rule.
+}
+
 // ── Source pools ─────────────────────────────────────────────────────────────
 
 const FIRST_NAMES = [
@@ -121,6 +148,26 @@ const IE_ADDRESSES: UKAddress[] = [
   { houseNumber: '', street: 'Shop Street', postcode: 'H91 XY89', city: 'Galway', country: 'IRELAND' },
 ];
 
+const DE_FIRST_NAMES = [
+  'Lukas', 'Maximilian', 'Jonas', 'Felix', 'Paul',
+  'Emilia', 'Mia', 'Hannah', 'Lea', 'Anna',
+];
+
+const DE_LAST_NAMES = [
+  'Müller', 'Schmidt', 'Schneider', 'Fischer', 'Weber',
+  'Meyer', 'Wagner', 'Becker', 'Hoffmann', 'Schulz',
+];
+
+/**
+ * Berlin is both the state (Bundesland) and its own city — confirmed live
+ * the city <select> cascades from state and only lists valid cities for
+ * whatever state is chosen, so using Berlin for both sidesteps needing a
+ * full city-per-state lookup table for a single test address.
+ */
+const DE_ADDRESSES: { zipCode: string; buildingName: string; street: string; state: string; city: string }[] = [
+  { zipCode: '10115', buildingName: '12', street: 'Musterstraße', state: 'Berlin', city: 'Berlin' },
+];
+
 // ── Generators ───────────────────────────────────────────────────────────────
 
 function randomFrom<T>(arr: T[]): T {
@@ -180,6 +227,17 @@ export function generateSouthAfricanMobile(): string {
   const firstDigit = randomFrom([6, 7, 8]);
   const rest = Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
   return `${firstDigit}${rest}`;
+}
+
+/**
+ * Generates a random valid German mobile number WITHOUT the leading 0. The
+ * form defaults its country-code selector to "+49" (confirmed live), so we
+ * supply the national number — German mobiles start 15/16/17 nationally.
+ */
+export function generateGermanMobile(): string {
+  const prefix = randomFrom(['15', '16', '17']);
+  const rest = Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
+  return `${prefix}${rest}`;
 }
 
 /**
@@ -316,5 +374,36 @@ export function generateROWRegistrationData(): RegistrationData {
     address:   randomFrom(UK_ADDRESSES),
     username:  `TestROW_${firstName[0]}${timestamp}`,
     password:  '5Tandard@1',
+  };
+}
+
+/**
+ * Generates registration data for DE — confirmed live 2026-07-13. Uses
+ * German name pools, a dot-separated DOB (form placeholder: "dd.mm.yyyy"),
+ * and a password with "!" as its special character since DE's live password
+ * rule checklist only accepts "!?$" (the rest of the suite's "@" would fail
+ * DE's rule specifically).
+ */
+export function generateDERegistrationData(): DeRegistrationData {
+  const firstName = randomFrom(DE_FIRST_NAMES);
+  const lastName  = randomFrom(DE_LAST_NAMES);
+  const timestamp = Date.now();
+  const addr = randomFrom(DE_ADDRESSES);
+
+  return {
+    mobile:       generateGermanMobile(),
+    dob:          generateDOBWithSeparator('.'),
+    firstName,
+    lastName,
+    birthPlace:   'Berlin',
+    gender:       randomFrom(['Männlich', 'Weiblich'] as const),
+    email:        `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
+    zipCode:      addr.zipCode,
+    buildingName: addr.buildingName,
+    street:       addr.street,
+    state:        addr.state,
+    city:         addr.city,
+    username:     `TestDE_${firstName[0]}${timestamp}`,
+    password:     '5Tandard!1',
   };
 }

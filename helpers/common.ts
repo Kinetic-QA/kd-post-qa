@@ -30,11 +30,14 @@ async function tryClickCookieConsent(page: Page): Promise<boolean> {
       const sr = (consentEl as any).shadowRoot as ShadowRoot | null;
       if (sr) allButtons.push(...Array.from(sr.querySelectorAll('button')) as HTMLButtonElement[]);
     }
-    // English (UK/ROW/IE/...) and Spanish (ES) confirmed live; add more
-    // locales here as they're confirmed rather than guessing translations.
+    // English (UK/ROW/IE/...), Spanish (ES), German (DE), and Swedish (SE)
+    // confirmed live; add more locales here as they're confirmed rather than
+    // guessing translations.
     const KNOWN_ACCEPT_TEXTS = [
       'allow all cookies', 'allow all',
       'permitir todas las cookies', 'permitir todas', 'aceptar todas',
+      'alle cookies zulassen',
+      'tillåt alla cookies',
     ];
     const target = allButtons.find(b => {
       const t = (b.textContent ?? '').trim().toLowerCase();

@@ -1,7 +1,8 @@
 import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, RegistrationData, EsRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, generateDERegistrationData, generateGermanMobile, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * REG-01: Registration
@@ -29,6 +30,7 @@ const MAX_MOBILE_RETRIES = 10;
 test.describe('Registration Flow', () => {
 
   test.beforeEach(async ({ page }) => {
+    test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional login/registration for this GEO (${test.info().project.name}) — no test credentials/deposit account exists`);
     await setupCampaignPopupWatcher(page);
     await page.goto('');
     await page.waitForLoadState('domcontentloaded'); // fast load — cookie consent doesn't need networkidle
@@ -77,10 +79,17 @@ test.describe('Registration Flow', () => {
     // (same mobile/DOB → name/email/gender → address → credentials shape)
     // but with an Irish mobile format, no house-number field on the address
     // step, and only 3 consent checkboxes instead of UK's 4 — see fillIE*
-    // helpers below. DE/SE not yet confirmed at all.
+    // helpers below. DE confirmed live 2026-07-13 (cross-checked against
+    // RevWright Claude.ai's independent walkthrough) — genuinely different
+    // shape: extra birthPlace/nationality/Bundesland/city fields required by
+    // German KYC regulation, house number IS present (unlike IE/ROW), and
+    // password rules only accept "!?$" as the special character. DE mobile
+    // not yet verified — see the isGermanFormat && isMobile skip below. SE
+    // not yet confirmed at all.
     const isSpanishFormat = test.info().project.name.replace(/-mobile$/, '') === 'ES';
     const isIrishFormat = test.info().project.name.replace(/-mobile$/, '') === 'IE';
     const isRowFormat = test.info().project.name.replace(/-mobile$/, '') === 'ROW';
+    const isGermanFormat = test.info().project.name.replace(/-mobile$/, '') === 'DE';
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
 
@@ -329,6 +338,46 @@ test.describe('Registration Flow', () => {
         const goPlayBtn = scope.getByRole('button', { name: /go play/i }).first();
         await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
         await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
+      });
+    } else if (isGermanFormat && isMobile) {
+      // DE mobile registration entry point/shape has not been verified live
+      // by either this session or RevWright Claude.ai's independent pass —
+      // per the known mobile-nav pattern (login/registration living in the
+      // slide-out menu rather than the header), it likely needs its own
+      // dedicated inspection before writing real assertions here. Skipping
+      // rather than guessing a shape that could silently pass or fail for
+      // the wrong reason.
+      test.skip(true, 'DE mobile registration flow not yet verified live — needs a dedicated inspection pass');
+    } else if (isGermanFormat && !isMobile) {
+      // DE desktop — confirmed live 2026-07-13 (cross-checked against
+      // RevWright Claude.ai's independent walkthrough of the same flow).
+      // Genuinely different shape from UK/IE/ROW: German gambling regulation
+      // requires extra KYC fields (place of birth, nationality, state) not
+      // present anywhere else in this suite, plus a dependent city dropdown
+      // that only populates once a state is chosen. House number IS present
+      // (unlike IE/ROW). Ends on "SPIEL LOS!", not "GO PLAY".
+      const data = generateDERegistrationData();
+
+      await runStep('Screen 0: Mobile + Date of Birth → Weiter', async () => {
+        await fillDEStep0(page, scope, data);
+      });
+
+      await runStep('Step 1/3: Personal details → Weiter', async () => {
+        await fillDEStep1(page, scope, data);
+      });
+
+      await runStep('Step 2/3: Address → Weiter', async () => {
+        await fillDEAddress(page, scope, data);
+      });
+
+      await runStep('Step 3/3: Username + Password + Checkboxes', async () => {
+        await fillDECredentials(page, scope, data);
+      });
+
+      await runStep('SPIEL LOS! button visible and enabled', async () => {
+        const spielLosBtn = scope.getByRole('button', { name: /spiel los/i }).first();
+        await expect(spielLosBtn).toBeVisible({ timeout: 15_000 });
+        await expect(spielLosBtn).toBeEnabled({ timeout: 5_000 });
       });
     } else if (isMobile) {
       // Mobile's flow is a genuinely different shape from desktop's —
@@ -1035,6 +1084,217 @@ async function fillROWAddress(page: Page, scope: Scope, data: RegistrationData):
     .first().waitFor({ state: 'visible', timeout: 15_000 });
 
   console.log('REG-01 (ROW) Step 2/3 complete');
+}
+
+/** DE Screen 0 — mobile/DOB/password, before the "SCHRITT X VON 3" counter starts (confirmed
+ * live). Country code defaults to "+49" and is left alone. Retries with a fresh mobile number
+ * if the form rejects it, same pattern as fillStep0WithRetry but with DE's field names/labels. */
+async function fillDEStep0(page: Page, scope: Scope, data: DeRegistrationData): Promise<void> {
+  let mobile = data.mobile;
+
+  for (let attempt = 1; attempt <= MAX_MOBILE_RETRIES; attempt++) {
+    console.log('REG-01 (DE) Screen 0 attempt ' + attempt + ' mobile: ' + mobile);
+
+    const mobileInput = scope.locator('input[name="mobile"]').first();
+    await expect(mobileInput).toBeVisible({ timeout: 15_000 });
+    await mobileInput.click();
+    await mobileInput.fill(mobile);
+    await mobileInput.press('Tab');
+    await page.waitForTimeout(500);
+
+    const dobInput = scope.locator('input[name="dateOfBirth"]').first();
+    await expect(dobInput).toBeVisible({ timeout: 10_000 });
+    await dobInput.click();
+    await dobInput.clear();
+    await dobInput.pressSequentially(data.dob, { delay: 80 });
+    await dobInput.press('Tab');
+    await page.waitForTimeout(500);
+
+    const passwordInput = scope.locator('input[name="password"]').first();
+    await expect(passwordInput).toBeVisible({ timeout: 5_000 });
+    await passwordInput.fill(data.password);
+    await page.waitForTimeout(300);
+
+    const continueBtn = scope.getByRole('button', { name: /^weiter$/i }).first();
+    await expect(continueBtn).toBeVisible({ timeout: 5_000 });
+
+    const isEnabled = await continueBtn.isEnabled({ timeout: 5_000 }).catch(() => false);
+    if (!isEnabled) {
+      console.log('REG-01 (DE) Screen 0 attempt ' + attempt + ' Weiter disabled, retrying');
+      mobile = generateGermanMobile();
+      data.mobile = mobile;
+      continue;
+    }
+
+    await continueBtn.click({ force: true });
+    await page.waitForTimeout(2_000);
+
+    const onStep1 = await scope.locator('input[name="firstName"]').first().isVisible({ timeout: 3_000 }).catch(() => false);
+    if (onStep1) {
+      console.log('REG-01 (DE) Screen 0 accepted on attempt ' + attempt);
+      return;
+    }
+
+    console.log('REG-01 (DE) Screen 0 did not advance, retrying');
+    mobile = generateGermanMobile();
+    data.mobile = mobile;
+  }
+
+  throw new Error('REG-01 (DE): mobile not accepted after ' + MAX_MOBILE_RETRIES + ' attempts');
+}
+
+/** DE Step 1/3 — personal details. Confirmed live 2026-07-13: name+birthPlace+nationality+gender+
+ * email all on one screen, unlike UK's equivalent which has no birthPlace/nationality at all.
+ * Nationality defaults to "Deutschland" and is left alone. Gender is a native radio input
+ * (id="gender_MALE"/"gender_FEMALE") visually hidden via CSS — must click its <label>, not the
+ * input itself, which isn't clickable/visible. */
+async function fillDEStep1(page: Page, scope: Scope, data: DeRegistrationData): Promise<void> {
+  console.log('REG-01 (DE) Step 1/3 personal details');
+
+  const firstNameInput = scope.locator('input[name="firstName"]').first();
+  await expect(firstNameInput).toBeVisible({ timeout: 10_000 });
+  await firstNameInput.click();
+  await firstNameInput.fill(data.firstName);
+  await page.waitForTimeout(200);
+
+  const lastNameInput = scope.locator('input[name="lastName"]').first();
+  await expect(lastNameInput).toBeVisible({ timeout: 5_000 });
+  await lastNameInput.click();
+  await lastNameInput.fill(data.lastName);
+  await page.waitForTimeout(200);
+  // "Birth name differs from last name" checkbox is optional — leave unchecked.
+
+  const birthPlaceInput = scope.locator('input[name="birthPlace"]').first();
+  await expect(birthPlaceInput).toBeVisible({ timeout: 5_000 });
+  await birthPlaceInput.click();
+  await birthPlaceInput.fill(data.birthPlace);
+  await page.waitForTimeout(200);
+
+  const genderId = data.gender === 'Männlich' ? 'gender_MALE' : 'gender_FEMALE';
+  await page.evaluate((id) => {
+    function findInShadow(root: ShadowRoot | Document): HTMLElement | null {
+      const el = root.querySelector(`label[for="${id}"]`) as HTMLElement;
+      if (el) return el;
+      for (const node of Array.from(root.querySelectorAll('*'))) {
+        if ((node as Element).shadowRoot) {
+          const found = findInShadow((node as Element).shadowRoot!);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+    findInShadow(document)?.click();
+  }, genderId);
+  await page.waitForTimeout(300);
+
+  const emailInput = scope.locator('input[name="email"]').filter({ visible: true }).first();
+  await expect(emailInput).toBeVisible({ timeout: 5_000 });
+  await emailInput.click();
+  await emailInput.fill(data.email);
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: /^weiter$/i }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.locator('input[name="zipCode"]').first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (DE) Step 1/3 complete');
+}
+
+/** DE Step 2/3 — address. Confirmed live 2026-07-13: has a house-number field (unlike IE/ROW),
+ * plus a state (Bundesland) select and a city select that only populates with valid options
+ * once a state is chosen — must select state first, wait, then select city. Country defaults
+ * to "Deutschland" and is left alone. */
+async function fillDEAddress(page: Page, scope: Scope, data: DeRegistrationData): Promise<void> {
+  console.log('REG-01 (DE) Step 2/3 address');
+
+  const zipInput = scope.locator('input[name="zipCode"]').first();
+  await expect(zipInput).toBeVisible({ timeout: 10_000 });
+  await zipInput.click();
+  await zipInput.fill(data.zipCode);
+  await page.waitForTimeout(300);
+
+  const buildingInput = scope.locator('input[name="buildingName"]').first();
+  await expect(buildingInput).toBeVisible({ timeout: 5_000 });
+  await buildingInput.click();
+  await buildingInput.fill(data.buildingName);
+  await page.waitForTimeout(200);
+
+  const streetInput = scope.locator('input[name="address"]').first();
+  await expect(streetInput).toBeVisible({ timeout: 5_000 });
+  await streetInput.click();
+  await streetInput.fill(data.street);
+  await page.waitForTimeout(200);
+
+  const stateSelect = scope.locator('select[name="state"]').first();
+  await expect(stateSelect).toBeVisible({ timeout: 5_000 });
+  await stateSelect.selectOption({ label: data.state });
+  // City <select> is dependent on state — its option list repopulates
+  // asynchronously after state changes (confirmed live), so wait before
+  // trying to select a city or the old (empty) option list is still active.
+  await page.waitForTimeout(1_000);
+
+  const citySelect = scope.locator('select[name="city"]').first();
+  await expect(citySelect).toBeVisible({ timeout: 5_000 });
+  await citySelect.selectOption({ label: data.city });
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: /^weiter$/i }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.locator('input[name="username"]').first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (DE) Step 2/3 complete');
+}
+
+/** DE Step 3/3 — username/password/consents. Confirmed live 2026-07-13: same 3 checkboxes as
+ * IE/ROW (over_18, gdpr, terms_accept — no gdprBingo). Password rule checklist only accepts
+ * "!?$" as a special character (generateDERegistrationData already accounts for this). Ends on
+ * "SPIEL LOS!", asserted by the caller — deliberately never clicked. */
+async function fillDECredentials(page: Page, scope: Scope, data: DeRegistrationData): Promise<void> {
+  console.log('REG-01 (DE) Step 3/3 account credentials');
+
+  const usernameInput = scope.locator('input[name="username"]').first();
+  await expect(usernameInput).toBeVisible({ timeout: 10_000 });
+  await usernameInput.click();
+  await usernameInput.fill(data.username);
+  await page.waitForTimeout(300);
+
+  const passwordInput = scope.locator('input[name="password"]').filter({ visible: true }).first();
+  await expect(passwordInput).toBeVisible({ timeout: 5_000 });
+  await passwordInput.click();
+  await passwordInput.fill(data.password);
+  await page.waitForTimeout(300);
+
+  // Real Playwright clicks on the <label> (not a raw JS .click() via
+  // page.evaluate) — a scripted DOM click on the label doesn't reliably
+  // forward to/toggle the associated native checkbox here, and even when it
+  // does, the framework's controlled-checkbox re-render can silently revert
+  // it right after (confirmed live: an evaluate-based click reported
+  // "checked: true" a moment later, but the checkbox visibly stayed
+  // unchecked in a headed run). Verify-and-retry per checkbox, same pattern
+  // fillEsMobileStep6Consents uses for the same class of timing quirk.
+  const checkboxIds = ['over_18', 'gdpr', 'terms_accept'];
+  for (const id of checkboxIds) {
+    const checkbox = scope.locator(`#${id}`).first();
+    const label = scope.locator(`label[for="${id}"]`).first();
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (await checkbox.isChecked().catch(() => false)) break;
+      if (await label.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        await label.click({ position: { x: 5, y: 10 }, force: true });
+      } else {
+        await checkbox.check({ force: true }).catch(() => {});
+      }
+      await page.waitForTimeout(500);
+    }
+  }
+
+  for (const id of checkboxIds) {
+    const checked = await scope.locator(`#${id}`).first().isChecked().catch(() => false);
+    if (!checked) throw new Error(`REG-01 (DE): consent checkbox "${id}" did not get checked`);
+  }
+
+  console.log('REG-01 (DE) Step 3/3 complete');
 }
 
 async function fillStep3(

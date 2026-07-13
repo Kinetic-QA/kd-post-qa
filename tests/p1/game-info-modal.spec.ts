@@ -33,7 +33,8 @@ test.describe('P1 - Game Information Modal', () => {
   test('GIM-01: Game information modal full flow', async ({ page }) => {
     test.setTimeout(120_000);
 
-    const EXPECTED_CURRENCY = currentGeoFeatures().currencySymbol;
+    const geoFeatures = currentGeoFeatures();
+    const EXPECTED_CURRENCY = geoFeatures.currencySymbol;
     const strings = currentLocaleStrings();
 
     const results: { label: string; status: string }[] = [];
@@ -120,6 +121,22 @@ test.describe('P1 - Game Information Modal', () => {
     });
 
     await runStep('Step 3b: Click Play It -> registration modal opens', async () => {
+      if (!geoFeatures.hasAccountModal) {
+        // Clicking Play does nothing for this GEO (confirmed live — no
+        // navigation, no modal), so the game-info modal opened in Step 1
+        // never gets a chance to close via the usual #account handoff.
+        // closeGameInfoModal() (Escape + pushState) isn't enough to unmount
+        // it — confirmed live this still left it intercepting later clicks
+        // (Step 10 failed even after calling it). A full navigation is what
+        // Steps 14-16 already rely on for the same React GamePopup
+        // component, so use that here too rather than the lighter helper.
+        await page.goto('');
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(1_000);
+        await dismissCampaignPopup(page);
+        console.log('GIM-01 Step 3b skipped — clicking Play does not open an #account modal for this GEO');
+        return;
+      }
       // Scoped to the open game-info modal — an unscoped page-wide search
       // for this CTA text can match unrelated content-block buttons
       // elsewhere on the page (confirmed live: a "Content_block-center"
@@ -133,10 +150,18 @@ test.describe('P1 - Game Information Modal', () => {
     });
 
     await runStep('Step 4: Registration modal visible + URL has /#account', async () => {
+      if (!geoFeatures.hasAccountModal) {
+        console.log('GIM-01 Step 4 skipped — no #account modal for this GEO');
+        return;
+      }
       expect(page.url()).toContain('#account');
     });
 
     await runStep('Step 5: Click X -> registration modal closes', async () => {
+      if (!geoFeatures.hasAccountModal) {
+        console.log('GIM-01 Step 5 skipped — no #account modal for this GEO');
+        return;
+      }
       await closeAccountModal();
       await expect(page).not.toHaveURL(/#account/, { timeout: 8_000 });
     });
@@ -258,11 +283,19 @@ test.describe('P1 - Game Information Modal', () => {
     });
 
     await runStep('Step 17: Registration modal visible + URL has /#account', async () => {
+      if (!geoFeatures.hasAccountModal) {
+        console.log('GIM-01 Step 17 skipped — no #account modal for this GEO');
+        return;
+      }
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
       console.log('GIM-01 Registration modal at: ' + page.url());
     });
 
     await runStep('Step 18: Close registration modal -> test complete', async () => {
+      if (!geoFeatures.hasAccountModal) {
+        console.log('GIM-01 Step 18 skipped — no #account modal for this GEO');
+        return;
+      }
       await page.keyboard.press('Escape');
       await page.waitForTimeout(1_200);
       if (page.url().includes('#account')) {

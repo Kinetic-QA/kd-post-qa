@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { dismissPopups, dismissCampaignPopup, setupCampaignPopupWatcher, expectedPlaysecureUrlPattern } from '../../helpers/common';
 import { currentTestCredentials } from '../../helpers/test-credentials';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * LW-01: Login
@@ -18,6 +19,7 @@ test.describe('P1 - Login', () => {
   test.setTimeout(90_000);
 
   test.beforeEach(async ({ page }) => {
+    test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional login/registration for this GEO (${test.info().project.name}) — no test credentials exist`);
     await setupCampaignPopupWatcher(page);
     await page.goto('');
     await page.waitForLoadState('domcontentloaded'); // faster than networkidle for initial load

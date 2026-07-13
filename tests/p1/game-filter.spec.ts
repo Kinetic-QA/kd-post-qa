@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * GF: Game Filter
@@ -18,6 +19,7 @@ test.describe('P1 - Game Filter', () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
+    test.skip(!currentGeoFeatures().hasGameFilterCarousel, `No game filter carousel for this GEO (${test.info().project.name}) — homepage shows a plain grid instead`);
     await setupCampaignPopupWatcher(page);
     await page.goto('');
     await page.waitForLoadState('domcontentloaded');

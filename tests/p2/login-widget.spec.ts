@@ -19,6 +19,7 @@ test.describe('P2 - Login Widget', () => {
   test.setTimeout(90_000);
 
   test.beforeEach(async ({ page }) => {
+    test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional login widget for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
     await page.goto('');
     await page.waitForLoadState('domcontentloaded');
@@ -140,9 +141,13 @@ test.describe('P2 - Login Widget', () => {
       await noAccountLink.click();
       await page.waitForTimeout(1_500);
       // ES's registration format asks for a DNI/NIE field first (no mobile
-      // step at all — see p1/registration.spec.ts) — UK's asks for mobile.
+      // step at all — see p1/registration.spec.ts) — UK/IE/ROW ask for
+      // mobile with an English-labeled field; DE's is labeled "Handynummer"
+      // (confirmed live — see p1/registration.spec.ts's DE branch).
       const firstFieldLocator = geoFeatures.locale === 'es'
         ? page.locator('input[name="personalID"]').first()
+        : geoFeatures.locale === 'de'
+        ? page.locator('input[name="mobile"]').first()
         : page.getByRole('textbox', { name: /mobile/i }).first();
       await expect(firstFieldLocator).toBeVisible({ timeout: 10_000 });
     });
@@ -170,6 +175,10 @@ test.describe('P2 - Login Widget', () => {
     });
 
     await runStep('Step 4: "Report a Problem" widget appears on click', async () => {
+      if (!geoFeatures.hasFeedbackForm) {
+        console.log('LW-02 Step 4 skipped — no feedback form for this GEO');
+        return;
+      }
       // "Report a problem" is not shown on the base login form — it only
       // appears after a failed login attempt (same behavior confirmed in
       // p1/feedback-form.spec.ts), so trigger that first.

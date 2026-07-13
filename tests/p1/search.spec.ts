@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * GS-01: Game - Search
@@ -61,7 +62,11 @@ test.describe('P1 - Search', () => {
     }
 
     const strings = currentLocaleStrings();
+    const geoFeatures = currentGeoFeatures();
     const isMobile = test.info().project.name.endsWith('-mobile');
+    const gameLinkSelector = geoFeatures.searchResultHrefSubstrings
+      .map(sub => `a[href*="${sub}"]`)
+      .join(', ');
 
     try {
 
@@ -87,19 +92,27 @@ test.describe('P1 - Search', () => {
       await searchInput.click();
     });
 
-    // ── Step 3: Type "Casino" ────────────────────────────────────────────
-    await runStep('Step 3: Type "Casino" → results appear', async () => {
+    // ── Step 3: Type the GEO's search term ───────────────────────────────
+    await runStep(`Step 3: Type "${geoFeatures.searchTerm}" → results appear`, async () => {
       const searchInput = page.getByPlaceholder(strings.searchPlaceholder).first();
       await searchInput.press('Control+a');
-      await searchInput.fill('Casino');
+      await searchInput.fill(geoFeatures.searchTerm);
       await page.waitForTimeout(2_500);
     });
 
     // ── Step 4: Click a game title → info modal opens ────────────────────
+    // Scoped to the actual results container — confirmed live on DE: an
+    // unscoped page-wide search for the game-link selector can match a
+    // same-href game tile from the homepage's own showcase grid sitting
+    // behind the search overlay (not a descendant of the results container
+    // at all), which silently no-ops when clicked instead of opening the
+    // info modal.
+    const searchResultsContainer = () => page.locator('[class*="GameSearchPopup"]').filter({ visible: true }).first();
+
     let gameTitle = '';
     await runStep('Step 4: Click game title → info modal appears', async () => {
       const vh = page.viewportSize()?.height ?? 720;
-      const gameLinks = page.locator('a[href*="/slots/casino"], a[href*="/casino/other/casino"]');
+      const gameLinks = searchResultsContainer().locator(gameLinkSelector);
       const count = await gameLinks.count();
       let titleLink = gameLinks.first();
       for (let i = 0; i < Math.min(count, 20); i++) {
@@ -111,7 +124,11 @@ test.describe('P1 - Search', () => {
         }
       }
       await titleLink.scrollIntoViewIfNeeded();
-      await titleLink.click();
+      // Confirmed live on DE: the scrollable results container itself (and a
+      // sibling image/back-button) can sit on top of the target link right
+      // after scrollIntoViewIfNeeded(), intercepting a plain click — force
+      // it through rather than waiting on actionability that never resolves.
+      await titleLink.click({ force: true });
       await page.waitForTimeout(2_000);
       await expect(page).toHaveURL(/#search-gamepage\//, { timeout: 10_000 });
       console.log('GS-01 modal opened for: ' + gameTitle);
@@ -160,7 +177,7 @@ test.describe('P1 - Search', () => {
     // ── Step 6: Hover a game → PLAY IT visible ───────────────────────────
     await runStep('Step 6: Hover game tile → Play It CTA appears', async () => {
       const vh = page.viewportSize()?.height ?? 720;
-      const gameLinks = page.locator('a[href*="/slots/casino"], a[href*="/casino/other/casino"]');
+      const gameLinks = searchResultsContainer().locator(gameLinkSelector);
       const count = await gameLinks.count();
       let titleLink = gameLinks.first();
       for (let i = 0; i < Math.min(count, 20); i++) {
@@ -209,6 +226,15 @@ test.describe('P1 - Search', () => {
 
     // ── Step 7: Click PLAY IT → registration modal opens ────────────────
     await runStep('Step 7: Click Play It → registration modal opens', async () => {
+      if (!geoFeatures.hasAccountModal) {
+        // Confirmed live on SE: clicking Play triggers no navigation, but
+        // leaves behind an invisible <son-auth-modals> element that still
+        // intercepts pointer events site-wide, breaking the later Back
+        // button click (Step 11) even though nothing visibly changed.
+        // Skip the click entirely for GEOs where it wouldn't do anything.
+        console.log('GS-01 Step 7 skipped — clicking Play does not open an #account modal for this GEO');
+        return;
+      }
       // Scoped to the search popup — an unscoped page-wide search for this
       // CTA text can match unrelated content-block buttons elsewhere on the
       // page (confirmed live: a promo tile also says "A JUGAR" on ES).
@@ -220,6 +246,10 @@ test.describe('P1 - Search', () => {
 
     // ── Step 8: Verify registration modal + /#account slug ───────────────
     await runStep('Step 8: Registration modal visible + URL has /#account', async () => {
+      if (!geoFeatures.hasAccountModal) {
+        console.log('GS-01 Step 8 skipped — no login/account modal for this GEO');
+        return;
+      }
       await expect(page).toHaveURL(/#account/, { timeout: 15_000 });
     });
 

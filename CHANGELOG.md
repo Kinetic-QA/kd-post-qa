@@ -24,6 +24,26 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-13
+
+### Added
+
+- **Germany (DE) and Sweden (SE) are now covered by the test suite**, alongside the existing UK, Spain, Ireland, and Rest of World markets. Both markets were checked directly on the live site first (not guessed) to figure out what's actually there:
+  - **Germany**: full sign-up now works, matching the real 5-screen German sign-up flow (phone/birthday, personal details, address, then username/password/agreements). Turns out Germany doesn't have a Casino games section, a "report a problem" link, or the games filter carousel that other markets have — checks for those now skip cleanly on Germany instead of failing.
+  - **Sweden**: turns out Sweden doesn't have a traditional log-in/sign-up screen, an account pop-up, or a payment methods page at all — checks for those now skip cleanly instead of failing. Sweden does have a Casino games section like the UK.
+- **One combined report across all 6 markets.** Ran the entire suite (desktop and mobile) for UK, Spain, Germany, Sweden, Ireland, and Rest of World back-to-back, all landing in a single Excel file with one tab per market/device — easier to hand over as one clean baseline snapshot instead of six separate files.
+- **The combined report now adds up the total run time across every market and device into one grand total**, on its own "Summary" tab, so it's easy to see how long the whole suite took to run end-to-end instead of having to add up each tab by hand.
+
+### Fixed
+
+- **The cookie pop-up was blocking every single test on Germany and Sweden** because the "accept all cookies" button text on those two markets ("alle cookies zulassen" / "tillåt alla cookies") wasn't recognized yet. Fixed by teaching the check both phrases.
+- **Germany's sign-up form was reporting the two agreement checkboxes as ticked when they actually weren't** — a shortcut way of clicking them wasn't reliably registering with the page. Replaced with a real click-and-double-check approach so this can't silently pass anymore.
+- **A search-results check could occasionally match the wrong thing on the page** — a game tile sitting in the background, hidden behind the search pop-up, rather than an actual search result. Now it only looks inside the actual search results panel.
+- **A "which page did this link lead to" check could occasionally match an unrelated individual game page** instead of correctly detecting that a category doesn't exist for a given market. Fixed so it only matches the exact category link, not anything that happens to start with the same web address.
+- **A check for Sweden's side-menu could silently throw away everything it had already confirmed passed**, the moment it hit a menu item Sweden doesn't have, instead of recording what did pass and skipping only what's missing. Now it correctly keeps the earlier results.
+
+---
+
 ## [Unreleased] - 2026-07-10
 
 ### Added

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 // dismissCampaignPopup is called after every navigation — it only acts if popup is present,
 // so it adds zero delay when there is no popup.
 
@@ -36,6 +37,7 @@ test.describe('P1 - Game Category Navigation', () => {
   test.setTimeout(180_000);
 
   test('GCN: All category and sub-category redirects', async ({ page }) => {
+    test.skip(!currentGeoFeatures().hasGameCategoryNav, `No Slingo/Slots/Bingo/Casino category nav for this GEO (${test.info().project.name})`);
 
     // ── Setup: dismiss cookie + campaign popup ONCE ──────────────────────
     await setupCampaignPopupWatcher(page);
@@ -52,7 +54,12 @@ test.describe('P1 - Game Category Navigation', () => {
 
     async function clickNavAndVerify(hrefPart: string, label: string) {
       const expectedUrl = siteUrl(hrefPart);
-      const link = page.locator(`a[href*="${hrefPart}"]`).filter({ visible: true }).first();
+      // href$= (ends with), not href*= (contains) — confirmed live on SE:
+      // "Other" sub-category has no real nav tab at all, but a substring
+      // match still hit an individual game tile living under that same
+      // path (e.g. /casino/other/flip-n-spin/), silently clicking into a
+      // game instead of skipping cleanly like the other missing sub-tabs.
+      const link = page.locator(`a[href$="${hrefPart}"]`).filter({ visible: true }).first();
       // Sub-category tabs (e.g. Megaways) aren't offered on every GEO's catalog —
       // detect absence and skip that one item instead of a hard timeout, without
       // weakening the check for GEOs where it IS present.

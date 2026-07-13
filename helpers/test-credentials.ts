@@ -7,7 +7,7 @@ import { test } from '@playwright/test';
  * TEST_CREDENTIALS_<GEO>_USERNAME/PASSWORD pair before a GEO's
  * login.spec.ts run can pass; unmapped GEOs fall back to UK's.
  */
-const KNOWN_GEOS = ['UK', 'ES', 'IE', 'ROW'];
+const KNOWN_GEOS = ['UK', 'ES', 'IE', 'ROW', 'DE'];
 
 function credentialsFor(geo: string): { username: string; password: string } {
   const username = process.env[`TEST_CREDENTIALS_${geo}_USERNAME`];

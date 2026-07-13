@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * FF-01: Feedback Form - Full Flow
@@ -16,6 +17,7 @@ test.describe('P1 - Feedback Form', () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
+    test.skip(!currentGeoFeatures().hasFeedbackForm, `No "Report a problem"/feedback form for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
     await page.goto('');
     await page.waitForLoadState('domcontentloaded'); // faster than networkidle for initial load
