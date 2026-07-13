@@ -5,6 +5,19 @@ function stripAnsi(str) {
   return (str || '').replace(/\x1B\[[0-9;]*m/g, '');
 }
 
+// Shared by each GEO sheet's own duration and the cross-sheet grand total in
+// the Summary tab — grand totals can exceed an hour once every GEO/platform
+// is added up, so this (unlike the old inline minutes/seconds-only version)
+// rolls over into hours too.
+function formatDuration(totalSeconds) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.round(totalSeconds % 60);
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
 /**
  * Translates a raw Playwright assertion/timeout error into a one-line,
  * non-technical explanation. Falls back to a cleaned/shortened version of
@@ -143,6 +156,14 @@ class ExcelReporter {
       this._writeSheet(ws, rows.filter(r => r.geo === geo));
     }
 
+    // Summary tab is fully recomputed every run (not just appended to) so it
+    // always reflects every GEO/platform sheet currently in the workbook —
+    // in append mode that includes tabs written by earlier, separate GEO
+    // runs, not just the one that just finished.
+    const existingSummary = wb.getWorksheet('Summary');
+    if (existingSummary) wb.removeWorksheet(existingSummary.id);
+    this._writeSummarySheet(wb);
+
     if (!appendFile) {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 23);
       const uniqueSuites = [...new Set(rows.map(r => r.file).filter(Boolean))];
@@ -170,6 +191,64 @@ class ExcelReporter {
     console.log(`\n[Excel Reporter] Report saved: ${outPath}\n`);
   }
 
+  // Adds a "Summary" tab listing every GEO/platform sheet's duration plus a
+  // grand total across the whole workbook — placed last so it always
+  // reflects whatever sheets exist at write time, including ones from
+  // earlier separate runs in append mode.
+  _writeSummarySheet(wb) {
+    const perSheet = [];
+    let grandTotalSeconds = 0;
+    wb.eachSheet(worksheet => {
+      // Raw seconds always lives at row 8/col 2 per _writeSheet's summary
+      // block — read it back exactly rather than re-parsing the human
+      // label, which is free to reformat later.
+      const raw = worksheet.getRow(8).getCell(2).value;
+      const seconds = typeof raw === 'number' ? raw : 0;
+      perSheet.push({ name: worksheet.name, seconds });
+      grandTotalSeconds += seconds;
+    });
+
+    const ws = wb.addWorksheet('Summary');
+
+    const title = ws.getRow(1);
+    title.getCell(1).value = 'Combined Run Duration — All GEOs & Platforms';
+    title.getCell(1).font = { name: 'Arial', bold: true, size: 13 };
+    title.commit();
+
+    const grandRow = ws.getRow(3);
+    grandRow.getCell(1).value = 'Grand Total Duration';
+    grandRow.getCell(1).font = { name: 'Arial', bold: true, size: 12 };
+    grandRow.getCell(2).value = formatDuration(grandTotalSeconds);
+    grandRow.getCell(2).font = { name: 'Arial', bold: true, size: 12, color: { argb: 'FF1F3864' } };
+    grandRow.commit();
+
+    const headerRow = ws.getRow(5);
+    ['GEO / Platform', 'Duration'].forEach((h, i) => {
+      const cell = headerRow.getCell(i + 1);
+      cell.value = h;
+      cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3864' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    headerRow.commit();
+
+    perSheet.forEach((s, idx) => {
+      const row = ws.getRow(6 + idx);
+      const shade = idx % 2 === 0 ? 'FFF2F2F2' : 'FFFFFFFF';
+      row.getCell(1).value = s.name;
+      row.getCell(2).value = formatDuration(s.seconds);
+      [1, 2].forEach(ci => {
+        const cell = row.getCell(ci);
+        cell.font = { name: 'Arial', size: 10 };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: shade } };
+        cell.alignment = { vertical: 'middle' };
+      });
+      row.commit();
+    });
+
+    ws.columns = [{ width: 30 }, { width: 20 }];
+  }
+
   _writeSheet(ws, rows) {
     const total = rows.length;
     const passed = rows.filter(r => r.status === 'passed').length;
@@ -177,9 +256,7 @@ class ExcelReporter {
     const skipped = rows.filter(r => r.status === 'skipped').length;
     const passRate = total > 0 ? `${Math.round(passed / total * 1000) / 10}%` : '0%';
     const totalDurationS = rows.reduce((sum, r) => sum + (r.duration_s || 0), 0);
-    const minutes = Math.floor(totalDurationS / 60);
-    const seconds = Math.round(totalDurationS % 60);
-    const totalDurationLabel = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+    const totalDurationLabel = formatDuration(totalDurationS);
 
     const summary = [
       ['Run Date', new Date(this._startTime).toLocaleString()],
@@ -189,6 +266,10 @@ class ExcelReporter {
       ['Skipped', skipped],
       ['Pass Rate', passRate],
       ['Total Duration', totalDurationLabel],
+      // Hidden — lets onEnd's Summary tab sum exact seconds across every GEO
+      // sheet in the workbook without re-parsing the human-readable label
+      // above (e.g. "31m 0s"), which would be fragile to reformat.
+      ['Total Duration (Raw Seconds)', totalDurationS],
     ];
 
     summary.forEach(([label, value], i) => {
@@ -201,6 +282,7 @@ class ExcelReporter {
       if (label === 'Passed') vc.font = { name: 'Arial', bold: true, size: 11, color: { argb: 'FF00B050' } };
       else if (label === 'Failed') vc.font = { name: 'Arial', bold: true, size: 11, color: { argb: 'FFC00000' } };
       else vc.font = { name: 'Arial', size: 11 };
+      if (label === 'Total Duration (Raw Seconds)') row.hidden = true;
       row.commit();
     });
 

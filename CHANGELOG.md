@@ -32,6 +32,7 @@ Each release or change set uses this structure:
   - **Germany**: full sign-up now works, matching the real 5-screen German sign-up flow (phone/birthday, personal details, address, then username/password/agreements). Turns out Germany doesn't have a Casino games section, a "report a problem" link, or the games filter carousel that other markets have — checks for those now skip cleanly on Germany instead of failing.
   - **Sweden**: turns out Sweden doesn't have a traditional log-in/sign-up screen, an account pop-up, or a payment methods page at all — checks for those now skip cleanly instead of failing. Sweden does have a Casino games section like the UK.
 - **One combined report across all 6 markets.** Ran the entire suite (desktop and mobile) for UK, Spain, Germany, Sweden, Ireland, and Rest of World back-to-back, all landing in a single Excel file with one tab per market/device — easier to hand over as one clean baseline snapshot instead of six separate files.
+- **The combined report now adds up the total run time across every market and device into one grand total**, on its own "Summary" tab, so it's easy to see how long the whole suite took to run end-to-end instead of having to add up each tab by hand.
 
 ### Fixed
 
