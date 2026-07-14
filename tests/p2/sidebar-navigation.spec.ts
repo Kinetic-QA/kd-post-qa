@@ -118,6 +118,13 @@ test.describe('P2 - Sidebar Navigation', () => {
       await openSidebar();
       const link = page.locator(SIDEBAR + ' a[href*="' + expectedPath + '"]').first();
       await link.click();
+      // Confirmed live (same root cause already fixed in footer-navigation.spec.ts's
+      // footerStep): the PREVIOUS navStep's navigation can still be in flight when
+      // this click fires, so a fixed wait doesn't guarantee THIS click's navigation
+      // is what actually lands — a slower earlier response can arrive after and
+      // clobber the URL back to the previous page (confirmed: Contact us landing on
+      // the prior step's /help/ URL). Wait for the expected path specifically.
+      await page.waitForURL(new RegExp(expectedPath.replace(/\//g, '\\/')), { timeout: 10_000 }).catch(() => {});
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
       await assertNoSiteError(page);
