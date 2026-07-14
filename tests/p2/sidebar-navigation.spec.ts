@@ -245,14 +245,23 @@ test.describe('P2 - Sidebar Navigation', () => {
       await expect.soft(page).toHaveURL(siteUrl(''), { timeout: 8_000 });
     });
 
-    // -- Steps 24-26: Slingo -----------------------------------------------
-    await navStep('Slingo link -> /slingo/', '/slingo/', '/slingo/');
+    // -- Steps 24-32: Slingo / Slots / Casino -------------------------------
+    if (geoFeatures.hasGameCategoryNav) {
+      // -- Steps 24-26: Slingo -----------------------------------------------
+      await navStep('Slingo link -> /slingo/', '/slingo/', '/slingo/');
 
-    // -- Steps 27-29: Slots ------------------------------------------------
-    await navStep('Slots link -> /slots/', '/slots/', '/slots/');
+      // -- Steps 27-29: Slots ------------------------------------------------
+      await navStep('Slots link -> /slots/', '/slots/', '/slots/');
 
-    // -- Steps 30-32: Casino -----------------------------------------------
-    await navStep('Casino link -> /casino/', '/casino/', '/casino/');
+      // -- Steps 30-32: Casino -----------------------------------------------
+      await navStep('Casino link -> /casino/', '/casino/', '/casino/');
+    } else {
+      // Same reasoning as the Promotions/Features branches above — soft skip,
+      // not a test-aborting test.skip(). Confirmed live (DE): no Slingo/Slots/
+      // Bingo/Casino category nav links exist in the sidebar at all.
+      record('Slingo/Slots/Casino links (skipped — no category nav for this GEO)', true);
+      console.log('SN-01 Slingo/Slots/Casino skipped — no category nav for this GEO');
+    }
 
     // -- Steps 33-35: Responsible Gaming ----------------------------------
     await navStep('Responsible Gaming -> /responsible-gaming/', '/responsible-gaming/', '/responsible-gaming/');
