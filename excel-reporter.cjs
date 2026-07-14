@@ -198,20 +198,39 @@ class ExcelReporter {
   _writeSummarySheet(wb) {
     const perSheet = [];
     let grandTotalSeconds = 0;
+    let grandTotal = 0, grandPassed = 0, grandFailed = 0, grandSkipped = 0;
     wb.eachSheet(worksheet => {
-      // Raw seconds always lives at row 8/col 2 per _writeSheet's summary
-      // block — read it back exactly rather than re-parsing the human
-      // label, which is free to reformat later.
+      // These all live at fixed rows/col 2 per _writeSheet's per-GEO summary
+      // block — read them back exactly rather than re-parsing anything
+      // human-readable, which is free to reformat later.
       const raw = worksheet.getRow(8).getCell(2).value;
       const seconds = typeof raw === 'number' ? raw : 0;
+      const total = worksheet.getRow(2).getCell(2).value;
+      const passed = worksheet.getRow(3).getCell(2).value;
+      const failed = worksheet.getRow(4).getCell(2).value;
+      const skipped = worksheet.getRow(5).getCell(2).value;
       perSheet.push({ name: worksheet.name, seconds });
       grandTotalSeconds += seconds;
+      grandTotal += typeof total === 'number' ? total : 0;
+      grandPassed += typeof passed === 'number' ? passed : 0;
+      grandFailed += typeof failed === 'number' ? failed : 0;
+      grandSkipped += typeof skipped === 'number' ? skipped : 0;
     });
+
+    // Coverage = how much of everything that ran was actually exercised
+    // (not skipped as "doesn't exist for this GEO/viewport"). Reliability =
+    // of what was actually exercised, how much came back clean — a GEO with
+    // heavy skips can still be 100% reliable on what it does cover, so these
+    // are two separate numbers, not one blended score.
+    const ran = grandPassed + grandFailed;
+    const coveragePct = grandTotal > 0 ? Math.round((ran / grandTotal) * 1000) / 10 : 0;
+    const reliabilityPct = ran > 0 ? Math.round((grandPassed / ran) * 1000) / 10 : 100;
+    const isFullyReliable = grandFailed === 0;
 
     const ws = wb.addWorksheet('Summary');
 
     const title = ws.getRow(1);
-    title.getCell(1).value = 'Combined Run Duration — All GEOs & Platforms';
+    title.getCell(1).value = 'Combined Run Summary — All GEOs & Platforms';
     title.getCell(1).font = { name: 'Arial', bold: true, size: 13 };
     title.commit();
 
@@ -222,7 +241,37 @@ class ExcelReporter {
     grandRow.getCell(2).font = { name: 'Arial', bold: true, size: 12, color: { argb: 'FF1F3864' } };
     grandRow.commit();
 
-    const headerRow = ws.getRow(5);
+    const totalChecksRow = ws.getRow(4);
+    totalChecksRow.getCell(1).value = 'Total Checks (all GEOs/platforms)';
+    totalChecksRow.getCell(1).font = { name: 'Arial', bold: true, size: 11 };
+    totalChecksRow.getCell(2).value = `${grandTotal} (${grandPassed} passed, ${grandFailed} failed, ${grandSkipped} skipped)`;
+    totalChecksRow.getCell(2).font = { name: 'Arial', size: 11 };
+    totalChecksRow.commit();
+
+    const coverageRow = ws.getRow(5);
+    coverageRow.getCell(1).value = '% of Regression Suite Automated (Coverage)';
+    coverageRow.getCell(1).font = { name: 'Arial', bold: true, size: 11 };
+    coverageRow.getCell(2).value = `${coveragePct}%`;
+    coverageRow.getCell(2).font = { name: 'Arial', bold: true, size: 11, color: { argb: 'FF1F3864' } };
+    coverageRow.commit();
+
+    const reliabilityRow = ws.getRow(6);
+    reliabilityRow.getCell(1).value = '% Reliable (pass rate of checks actually run)';
+    reliabilityRow.getCell(1).font = { name: 'Arial', bold: true, size: 11 };
+    reliabilityRow.getCell(2).value = `${reliabilityPct}%`;
+    reliabilityRow.getCell(2).font = { name: 'Arial', bold: true, size: 11, color: { argb: reliabilityPct === 100 ? 'FF00B050' : 'FFC00000' } };
+    reliabilityRow.commit();
+
+    const verdictRow = ws.getRow(7);
+    verdictRow.getCell(1).value = 'Fully Reliable?';
+    verdictRow.getCell(1).font = { name: 'Arial', bold: true, size: 11 };
+    verdictRow.getCell(2).value = isFullyReliable
+      ? 'Yes — 0 real failures across every GEO/platform in this run'
+      : `No — ${grandFailed} real failure(s) found, needs review before calling automation fully reliable`;
+    verdictRow.getCell(2).font = { name: 'Arial', bold: true, size: 11, color: { argb: isFullyReliable ? 'FF00B050' : 'FFC00000' } };
+    verdictRow.commit();
+
+    const headerRow = ws.getRow(9);
     ['GEO / Platform', 'Duration'].forEach((h, i) => {
       const cell = headerRow.getCell(i + 1);
       cell.value = h;
@@ -233,7 +282,7 @@ class ExcelReporter {
     headerRow.commit();
 
     perSheet.forEach((s, idx) => {
-      const row = ws.getRow(6 + idx);
+      const row = ws.getRow(10 + idx);
       const shade = idx % 2 === 0 ? 'FFF2F2F2' : 'FFFFFFFF';
       row.getCell(1).value = s.name;
       row.getCell(2).value = formatDuration(s.seconds);
@@ -246,7 +295,7 @@ class ExcelReporter {
       row.commit();
     });
 
-    ws.columns = [{ width: 30 }, { width: 20 }];
+    ws.columns = [{ width: 42 }, { width: 45 }];
   }
 
   _writeSheet(ws, rows) {
