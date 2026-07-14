@@ -26,6 +26,10 @@ Each release or change set uses this structure:
 
 ## [Unreleased] - 2026-07-14
 
+### Added
+
+- **The combined 6-market report's Summary tab now shows two new numbers: how much of the full regression checklist is actually automated, and how reliable that automation is.** "Coverage" is the share of all checks across every market/device that actually ran (not skipped for not existing in that market) — currently 77.4%. "Reliability" is, of everything that actually ran, how much came back clean — currently 98.7%. A plain "Fully Reliable? Yes/No" line is also shown, so anyone opening the report can tell at a glance whether today's run had any real problems without reading every tab.
+
 ### Fixed
 
 - **A UK check for a broken-looking error page ("Something Went Wrong") could report the site as broken when it was actually fine again a couple of seconds later.** This showed up deep into a long test run — the page can flash a "loading hiccup" message briefly and then recover on its own, but the check only looked once and gave up immediately. It now waits a few seconds and checks again, and if it's still showing after that, refreshes the page once before giving up for good. Confirmed clean across two full re-runs of the entire UK check-list after the fix.
