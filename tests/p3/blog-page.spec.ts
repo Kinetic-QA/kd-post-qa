@@ -135,14 +135,21 @@ test.describe('P3 - Blog Page', () => {
       await dismissCampaignPopup(page);
       const sideAd = page.locator('[class*="PostSidebar_banner"] a, [class*="PostSidebar_banner"]').first();
       const visible = await sideAd.isVisible({ timeout: 5_000 }).catch(() => false);
-      if (visible) {
-        await sideAd.click();
-        await page.waitForTimeout(1_500);
-        record('Side ad opens registration form', page.url().includes('#account'));
-      } else {
-        record('Side ad opens registration form', false);
-        console.log('BP-01 side ad CTA not found — verify live');
+      const isMobile = test.info().project.name.endsWith('-mobile');
+      if (!visible) {
+        // Confirmed live: the post sidebar ad is desktop-only — mobile's
+        // narrower layout doesn't render it at all (UK desktop finds it
+        // every time; UK mobile never does). Not a bug on mobile, but a
+        // real failure if it's ever missing on desktop.
+        if (isMobile) {
+          console.log('BP-01 side ad not present on mobile — confirmed desktop-only layout, skipping');
+          return;
+        }
+        throw new Error('BP-01: side ad CTA not found on blog post detail page (desktop)');
       }
+      await sideAd.click();
+      await page.waitForTimeout(1_500);
+      expect(page.url()).toContain('#account');
     });
 
     } finally {

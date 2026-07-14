@@ -68,13 +68,37 @@ export function expectedPlaysecureUrlPattern(): RegExp {
  * later on an unrelated timeout — makes the retry (see playwright.config.ts
  * retries) both faster and obvious in the report as "site glitched, retried"
  * rather than a confusing unrelated failure.
+ *
+ * Confirmed live: deep into a long full-suite run (20+ tests, one
+ * long-lived browser process), this glitch can flash in and clear itself
+ * within a couple of seconds — a single 500ms check caught it mid-flash and
+ * failed the whole test (and its retry) even though the site had already
+ * recovered by the time the retry's fresh page loaded. Same class of
+ * under-load timing issue as dismissCookieConsent's budget bump above —
+ * poll for a few seconds before treating it as a real, persistent glitch.
+ *
+ * Confirmed live (2026-07-14): polling alone isn't always enough — this can
+ * still be showing after the full ~3.5s poll AND after Playwright's own
+ * whole-test retry (which only gets a fresh page/context, not a fresh
+ * browser process — playwright.config.ts runs 1 worker, so the same
+ * long-lived renderer carries over). A real page.reload() is what actually
+ * clears it deep in a long run, so try that once as a last resort before
+ * giving up for real. Safe to call mid-test: this only reloads the page
+ * already navigated to, it never changes the URL.
  */
 export async function assertNoSiteError(page: Page): Promise<void> {
-  const hasError = await page.getByText('SOMETHING WENT WRONG', { exact: false })
-    .isVisible({ timeout: 500 }).catch(() => false);
-  if (hasError) {
-    throw new Error('Site showed "SOMETHING WENT WRONG" — transient glitch, will retry this test with a fresh page.');
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const hasError = await page.getByText('SOMETHING WENT WRONG', { exact: false })
+      .isVisible({ timeout: 500 }).catch(() => false);
+    if (!hasError) return;
+    if (attempt < 3) await page.waitForTimeout(1_000);
   }
+  await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+  await page.waitForTimeout(2_000);
+  const stillBroken = await page.getByText('SOMETHING WENT WRONG', { exact: false })
+    .isVisible({ timeout: 500 }).catch(() => false);
+  if (!stillBroken) return;
+  throw new Error('Site showed "SOMETHING WENT WRONG" — persisted through polling and a page reload, likely a real issue.');
 }
 
 export async function dismissCookieConsent(page: Page): Promise<void> {

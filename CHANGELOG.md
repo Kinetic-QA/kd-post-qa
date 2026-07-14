@@ -24,6 +24,16 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-14
+
+### Fixed
+
+- **A UK check for a broken-looking error page ("Something Went Wrong") could report the site as broken when it was actually fine again a couple of seconds later.** This showed up deep into a long test run — the page can flash a "loading hiccup" message briefly and then recover on its own, but the check only looked once and gave up immediately. It now waits a few seconds and checks again, and if it's still showing after that, refreshes the page once before giving up for good. Confirmed clean across two full re-runs of the entire UK check-list after the fix.
+- **On the UK site, clicking "Contact us" in the side menu could land on the Help page instead** — this only happened right after checking the Help page, when the site's page-change from that check hadn't fully caught up yet before the next click fired. The check now waits for the correct page to actually finish loading before checking where it landed.
+- **The blog page's "click the side ad, it should open sign-up" check could quietly report success even when the ad genuinely wasn't found and nothing was clicked.** Turns out this ad only shows on desktop screens, not phone screens, by design — the check now skips it cleanly on mobile, but will correctly report a real failure if it's ever missing on desktop.
+
+---
+
 ## [Unreleased] - 2026-07-13
 
 ### Added
