@@ -20,8 +20,9 @@ test.describe('P1 - Login', () => {
 
   test.beforeEach(async ({ page }) => {
     test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional login/registration for this GEO (${test.info().project.name}) — no test credentials exist`);
+    test.skip(currentGeoFeatures().hasTestAccount === false, `Login widget exists for this GEO (${test.info().project.name}) but no working test account exists yet — see helpers/geo-features.ts hasTestAccount`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded'); // faster than networkidle for initial load
     await page.waitForTimeout(3_000);
     await dismissPopups(page);

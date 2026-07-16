@@ -198,7 +198,7 @@ class ExcelReporter {
   _writeSummarySheet(wb) {
     const perSheet = [];
     let grandTotalSeconds = 0;
-    let grandTotal = 0, grandPassed = 0, grandFailed = 0, grandSkipped = 0;
+    let grandTotal = 0, grandPassed = 0, grandFailed = 0, grandSkipped = 0, grandFlaky = 0;
     wb.eachSheet(worksheet => {
       // These all live at fixed rows/col 2 per _writeSheet's per-GEO summary
       // block — read them back exactly rather than re-parsing anything
@@ -209,12 +209,14 @@ class ExcelReporter {
       const passed = worksheet.getRow(3).getCell(2).value;
       const failed = worksheet.getRow(4).getCell(2).value;
       const skipped = worksheet.getRow(5).getCell(2).value;
+      const flaky = worksheet.getRow(9).getCell(2).value;
       perSheet.push({ name: worksheet.name, seconds });
       grandTotalSeconds += seconds;
       grandTotal += typeof total === 'number' ? total : 0;
       grandPassed += typeof passed === 'number' ? passed : 0;
       grandFailed += typeof failed === 'number' ? failed : 0;
       grandSkipped += typeof skipped === 'number' ? skipped : 0;
+      grandFlaky += typeof flaky === 'number' ? flaky : 0;
     });
 
     // Coverage = how much of everything that ran was actually exercised
@@ -225,7 +227,25 @@ class ExcelReporter {
     const ran = grandPassed + grandFailed;
     const coveragePct = grandTotal > 0 ? Math.round((ran / grandTotal) * 1000) / 10 : 0;
     const reliabilityPct = ran > 0 ? Math.round((grandPassed / ran) * 1000) / 10 : 100;
-    const isFullyReliable = grandFailed === 0;
+
+    // "Clean Run" describes the SITE this run — did everything pass. It is
+    // NOT a judgment on the automation's quality: a real bug getting caught
+    // correctly is the automation doing its job, not failing at it. Keep
+    // this separate from Automation Reliability below — conflating the two
+    // makes every genuine bug-catch look like a tooling problem.
+    const isCleanRun = grandFailed === 0;
+
+    // Automation Reliability asks a different question: can the tooling's
+    // verdicts be trusted? Two structural facts back this up rather than
+    // guessing: (1) playwright.config.ts sets retries: 1, so anything shown
+    // as Failed above already failed on BOTH attempts — a one-off blip
+    // would have self-healed on the retry and shown as Flaky instead, never
+    // counted as a failure. (2) Flaky checks are tracked and reported
+    // separately, not silently absorbed into the pass count. A flaky rate
+    // above 0 doesn't mean "unreliable" on its own — it means the tooling
+    // is already catching and self-correcting one-off noise instead of
+    // misreporting it as a bug or masking it as a clean pass.
+    const flakyRatePct = ran > 0 ? Math.round((grandFlaky / ran) * 1000) / 10 : 0;
 
     const ws = wb.addWorksheet('Summary');
 
@@ -256,22 +276,38 @@ class ExcelReporter {
     coverageRow.commit();
 
     const reliabilityRow = ws.getRow(6);
-    reliabilityRow.getCell(1).value = '% Reliable (pass rate of checks actually run)';
+    reliabilityRow.getCell(1).value = '% Passed (pass rate of checks actually run)';
     reliabilityRow.getCell(1).font = { name: 'Arial', bold: true, size: 11 };
     reliabilityRow.getCell(2).value = `${reliabilityPct}%`;
     reliabilityRow.getCell(2).font = { name: 'Arial', bold: true, size: 11, color: { argb: reliabilityPct === 100 ? 'FF00B050' : 'FFC00000' } };
     reliabilityRow.commit();
 
-    const verdictRow = ws.getRow(7);
-    verdictRow.getCell(1).value = 'Fully Reliable?';
-    verdictRow.getCell(1).font = { name: 'Arial', bold: true, size: 11 };
-    verdictRow.getCell(2).value = isFullyReliable
+    const cleanRunRow = ws.getRow(7);
+    cleanRunRow.getCell(1).value = 'Clean Run? (site passed everything)';
+    cleanRunRow.getCell(1).font = { name: 'Arial', bold: true, size: 11 };
+    cleanRunRow.getCell(2).value = isCleanRun
       ? 'Yes — 0 real failures across every GEO/platform in this run'
-      : `No — ${grandFailed} real failure(s) found, needs review before calling automation fully reliable`;
-    verdictRow.getCell(2).font = { name: 'Arial', bold: true, size: 11, color: { argb: isFullyReliable ? 'FF00B050' : 'FFC00000' } };
-    verdictRow.commit();
+      : `No — ${grandFailed} real failure(s) found on the site/product this run`;
+    cleanRunRow.getCell(2).font = { name: 'Arial', bold: true, size: 11, color: { argb: isCleanRun ? 'FF00B050' : 'FFC00000' } };
+    cleanRunRow.commit();
 
-    const headerRow = ws.getRow(9);
+    // Any flakiness at all means "not reliable" — self-healing on retry
+    // keeps a flaky check from being misreported as a bug, but it's still
+    // a symptom to eliminate, not a pass. Reliable means 0 flaky checks,
+    // full stop; anything else calls out exactly what needs fixing so it
+    // doesn't quietly become "normal" just because it self-heals.
+    const isAutomationReliable = grandFlaky === 0;
+
+    const reliabilityVerdictRow = ws.getRow(8);
+    reliabilityVerdictRow.getCell(1).value = 'Automation Reliability (can the tooling be trusted?)';
+    reliabilityVerdictRow.getCell(1).font = { name: 'Arial', bold: true, size: 11 };
+    reliabilityVerdictRow.getCell(2).value = isAutomationReliable
+      ? `Yes — every result this run was reproducible on the first attempt (0 flaky checks), and any real failure shown already failed twice in a row, not a one-off blip`
+      : `No — ${grandFlaky} check(s) (${flakyRatePct}% of what ran) needed a retry to pass. They self-healed rather than being misreported as bugs, but flakiness like this should be root-caused and eliminated, not left to keep self-healing`;
+    reliabilityVerdictRow.getCell(2).font = { name: 'Arial', bold: true, size: 11, color: { argb: isAutomationReliable ? 'FF00B050' : 'FFC00000' } };
+    reliabilityVerdictRow.commit();
+
+    const headerRow = ws.getRow(10);
     ['GEO / Platform', 'Duration'].forEach((h, i) => {
       const cell = headerRow.getCell(i + 1);
       cell.value = h;
@@ -282,7 +318,7 @@ class ExcelReporter {
     headerRow.commit();
 
     perSheet.forEach((s, idx) => {
-      const row = ws.getRow(10 + idx);
+      const row = ws.getRow(11 + idx);
       const shade = idx % 2 === 0 ? 'FFF2F2F2' : 'FFFFFFFF';
       row.getCell(1).value = s.name;
       row.getCell(2).value = formatDuration(s.seconds);
@@ -303,6 +339,12 @@ class ExcelReporter {
     const passed = rows.filter(r => r.status === 'passed').length;
     const failed = rows.filter(r => ['failed', 'timedOut'].includes(r.status)).length;
     const skipped = rows.filter(r => r.status === 'skipped').length;
+    // A test that failed once then passed on Playwright's own retry (see
+    // playwright.config.ts's retries: 1) self-healed — it's not counted as
+    // Failed above, but tracking it separately lets the Summary tab's
+    // Automation Reliability metric distinguish "the tooling caught a
+    // one-off blip and recovered" from "the tooling is untrustworthy."
+    const flaky = rows.filter(r => r.retried && r.status === 'passed').length;
     const passRate = total > 0 ? `${Math.round(passed / total * 1000) / 10}%` : '0%';
     const totalDurationS = rows.reduce((sum, r) => sum + (r.duration_s || 0), 0);
     const totalDurationLabel = formatDuration(totalDurationS);
@@ -319,6 +361,10 @@ class ExcelReporter {
       // sheet in the workbook without re-parsing the human-readable label
       // above (e.g. "31m 0s"), which would be fragile to reformat.
       ['Total Duration (Raw Seconds)', totalDurationS],
+      // Appended after the existing rows (not inserted earlier) so every
+      // row index _writeSummarySheet already reads by fixed position stays
+      // correct — only this new row 9 needs a new read added.
+      ['Flaky (Failed Once, Passed on Retry)', flaky],
     ];
 
     summary.forEach(([label, value], i) => {

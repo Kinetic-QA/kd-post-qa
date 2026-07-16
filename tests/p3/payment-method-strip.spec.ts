@@ -19,7 +19,7 @@ test.describe('P3 - Payment Method Strip', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!currentGeoFeatures().hasPaymentMethodsPage, `No Payment Methods page for this GEO (${test.info().project.name}) — confirmed 404`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('payment-methods/');
+    await page.goto('payment-methods/', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);

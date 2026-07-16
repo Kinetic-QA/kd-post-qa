@@ -22,7 +22,7 @@ test.describe('P3 - Blog Search', () => {
     geoFeatures = currentGeoFeatures();
     test.skip(!geoFeatures.hasBlog, `Blog does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded'); // faster than networkidle for initial load
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -120,7 +120,7 @@ test.describe('P3 - Blog Search', () => {
         break;
       }
       if (!clicked) {
-        await page.goto(geoFeatures.blogPath!);
+        await page.goto(geoFeatures.blogPath!, { waitUntil: 'domcontentloaded' });
       }
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_500); // wait for campaign popup to appear on blog page
@@ -142,7 +142,7 @@ test.describe('P3 - Blog Search', () => {
       } else {
         const currentUrl = page.url();
         const blogBase = currentUrl.split('/blog')[0] + '/blog';
-        await page.goto(blogBase + '/search/');
+        await page.goto(blogBase + '/search/', { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(2_500);
         await dismissCampaignPopup(page);

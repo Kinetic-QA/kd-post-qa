@@ -21,7 +21,7 @@ test.describe('P1 - Game Filter', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!currentGeoFeatures().hasGameFilterCarousel, `No game filter carousel for this GEO (${test.info().project.name}) — homepage shows a plain grid instead`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);

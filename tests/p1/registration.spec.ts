@@ -32,7 +32,7 @@ test.describe('Registration Flow', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional login/registration for this GEO (${test.info().project.name}) — no test credentials/deposit account exists`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded'); // fast load — cookie consent doesn't need networkidle
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -458,16 +458,24 @@ async function clickContinuarAndWait(
 ): Promise<void> {
   const continueBtn = scope.locator('button', { hasText: /^Continuar$/ }).filter({ visible: true }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
-  // force: true — same overlay-interception quirk noted in login.spec.ts.
-  await continueBtn.click({ force: true });
-  await page.waitForTimeout(1_500);
 
-  const advanced = await readyLocator.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false);
-  if (!advanced) {
-    await page.screenshot({ path: `test-results/es-reg-debug-${stepLabel}-${Date.now()}.png` });
-    const inlineError = await page.locator('[class*="error" i]').first().textContent({ timeout: 2_000 }).catch(() => null);
-    throw new Error(`REG-01 (ES): registration did not advance past "${stepLabel}" (inline error: ${inlineError ?? 'none'}) — see debug screenshot`);
+  // Confirmed live 2026-07-16: this step (ES-mobile "mobile-email-mobile")
+  // failed once during a full-suite run then passed clean on Playwright's
+  // own whole-test retry — a one-off click-swallow under load, same shape
+  // as the consent-checkbox and popup-close flakiness already hardened
+  // elsewhere in this suite. One retry of the click itself (not just a
+  // longer wait) absorbs that instead of failing the whole flow.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // force: true — same overlay-interception quirk noted in login.spec.ts.
+    await continueBtn.click({ force: true });
+    await page.waitForTimeout(1_500);
+    const advanced = await readyLocator.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false);
+    if (advanced) return;
   }
+
+  await page.screenshot({ path: `test-results/es-reg-debug-${stepLabel}-${Date.now()}.png` });
+  const inlineError = await page.locator('[class*="error" i]').first().textContent({ timeout: 2_000 }).catch(() => null);
+  throw new Error(`REG-01 (ES): registration did not advance past "${stepLabel}" (inline error: ${inlineError ?? 'none'}) — see debug screenshot`);
 }
 
 async function fillEsIdStep(page: Page, scope: Scope, data: EsRegistrationData, readyLocator?: Locator): Promise<void> {

@@ -19,7 +19,7 @@ test.describe('P1 - Website Header', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -155,7 +155,7 @@ test.describe('P1 - Website Header', () => {
       // a reliable reset here rather than chasing the mobile modal's close
       // button (this fullscreen mobile takeover, unlike desktop's popup, has
       // its own separate DOM structure).
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
     });
@@ -244,7 +244,7 @@ test.describe('P1 - Website Header', () => {
     });
 
     await runStep('Step 6: Brand logo click sends to homepage', async () => {
-      await page.goto('slingo/');
+      await page.goto('slingo/', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
       const logo = page.getByRole('banner').locator(`a[href="${siteUrl('')}"]`).first();

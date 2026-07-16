@@ -22,7 +22,7 @@ test.describe('P3 - Features Page', () => {
     const featuresPathCheck = currentGeoFeatures().featuresPath;
     test.skip(!featuresPathCheck, `Features page does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -88,7 +88,7 @@ test.describe('P3 - Features Page', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_000);
       expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto(featuresPath);
+      await page.goto(featuresPath, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);

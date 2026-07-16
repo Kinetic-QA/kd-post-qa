@@ -17,7 +17,7 @@ test.describe('P2 - Registration Widget', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional registration widget for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -104,7 +104,7 @@ test.describe('P2 - Registration Widget', () => {
         console.log('RW-01 Step 2 skipped — no feedback form for this GEO');
         return;
       }
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await openRegistrationWidget();
@@ -118,7 +118,7 @@ test.describe('P2 - Registration Widget', () => {
     });
 
     await runStep('Step 3: Close button dismisses the registration window', async () => {
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -129,7 +129,7 @@ test.describe('P2 - Registration Widget', () => {
         // login-widget.spec.ts) rather than desktop's small popup —
         // re-navigating is a reliable reset here rather than chasing that
         // icon's exact coordinates.
-        await page.goto('');
+        await page.goto('', { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
       } else {

@@ -85,7 +85,7 @@ test.describe('P3 - Blog Page Header', () => {
         // Mobile's login/registration widget is a fullscreen takeover with
         // its own DOM (confirmed live in login-widget.spec.ts) — desktop's
         // Escape/corner-click close never actually dismisses it there.
-        await page.goto(page.url().split('#')[0]);
+        await page.goto(page.url().split('#')[0], { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
         return;
@@ -149,7 +149,7 @@ test.describe('P3 - Blog Page Header', () => {
       // (https://www.slingo.com/), NOT /blog/. Confirmed intentional by the
       // dev team — this behavior is consistent across other brand sites, not
       // a bug — so the checklist's "blog homepage" wording is outdated.
-      await page.goto(`${geoFeatures.blogPath}search/`);
+      await page.goto(`${geoFeatures.blogPath}search/`, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);

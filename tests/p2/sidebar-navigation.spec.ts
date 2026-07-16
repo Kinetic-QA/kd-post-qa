@@ -54,7 +54,7 @@ test.describe('P2 - Sidebar Navigation', () => {
 
     // -- Setup: ONE page.goto('/') -----------------------------------------
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1_000);
     await dismissCookieConsent(page);
@@ -98,7 +98,7 @@ test.describe('P2 - Sidebar Navigation', () => {
     // close control.
     async function closeAccountModal() {
       if (isMobile) {
-        await page.goto('');
+        await page.goto('', { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
         return;
@@ -135,6 +135,23 @@ test.describe('P2 - Sidebar Navigation', () => {
       await expect.soft(page).toHaveURL(
         new RegExp(expectedPath.replace(/\//g, '\\/')), { timeout: 8_000 }
       );
+    }
+
+    // Same as navStep, but for a category link that may not exist at all for
+    // this brand/GEO (e.g. SNG AB has Slots/Casino/Live Casino but no
+    // Slingo/Bingo) — skip cleanly instead of hard-failing on a link that
+    // was never going to be there, same pattern footer-navigation.spec.ts
+    // already uses for optional footer links.
+    async function navStepIfExists(label: string, href: string, expectedPath: string) {
+      await openSidebar();
+      const link = page.locator(SIDEBAR + ' a[href*="' + expectedPath + '"]').first();
+      const exists = await link.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!exists) {
+        record(`${label} (skipped — not offered for this GEO)`, true);
+        console.log('SN-01 ' + label + ' skipped — not offered for this GEO');
+        return;
+      }
+      await navStep(label, href, expectedPath);
     }
 
     try {
@@ -245,16 +262,17 @@ test.describe('P2 - Sidebar Navigation', () => {
       await expect.soft(page).toHaveURL(siteUrl(''), { timeout: 8_000 });
     });
 
-    // -- Steps 24-32: Slingo / Slots / Casino -------------------------------
+    // -- Steps 24-32: Slingo / Slots / Bingo / Casino / Live Casino ---------
     if (geoFeatures.hasGameCategoryNav) {
-      // -- Steps 24-26: Slingo -----------------------------------------------
-      await navStep('Slingo link -> /slingo/', '/slingo/', '/slingo/');
-
-      // -- Steps 27-29: Slots ------------------------------------------------
-      await navStep('Slots link -> /slots/', '/slots/', '/slots/');
-
-      // -- Steps 30-32: Casino -----------------------------------------------
-      await navStep('Casino link -> /casino/', '/casino/', '/casino/');
+      // Each brand offers a different subset of these (e.g. SNG AB has
+      // Slots/Casino/Live Casino but no Slingo/Bingo) — check-and-skip per
+      // link rather than assuming the fixed Slingo/Slots/Casino trio every
+      // GEO configured so far happened to share.
+      await navStepIfExists('Slingo link -> /slingo/', '/slingo/', '/slingo/');
+      await navStepIfExists('Slots link -> /slots/', '/slots/', '/slots/');
+      await navStepIfExists('Bingo link -> /bingo/', '/bingo/', '/bingo/');
+      await navStepIfExists('Casino link -> /casino/', '/casino/', '/casino/');
+      await navStepIfExists('Live Casino link -> /live-casino/', '/live-casino/', '/live-casino/');
     } else {
       // Same reasoning as the Promotions/Features branches above — soft skip,
       // not a test-aborting test.skip(). Confirmed live (DE): no Slingo/Slots/

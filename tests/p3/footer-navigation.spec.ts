@@ -46,7 +46,7 @@ test.describe('P3 - Footer Navigation', () => {
 
     // ── Setup: ONE page.goto('/') ─────────────────────────────────────────
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1_000);
     await dismissCookieConsent(page);
