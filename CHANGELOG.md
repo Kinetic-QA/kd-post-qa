@@ -24,6 +24,12 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-16
+
+### Fixed
+
+- **The regulation/licensing logo check in the footer (GamCare, Gamstop, Spelinspektionen, etc.) could occasionally fail on the German and Swedish sites**, saying a click on one of those logos didn't open the expected new tab. Dug into it live on both real German and Swedish connections and couldn't get it to fail again — it turned out to be a rare one-off timing hiccup (most likely the "special offer" popup reappearing at the exact moment of the click and swallowing it), not a real broken link on either site. The check now tries the click a second time if the first attempt doesn't open a tab in time, so a rare hiccup like this won't fail the whole check. Confirmed clean with two full re-runs each on real German and Swedish connections after the fix.
+
 ## [Unreleased] - 2026-07-14
 
 ### Added

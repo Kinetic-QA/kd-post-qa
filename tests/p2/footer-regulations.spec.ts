@@ -129,10 +129,25 @@ test.describe('P2 - Footer Regulations', () => {
             const expectedFragment = resolved.hash || resolved.search;
             expect(page.url()).toContain(expectedFragment);
           } else {
-            [popup] = await Promise.all([
-              page.context().waitForEvent('page', { timeout: 10_000 }),
-              link.click(),
-            ]);
+            // Confirmed live 2026-07-16: this click can silently miss on a
+            // long-lived run (DE + SE both hit a 10s waitForEvent timeout
+            // here during the 6-GEO baseline run, but 3 isolated re-runs
+            // afterwards were all clean — a one-off click-swallow under
+            // load, e.g. the campaign popup remounting right as we click,
+            // not a per-GEO bug). One retry with a fresh dismiss absorbs
+            // that without masking a real, persistent failure.
+            try {
+              [popup] = await Promise.all([
+                page.context().waitForEvent('page', { timeout: 10_000 }),
+                link.click(),
+              ]);
+            } catch {
+              await dismissCampaignPopup(page);
+              [popup] = await Promise.all([
+                page.context().waitForEvent('page', { timeout: 10_000 }),
+                link.click(),
+              ]);
+            }
             await popup.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
             expect(popup.url()).toContain(expectedHost);
           }
