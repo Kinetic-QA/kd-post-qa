@@ -23,7 +23,7 @@ test.describe('P2 - Promotions Page', () => {
     promoPath = currentGeoFeatures().promotionsPath;
     test.skip(!promoPath, `Promotions page does not exist for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto(promoPath!);
+    await page.goto(promoPath!, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -85,7 +85,7 @@ test.describe('P2 - Promotions Page', () => {
       await page.waitForTimeout(2_000);
       console.log('PP-01 Step 1 url after click+wait: ' + page.url());
       expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto(promoPath!);
+      await page.goto(promoPath!, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -107,7 +107,7 @@ test.describe('P2 - Promotions Page', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_000);
       expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto(promoPath!);
+      await page.goto(promoPath!, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -125,7 +125,7 @@ test.describe('P2 - Promotions Page', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_000);
       expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto(promoPath!);
+      await page.goto(promoPath!, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -164,7 +164,7 @@ test.describe('P2 - Promotions Page', () => {
     });
 
     await runStep('Step 6: Promotion icon in header leads back to Promotions page', async () => {
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
       // Mobile's visible entry point is the gift icon in the bottom nav

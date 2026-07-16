@@ -41,7 +41,7 @@ test.describe('P1 - Game Category Navigation', () => {
 
     // ── Setup: dismiss cookie + campaign popup ONCE ──────────────────────
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000); // wait for campaign popup to appear before dismissing
     await dismissCookieConsent(page);
@@ -52,8 +52,25 @@ test.describe('P1 - Game Category Navigation', () => {
     // ── Helper: click a nav link by partial href and verify URL ──────────
     const results: { label: string; status: string }[] = [];
 
+    // Confirmed live on SNG AB: category/sub-category links (Megaways,
+    // Jackpots, etc.) live inside the hamburger sidebar, translated
+    // off-screen while closed — isVisible() still reports true for an
+    // off-canvas element (checks CSS visibility, not on-screen position),
+    // so a stale "visible" reading led straight to a click timeout instead
+    // of a clean skip. Opening the sidebar first is harmless even for
+    // brands (like Slingo) whose sub-category tabs render directly on the
+    // landing page, since the check below still finds them either way.
+    async function openSidebarIfPresent() {
+      await page.evaluate(() => {
+        const el = document.querySelector('[class*="hamburger" i]') as HTMLElement | null;
+        el?.click();
+      }).catch(() => {});
+      await page.waitForTimeout(600);
+    }
+
     async function clickNavAndVerify(hrefPart: string, label: string) {
       const expectedUrl = siteUrl(hrefPart);
+      await openSidebarIfPresent();
       // href$= (ends with), not href*= (contains) — confirmed live on SE:
       // "Other" sub-category has no real nav tab at all, but a substring
       // match still hit an individual game tile living under that same

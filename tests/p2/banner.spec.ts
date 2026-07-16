@@ -23,7 +23,7 @@ test.describe('P2 - Banner', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -113,7 +113,7 @@ test.describe('P2 - Banner', () => {
             await page.waitForTimeout(800);
           });
         if (page.url().includes('#account')) {
-          await page.goto('');
+          await page.goto('', { waitUntil: 'domcontentloaded' });
           await page.waitForLoadState('domcontentloaded');
           await page.waitForTimeout(500);
         }
@@ -140,7 +140,7 @@ test.describe('P2 - Banner', () => {
         // for the mailto: link check in contact-us-page.spec.ts.
         const href = await bonusLink.getAttribute('href') ?? '';
         expect(href).toContain('/bonus-policy/');
-        await page.goto(href);
+        await page.goto(href, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await expect(page).toHaveURL(/\/bonus-policy\//, { timeout: 10_000 });
         await page.goBack();

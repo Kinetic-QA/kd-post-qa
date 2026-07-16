@@ -22,7 +22,7 @@ test.describe('P1 - Game Information Modal', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -93,7 +93,7 @@ test.describe('P1 - Game Information Modal', () => {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(1_200);
       if (!page.url().includes('#account')) return;
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
     }
@@ -130,7 +130,7 @@ test.describe('P1 - Game Information Modal', () => {
         // (Step 10 failed even after calling it). A full navigation is what
         // Steps 14-16 already rely on for the same React GamePopup
         // component, so use that here too rather than the lighter helper.
-        await page.goto('');
+        await page.goto('', { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(1_000);
         await dismissCampaignPopup(page);
@@ -216,7 +216,7 @@ test.describe('P1 - Game Information Modal', () => {
 
     await runStep('Steps 14-16: Hover first game tile -> Play CTA -> registration modal', async () => {
       // Full navigation to properly unmount the React GamePopup component
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
 
       // Campaign popup appears ~3s after page load. Wait for it, then dismiss.
@@ -299,7 +299,7 @@ test.describe('P1 - Game Information Modal', () => {
       await page.keyboard.press('Escape');
       await page.waitForTimeout(1_200);
       if (page.url().includes('#account')) {
-        await page.goto('');
+        await page.goto('', { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
       }

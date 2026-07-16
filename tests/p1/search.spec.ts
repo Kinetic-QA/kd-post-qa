@@ -17,7 +17,7 @@ test.describe('P1 - Search', () => {
 
   test.beforeEach(async ({ page }) => {
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -199,28 +199,39 @@ test.describe('P1 - Search', () => {
       // (#search-gamepage/) instead of registration, not just being
       // redundant. Desktop genuinely needs the hover to reveal the CTA via
       // CSS :hover, so this stays unchanged there.
-      if (!isMobile) {
-        const gameImg = titleLink.locator('xpath=preceding::img[1]').first();
-        // Smooth mouse movement so hover animation is visually visible
-        // Start from top-left corner so the glide across the screen is clearly seen
-        const imgBox = await gameImg.boundingBox().catch(() => null);
-        const targetBox = (imgBox && imgBox.y > 50 && imgBox.y < vh) ? imgBox
-          : await titleLink.boundingBox().catch(() => null);
-        if (targetBox) {
-          const cx = targetBox.x + targetBox.width / 2;
-          const cy = targetBox.y + targetBox.height / 2;
-          await page.mouse.move(50, 50);                   // start far from target
-          await page.waitForTimeout(200);
-          await page.mouse.move(cx, cy, { steps: 30 });   // slow glide to game tile
-        }
-        await page.waitForTimeout(1_500); // let animation fully play
-      }
-
       // Scoped to the search popup — an unscoped page-wide search for this
       // CTA text can match unrelated content-block buttons elsewhere on the
       // page (confirmed live: a promo tile also says "A JUGAR" on ES).
       const searchPopup = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
       const playItBtn = searchPopup.locator('a, button').filter({ hasText: strings.playCta }).filter({ visible: true }).first();
+
+      // Confirmed live on ROW: a single hover-then-check can miss if the
+      // CSS hover-reveal animation is still mid-play when the assertion
+      // fires (deep into a long single-worker run, not every time) — same
+      // "one-shot check under load" flakiness already seen elsewhere in
+      // this suite (cookie consent, campaign popup). Retry the hover itself
+      // rather than just re-checking, since a stale mouse position won't
+      // re-trigger the CSS hover state on its own.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (!isMobile) {
+          const gameImg = titleLink.locator('xpath=preceding::img[1]').first();
+          // Smooth mouse movement so hover animation is visually visible
+          // Start from top-left corner so the glide across the screen is clearly seen
+          const imgBox = await gameImg.boundingBox().catch(() => null);
+          const targetBox = (imgBox && imgBox.y > 50 && imgBox.y < vh) ? imgBox
+            : await titleLink.boundingBox().catch(() => null);
+          if (targetBox) {
+            const cx = targetBox.x + targetBox.width / 2;
+            const cy = targetBox.y + targetBox.height / 2;
+            await page.mouse.move(50, 50);                   // start far from target
+            await page.waitForTimeout(200);
+            await page.mouse.move(cx, cy, { steps: 30 });   // slow glide to game tile
+          }
+          await page.waitForTimeout(1_500); // let animation fully play
+        }
+        const visible = await playItBtn.isVisible({ timeout: 3_000 }).catch(() => false);
+        if (visible) break;
+      }
       await expect(playItBtn).toBeVisible({ timeout: 5_000 });
     });
 

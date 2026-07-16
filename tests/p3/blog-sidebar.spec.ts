@@ -111,7 +111,7 @@ test.describe('P3 - Blog Sidebar', () => {
           throw e;
         } finally {
           // Back to the blog listing and reopen the sidebar for the next link.
-          await page.goto(geoFeatures.blogPath!);
+          await page.goto(geoFeatures.blogPath!, { waitUntil: 'domcontentloaded' });
           await page.waitForLoadState('domcontentloaded');
           await page.waitForTimeout(800);
           await dismissCampaignPopup(page);
@@ -121,7 +121,7 @@ test.describe('P3 - Blog Sidebar', () => {
     });
 
     await runStep('Step 2: "X" icon closes the sidebar menu', async () => {
-      await page.goto(geoFeatures.blogPath!);
+      await page.goto(geoFeatures.blogPath!, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);

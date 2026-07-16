@@ -54,7 +54,7 @@ test.describe('P3 - Contact Us Page', () => {
 
     // ── Setup ─────────────────────────────────────────────────────────────
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1_000);
     await dismissCookieConsent(page);
@@ -73,7 +73,7 @@ test.describe('P3 - Contact Us Page', () => {
     // widget's close control — later steps still need to be on this same
     // GEO-prefixed contact page, not the homepage.
     async function closeMobileModal() {
-      await page.goto(page.url().split('#')[0]);
+      await page.goto(page.url().split('#')[0], { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
     }

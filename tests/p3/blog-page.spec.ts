@@ -89,7 +89,7 @@ test.describe('P3 - Blog Page', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_000);
       expect(page.url()).not.toBe(siteUrl(geoFeatures.blogPath!));
-      await page.goto(geoFeatures.blogPath!);
+      await page.goto(geoFeatures.blogPath!, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);

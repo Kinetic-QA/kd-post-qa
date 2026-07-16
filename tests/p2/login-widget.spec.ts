@@ -21,7 +21,7 @@ test.describe('P2 - Login Widget', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional login widget for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -131,7 +131,7 @@ test.describe('P2 - Login Widget', () => {
     });
 
     await runStep('Step 2: "Don\'t have an account" link opens the registration form', async () => {
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -153,7 +153,7 @@ test.describe('P2 - Login Widget', () => {
     });
 
     await runStep('Step 3: Show Password icon toggles masked/visible text', async () => {
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -182,7 +182,7 @@ test.describe('P2 - Login Widget', () => {
       // "Report a problem" is not shown on the base login form — it only
       // appears after a failed login attempt (same behavior confirmed in
       // p1/feedback-form.spec.ts), so trigger that first.
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await openLoginWidget();
@@ -207,7 +207,7 @@ test.describe('P2 - Login Widget', () => {
     });
 
     await runStep('Step 5: Close button dismisses the login widget', async () => {
-      await page.goto('');
+      await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
@@ -218,7 +218,7 @@ test.describe('P2 - Login Widget', () => {
         // desktop's small popup — re-navigating is a reliable reset here
         // rather than chasing that icon's exact coordinates (same approach
         // used for the mobile PLAY-opened widget in website-header.spec.ts).
-        await page.goto('');
+        await page.goto('', { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
       } else {

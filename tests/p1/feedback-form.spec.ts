@@ -19,7 +19,7 @@ test.describe('P1 - Feedback Form', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!currentGeoFeatures().hasFeedbackForm, `No "Report a problem"/feedback form for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('');
+    await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded'); // faster than networkidle for initial load
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
