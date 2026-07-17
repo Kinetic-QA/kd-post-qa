@@ -57,7 +57,15 @@ test.describe('P3 - Payment Method Strip', () => {
     try {
 
     await runStep('Step 1: Payment provider logos are displayed', async () => {
-      const logos = page.locator('a[href*="/payment-methods/"] img, img[alt*="pay" i]');
+      // Confirmed live on SNG AB: the whole strip renders as ONE merged
+      // banner image (src contains `sectionCode=payments`, generic site-wide
+      // alt text, not per-provider) instead of individual logo <img> tags
+      // with per-provider alt text — a genuinely different implementation,
+      // not a missing/broken feature. Accept either shape as evidence logos
+      // are displayed.
+      const logos = page.locator(
+        'a[href*="/payment-methods/"] img, img[alt*="pay" i], img[src*="sectionCode=payments"]'
+      );
       const count = await logos.count();
       expect(count).toBeGreaterThan(0);
       console.log('PM-01 payment logos found: ' + count);

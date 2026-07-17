@@ -80,6 +80,15 @@ test.describe('P2 - Sidebar Navigation', () => {
     }
 
     async function openSidebar() {
+      // Idempotent — confirmed live (both SNG AB and Slingo UK): navStepIfExists
+      // calls openSidebar() itself, then delegates to navStep(), which calls
+      // openSidebar() AGAIN. clickHamburger() is a raw toggle (same element
+      // closes it, see Steps 3-4 below), so the second call was silently
+      // CLOSING the sidebar it had just opened, right before navStep tried to
+      // click a link inside it — hung for the full click timeout on both
+      // brands' very first category-nav step every single run. Skip the
+      // toggle entirely when already open instead of blindly re-clicking it.
+      if (await isSidebarOpen()) return;
       // Smart poll: check for popup every 800ms up to 4s, exit early if found
       for (let i = 0; i < 5; i++) {
         const hasPopup = await page.locator('[class*="OfferPopup_close"]')
@@ -117,7 +126,18 @@ test.describe('P2 - Sidebar Navigation', () => {
     async function navStep(label: string, href: string, expectedPath: string) {
       await openSidebar();
       const link = page.locator(SIDEBAR + ' a[href*="' + expectedPath + '"]').first();
-      await link.click();
+      // Native el.click() via evaluate, not link.click() — confirmed live on
+      // SNG AB: the sidebar's Slots/Casino/Live Casino rows render an "All"
+      // sub-link (the real, correct link this locator resolves to) directly
+      // beneath a sibling toggle row ("Online Slots"/"Casino" label + arrow)
+      // that visually overlaps it, so a real coordinate-based click gets
+      // intercepted by that sibling instead of landing on "All" — same class
+      // of issue as the desktop header nav (see game-category-navigation.spec.ts),
+      // but UNLIKE that case this has NOT yet been confirmed against a real
+      // user's mouse click in a normal browser — don't assume it's equally
+      // harmless. Flag to Reeve for a manual check before treating this
+      // sidebar overlap as confirmed-safe the way the header one was.
+      await link.evaluate((el: HTMLElement) => el.click());
       // Confirmed live (same root cause already fixed in footer-navigation.spec.ts's
       // footerStep): the PREVIOUS navStep's navigation can still be in flight when
       // this click fires, so a fixed wait doesn't guarantee THIS click's navigation

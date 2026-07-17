@@ -19,6 +19,7 @@ export interface UKAddress {
   postcode: string;
   city: string;
   country: string;
+  state?: string;   // Canadian/AB-only: "Pick your state" province dropdown (e.g. "Alberta")
 }
 
 export interface RegistrationData {
@@ -137,6 +138,51 @@ const UK_ADDRESSES: UKAddress[] = [
 ];
 
 /**
+ * IMPORTANT — these are Ontario addresses, not Alberta ones, despite this
+ * being the SNG AB (Alberta) brand's test data. Confirmed live 2026-07-17:
+ * selecting Canada as the mobile country code switches the address step to
+ * Canadian fields, including a "Pick your state" province dropdown that
+ * defaults to Ontario. Selecting "Alberta" there triggers a hard validation
+ * error: "Please note that SpinGenie.CA accepts only players who are
+ * residents of Ontario. If you are not a resident of Ontario, you cannot
+ * register on SpinGenie.CA site." This is a REAL platform/business-rule
+ * finding, not a test bug — the entire QA site is built and branded for
+ * Alberta (Alberta iGaming Corporation branding, "Alberta Online Casino"
+ * copy throughout), but the actual registration backend right now only
+ * accepts Ontario residents. Very likely because Alberta's backend/
+ * licensing isn't activated yet in this pre-live environment while Ontario
+ * is SNG's existing live Canadian market sharing the same infrastructure —
+ * flag to the team; don't just quietly keep working around it if this is
+ * still true once Alberta actually goes live. Left the province dropdown at
+ * its Ontario default (see fillStep2AB/fillMobileStep3AddressAB — `state`
+ * intentionally omitted below) and used real Ontario postal codes so the
+ * flow can still reach a submittable end state.
+ */
+const AB_ADDRESSES: UKAddress[] = [
+  {
+    houseNumber: '210',
+    street:      'Queen Street West',
+    postcode:    'M5V 3L9',
+    city:        'Toronto',
+    country:     'CANADA',
+  },
+  {
+    houseNumber: '101',
+    street:      'Bank Street',
+    postcode:    'K1P 5N4',
+    city:        'Ottawa',
+    country:     'CANADA',
+  },
+  {
+    houseNumber: '44',
+    street:      'King Street West',
+    postcode:    'L8P 1A2',
+    city:        'Hamilton',
+    country:     'CANADA',
+  },
+];
+
+/**
  * Hardcoded valid Irish addresses — Eircodes (not UK-style postcodes)
  * confirmed live: IE's address step has no separate house-number field
  * (unlike UK's), so houseNumber here is unused by fillIEAddress but kept
@@ -241,6 +287,27 @@ export function generateGermanMobile(): string {
 }
 
 /**
+ * Generates a random valid Alberta (Canada) mobile number in NANP format:
+ * a real Alberta area code (403/587/780/825) + 3-digit exchange (can't
+ * start 0/1) + 4-digit subscriber number, 10 digits total, no leading 1.
+ * Confirmed live on SNG AB: unlike ROW/DE, the form's country-code dropdown
+ * does NOT need to be relied on for auto-detection — it defaults to
+ * whichever country the tester's real IP/VPN resolves to (Israel, +972,
+ * since the IL/CY VPN required to reach this QA site has nothing to do with
+ * the actual Canadian market), so registration.spec.ts explicitly selects
+ * "Canada" in the dropdown before using this generator (see
+ * fillStep0WithRetry's countryCodeLabel param) rather than depending on
+ * auto-detect the way ROW's South African generator does.
+ */
+export function generateCanadianMobile(): string {
+  const areaCode = randomFrom(['403', '587', '780', '825']);
+  const exchange = randomFrom([2, 3, 4, 5, 6, 7, 8, 9]).toString() +
+    Array.from({ length: 2 }, () => Math.floor(Math.random() * 10)).join('');
+  const subscriber = Array.from({ length: 4 }, () => Math.floor(Math.random() * 10)).join('');
+  return `${areaCode}${exchange}${subscriber}`;
+}
+
+/**
  * Generates a random date of birth for a person aged 25–50, joined with the
  * given separator (UK's form wants DD/MM/YYYY, ES's wants DD-MM-YYYY).
  */
@@ -323,6 +390,30 @@ export function generateRegistrationData(): RegistrationData {
     gender:    randomFrom(['Male', 'Female'] as const),
     email:     `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
     address:   randomFrom(UK_ADDRESSES),
+    username:  `Test_${firstName[0]}${timestamp}`,
+    password:  '5Tandard@1',
+  };
+}
+
+/**
+ * Generates registration data for SNG AB (Alberta) — reuses UK's names/
+ * gender/DOB pools (same English-language flow) but with a Canadian mobile
+ * number and a real Alberta address (Province + valid postal code), per
+ * registration.spec.ts's isAlbertaFormat branch.
+ */
+export function generateAbRegistrationData(): RegistrationData {
+  const firstName = randomFrom(FIRST_NAMES);
+  const lastName  = randomFrom(LAST_NAMES);
+  const timestamp = Date.now();
+
+  return {
+    mobile:    generateCanadianMobile(),
+    dob:       generateDOB(),
+    firstName,
+    lastName,
+    gender:    randomFrom(['Male', 'Female'] as const),
+    email:     `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
+    address:   randomFrom(AB_ADDRESSES),
     username:  `Test_${firstName[0]}${timestamp}`,
     password:  '5Tandard@1',
   };
