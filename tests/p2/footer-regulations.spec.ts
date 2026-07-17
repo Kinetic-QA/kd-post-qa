@@ -136,20 +136,73 @@ test.describe('P2 - Footer Regulations', () => {
             // load, e.g. the campaign popup remounting right as we click,
             // not a per-GEO bug). One retry with a fresh dismiss absorbs
             // that without masking a real, persistent failure.
+            //
+            // Confirmed live on SNG AB mobile: NOT every cross-origin
+            // regulation logo opens a new tab the way the header comment
+            // above assumes — responsiblegambling.org specifically
+            // navigates the CURRENT tab directly instead (no window.open()
+            // interception for this one link). Race the popup event against
+            // the current page navigating to the expected host, and accept
+            // whichever actually happens rather than assuming cross-origin
+            // always means "new tab."
+            //
+            // Strip "www." before comparing — confirmed live: this specific
+            // link's href is www.responsiblegambling.org but the site
+            // redirects to the bare responsiblegambling.org, so a plain
+            // hostname.includes(expectedHost) check can never match (the
+            // shorter post-redirect hostname doesn't contain the longer
+            // www.-prefixed one). Comparing the bare domain both ways
+            // handles either direction of www./non-www. redirect.
+            const bareHost = expectedHost.replace(/^www\./, '');
+            const matchesExpectedHost = (url: URL) => url.hostname.replace(/^www\./, '') === bareHost;
+            // Confirmed live: this specific cross-origin same-tab navigation
+            // can genuinely take longer than 10s (real third-party site,
+            // VPN latency) — the first race can time out on BOTH branches
+            // even though the navigation is still quietly in flight and
+            // completes a moment later. Re-clicking on the retry then fails
+            // outright, since the page has already navigated away and the
+            // original selector no longer exists there. Check whether we've
+            // already arrived before ever attempting a retry-click.
+            const raceOnce = () => Promise.race([
+              page.context().waitForEvent('page', { timeout: 20_000 }).then(p => ({ kind: 'popup' as const, popup: p })),
+              page.waitForURL(matchesExpectedHost, { timeout: 20_000 }).then(() => ({ kind: 'sametab' as const })),
+            ]);
+            let outcome: { kind: 'popup'; popup: import('@playwright/test').Page } | { kind: 'sametab' };
             try {
-              [popup] = await Promise.all([
-                page.context().waitForEvent('page', { timeout: 10_000 }),
-                link.click(),
-              ]);
+              [outcome] = await Promise.all([raceOnce(), link.click()]);
             } catch {
-              await dismissCampaignPopup(page);
-              [popup] = await Promise.all([
-                page.context().waitForEvent('page', { timeout: 10_000 }),
-                link.click(),
-              ]);
+              if (matchesExpectedHost(new URL(page.url()))) {
+                outcome = { kind: 'sametab' };
+              } else {
+                await dismissCampaignPopup(page);
+                [outcome] = await Promise.all([raceOnce(), link.click()]);
+              }
             }
-            await popup.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
-            expect(popup.url()).toContain(expectedHost);
+            if (outcome.kind === 'popup') {
+              popup = outcome.popup;
+              await popup.waitForLoadState('domcontentloaded', { timeout: 15_000 }).catch(() => {});
+              // bareHost — confirmed live: connexontario.ca ALSO strips
+              // "www." on redirect, same as responsiblegambling.org above.
+              expect(popup.url()).toContain(bareHost);
+            } else {
+              // bareHost, not expectedHost — same www./non-www. redirect
+              // this whole branch exists to handle in the first place.
+              expect(page.url()).toContain(bareHost);
+              // Full reload, not goBack() — confirmed live on SNG AB mobile:
+              // after several same-tab regulator redirects in a row, the next
+              // link in the loop (connexontario.ca) stopped resolving inside
+              // <son-license-logos> at all, even though Step 1 counted it
+              // successfully earlier in the same run. goBack() restores the
+              // URL but doesn't reliably force this custom element's shadow
+              // DOM to remount cleanly after repeated back-navigations. A
+              // fresh navigation guarantees a clean remount every time.
+              await page.goto('', { waitUntil: 'domcontentloaded' });
+              await page.waitForLoadState('domcontentloaded');
+              await page.waitForTimeout(1_000);
+              await dismissCampaignPopup(page);
+              await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+              await page.waitForTimeout(500);
+            }
           }
           record(label, true);
         } catch (e) {

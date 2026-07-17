@@ -1,6 +1,6 @@
 import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, generateDERegistrationData, generateGermanMobile, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateAbRegistrationData, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -30,6 +30,14 @@ const MAX_MOBILE_RETRIES = 10;
 test.describe('Registration Flow', () => {
 
   test.beforeEach(async ({ page }) => {
+    // Confirmed live on SNG AB: the default 30s test timeout was hit
+    // mid-beforeEach on a slow page load (VPN latency reaching a pre-live
+    // QA environment routed through IL/CY), not a real bug — Playwright's
+    // retry passed clean immediately after. test.setTimeout() extends the
+    // CURRENT test's overall budget even when called from a hook, so bump
+    // it here rather than only inside the test body (which doesn't
+    // retroactively cover a beforeEach that already ran).
+    test.setTimeout(60_000);
     test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional login/registration for this GEO (${test.info().project.name}) — no test credentials/deposit account exists`);
     await setupCampaignPopupWatcher(page);
     await page.goto('', { waitUntil: 'domcontentloaded' });
@@ -90,6 +98,11 @@ test.describe('Registration Flow', () => {
     const isIrishFormat = test.info().project.name.replace(/-mobile$/, '') === 'IE';
     const isRowFormat = test.info().project.name.replace(/-mobile$/, '') === 'ROW';
     const isGermanFormat = test.info().project.name.replace(/-mobile$/, '') === 'DE';
+    // Brand read directly from process.env.TEST_BRAND, same as
+    // helpers/geo-features.ts/test-credentials.ts — safe here because brand
+    // (unlike GEO) is fixed for the whole process, not per-project.
+    const isAlbertaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SNG'
+      && test.info().project.name.replace(/-mobile$/, '') === 'AB';
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
 
@@ -209,7 +222,12 @@ test.describe('Registration Flow', () => {
       const data = generateIERegistrationData();
 
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        await fillStep0WithRetry(page, scope, data, generateIrishMobile);
+        // Explicit country selection, not just the mobileGenerator — confirmed
+        // live testing SNG IE from a UK IP/VPN: the dropdown defaults to +44
+        // (whatever the tester's real IP resolves to), rejecting an Irish
+        // number regardless of format. Same root cause/fix as SNG AB's
+        // Canada selection — see fillStep0WithRetry's countryCodeLabel param.
+        await fillStep0WithRetry(page, scope, data, generateIrishMobile, 'Ireland');
       });
 
       await runStep('Step 1: Name + Email + Gender → Continue', async () => {
@@ -238,7 +256,12 @@ test.describe('Registration Flow', () => {
       const data = generateIERegistrationData();
 
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        await fillStep0WithRetry(page, scope, data, generateIrishMobile);
+        // Explicit country selection, not just the mobileGenerator — confirmed
+        // live testing SNG IE from a UK IP/VPN: the dropdown defaults to +44
+        // (whatever the tester's real IP resolves to), rejecting an Irish
+        // number regardless of format. Same root cause/fix as SNG AB's
+        // Canada selection — see fillStep0WithRetry's countryCodeLabel param.
+        await fillStep0WithRetry(page, scope, data, generateIrishMobile, 'Ireland');
       });
 
       await runStep('Step 1 of 5: First/Last name → Continue', async () => {
@@ -385,10 +408,15 @@ test.describe('Registration Flow', () => {
       // unnamed ones, splitting what desktop combines into one screen (e.g.
       // Name+Email+Gender) across separate steps. Step 0 (mobile/DOB) is
       // identical to desktop and reuses fillStep0WithRetry unchanged.
-      const data = generateRegistrationData();
+      const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
 
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        await fillStep0WithRetry(page, scope, data);
+        // SNG AB: country-code dropdown defaults to the tester's real
+        // IL/CY-VPN country, not Canada — see fillStep0WithRetry's
+        // countryCodeLabel handling and generateCanadianMobile's docstring.
+        await (isAlbertaFormat
+          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada')
+          : fillStep0WithRetry(page, scope, data));
       });
 
       await runStep('Step 1 of 5: First/Last name → Continue', async () => {
@@ -400,15 +428,29 @@ test.describe('Registration Flow', () => {
       });
 
       await runStep('Step 3 of 5: Address → Continue', async () => {
-        await fillMobileStep3Address(page, scope, data);
+        // SNG AB: selecting Canada as mobile country switches this step to
+        // Canadian fields (Province dropdown + postal-code validation) —
+        // see fillMobileStep3AddressAB's docstring.
+        await (isAlbertaFormat
+          ? fillMobileStep3AddressAB(page, scope, data)
+          : fillMobileStep3Address(page, scope, data));
       });
 
       await runStep('Step 4 of 5: Username + Password → Continue', async () => {
-        await fillMobileStep4Credentials(page, scope, data);
+        // SNG AB: no separate "Set deposit limits" sub-step — see
+        // fillMobileStep4CredentialsAB's docstring.
+        await (isAlbertaFormat
+          ? fillMobileStep4CredentialsAB(page, scope, data)
+          : fillMobileStep4Credentials(page, scope, data));
       });
 
       await runStep('Step 5 of 5: Deposit limit + consents', async () => {
-        await fillMobileStep5Final(page, scope);
+        // SNG AB: genuinely different consent checkboxes (PEP/HIO + third-party
+        // declaration, no over_18/gdprBingo) and no deposit-limit sub-step —
+        // see fillMobileStep5FinalAB's docstring.
+        await (isAlbertaFormat
+          ? fillMobileStep5FinalAB(page, scope)
+          : fillMobileStep5Final(page, scope));
       });
 
       await runStep('GO PLAY button visible and enabled', async () => {
@@ -417,11 +459,16 @@ test.describe('Registration Flow', () => {
         await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
       });
     } else {
-      const data = generateRegistrationData();
+      const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
 
       // ── Step 2: Step 0 — Mobile + DOB ─────────────────────────────────
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        await fillStep0WithRetry(page, scope, data);
+        // SNG AB: country-code dropdown defaults to the tester's real
+        // IL/CY-VPN country, not Canada — see fillStep0WithRetry's
+        // countryCodeLabel handling and generateCanadianMobile's docstring.
+        await (isAlbertaFormat
+          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada')
+          : fillStep0WithRetry(page, scope, data));
       });
 
       // ── Step 3: Step 1 — Name + Email + Gender ─────────────────────────
@@ -431,12 +478,20 @@ test.describe('Registration Flow', () => {
 
       // ── Step 4: Step 2 — Address ───────────────────────────────────────
       await runStep('Step 2: Address → Continue', async () => {
-        await fillStep2(page, scope, data);
+        // SNG AB: selecting Canada as mobile country switches this step to
+        // Canadian fields (Province dropdown + postal-code validation) —
+        // see fillStep2AB's docstring.
+        await (isAlbertaFormat ? fillStep2AB(page, scope, data) : fillStep2(page, scope, data));
       });
 
       // ── Step 5: Step 3 — Username + Password + Checkboxes ──────────────
       await runStep('Step 3: Username + Password + Checkboxes', async () => {
-        await fillStep3(page, scope, data);
+        // SNG AB: genuinely different consent checkboxes (PEP/HIO + third-party
+        // declaration, no over_18/gdprBingo) — see fillMobileStep5FinalAB's
+        // docstring for the same set confirmed on mobile.
+        await (isAlbertaFormat
+          ? fillStep3(page, scope, data, ['isPepConsent', 'gdpr', 'terms_accept', 'playerDeclaration'])
+          : fillStep3(page, scope, data));
       });
 
       // ── Step 6: GO PLAY button visible ─────────────────────────────────
@@ -860,8 +915,36 @@ async function detectWidgetScope(page: Page): Promise<Scope> {
 async function fillStep0WithRetry(
   page: Page, scope: Scope, data: RegistrationData,
   mobileGenerator: () => string = generateUKMobile,
+  countryCodeLabel?: string,
 ): Promise<void> {
   let mobile = data.mobile;
+
+  // Confirmed live on SNG AB: the mobile country-code dropdown defaults to
+  // whatever country the tester's REAL IP/VPN resolves to (Israel, +972,
+  // matching the IL/CY VPN required to reach this QA site) — NOT Canada,
+  // the actual market being tested. Every retry kept failing "Invalid phone
+  // number" regardless of digits typed, because the number was being
+  // validated against the wrong country's format. Same root cause already
+  // documented for ROW's address-country auto-detect — re-verify with the
+  // correct VPN if this ever needs retesting. Select the correct country
+  // ONCE before the retry loop, since it doesn't reset between attempts.
+  if (countryCodeLabel) {
+    const countryDropdown = scope.getByRole('combobox').first();
+    const isVisible = await countryDropdown.isVisible({ timeout: 5_000 }).catch(() => false);
+    if (isVisible) {
+      const current = await countryDropdown.inputValue().catch(() => '');
+      if (!current.toLowerCase().includes(countryCodeLabel.toLowerCase())) {
+        // selectOption's exact-label match won't work directly — options
+        // include the dial code, e.g. "Canada (+ 1)", not just the country
+        // name — so find the real option text first, then select by it.
+        const options = await countryDropdown.locator('option').allTextContents();
+        const match = options.find(o => o.toLowerCase().includes(countryCodeLabel.toLowerCase()));
+        if (match) await countryDropdown.selectOption({ label: match }).catch(() => {});
+        await page.waitForTimeout(300);
+        console.log('REG-01 Step 0 country code set to ' + countryCodeLabel);
+      }
+    }
+  }
 
   for (let attempt = 1; attempt <= MAX_MOBILE_RETRIES; attempt++) {
     console.log('REG-01 Step 0 attempt ' + attempt + ' mobile: ' + mobile);
@@ -1006,12 +1089,103 @@ async function fillStep2(page: Page, scope: Scope, data: RegistrationData): Prom
   console.log('REG-01 Step 2/3 complete');
 }
 
-/** IE's address step — same shape as UK's fillStep2 but with no house-number field, and the
- * country select already defaults to Ireland (confirmed live), so it's only verified, not set. */
+/**
+ * SNG AB desktop address step — same shape/selectors as UK's fillStep2, but
+ * confirmed live this page ALSO adds a "Pick your state" province dropdown
+ * (defaults to Ontario, must be set to Alberta explicitly) once Canada is
+ * selected as the mobile country code, and does NOT try to force the
+ * country back to UK — it's already correctly "Canada" from Step 0.
+ */
+async function fillStep2AB(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (AB) Step 2/3 address');
+
+  const addr = data.address;
+
+  const houseInput = scope.getByPlaceholder('House No./Name').first();
+  await expect(houseInput).toBeVisible({ timeout: 10_000 });
+  await houseInput.click();
+  await houseInput.fill(addr.houseNumber);
+  await houseInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  await expect(streetInput).toBeVisible({ timeout: 5_000 });
+  await streetInput.click();
+  await streetInput.fill(addr.street);
+  await streetInput.press('Tab');
+  await page.waitForTimeout(800);
+
+  const cityInput = scope.getByRole('textbox', { name: 'City' }).first();
+  await expect(cityInput).toBeVisible({ timeout: 5_000 });
+  await cityInput.click();
+  await cityInput.fill(addr.city);
+  await cityInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  const stateSelect = scope.getByRole('combobox', { name: 'Pick your state' }).first();
+  await expect(stateSelect).toBeVisible({ timeout: 5_000 });
+  if (addr.state) {
+    await stateSelect.selectOption({ label: addr.state }).catch(() => {});
+  }
+  await page.waitForTimeout(300);
+
+  const postcodeInput = scope.getByRole('textbox', { name: 'Postcode' }).first();
+  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  await postcodeInput.click();
+  await postcodeInput.fill(addr.postcode);
+  await postcodeInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.getByRole('textbox', { name: /username/i })
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+
+  console.log('REG-01 (AB) Step 2/3 complete');
+}
+
+/** IE's address step — same shape as UK's fillStep2 but with no house-number field. The country
+ * select must be forced to Ireland FIRST, not just verified — confirmed live testing from a UK
+ * IP/VPN: it defaults to whatever the tester's real IP resolves to (UK), same root cause as the
+ * mobile country-code dropdown, and the whole address form renders in THAT country's shape (a
+ * UK-style House No./Name field appears, which genuine IE registrations never show) until the
+ * correct country is selected. */
 async function fillIEAddress(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
   console.log('REG-01 (IE) Step 2/3 address');
 
   const addr = data.address;
+
+  // Select Ireland FIRST, before filling any field — `.filter({ hasText:
+  // /ireland/i })` (the old approach) only matches a <select> whose
+  // CURRENTLY DISPLAYED text already says "Ireland", a chicken-and-egg
+  // check that silently matches zero elements exactly when the country is
+  // wrong and needs changing. Match by real option text instead, same
+  // technique as SNG AB's mobile-country and address-province fixes.
+  const countrySelect = scope.locator('select').last();
+  const countryVisible = await countrySelect.isVisible({ timeout: 3_000 }).catch(() => false);
+  if (countryVisible) {
+    const val = await countrySelect.inputValue().catch(() => '');
+    if (!val.toLowerCase().includes('ireland')) {
+      const options = await countrySelect.locator('option').allTextContents();
+      const match = options.find(o => o.toLowerCase().includes('ireland'));
+      if (match) await countrySelect.selectOption({ label: match }).catch(() => {});
+      await page.waitForTimeout(500);
+    }
+  }
+
+  // Confirmed live: once the country is genuinely Ireland, a UK-style House
+  // No./Name field can still be present transiently or not at all depending
+  // on how the form re-renders — fill it if present, IE's own address flow
+  // simply won't show one so this is a no-op there.
+  const houseInput = scope.getByPlaceholder('House No./Name').first();
+  if (await houseInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await houseInput.click();
+    await houseInput.fill(addr.houseNumber);
+    await houseInput.press('Tab');
+    await page.waitForTimeout(300);
+  }
 
   const streetInput = scope.getByPlaceholder('Start typing your address').first();
   await expect(streetInput).toBeVisible({ timeout: 10_000 });
@@ -1033,16 +1207,6 @@ async function fillIEAddress(page: Page, scope: Scope, data: RegistrationData): 
   await cityInput.fill(addr.city);
   await cityInput.press('Tab');
   await page.waitForTimeout(300);
-
-  try {
-    const countrySelect = scope.locator('select').filter({ hasText: /ireland/i }).first();
-    if (await countrySelect.isVisible({ timeout: 2_000 })) {
-      const val = await countrySelect.inputValue().catch(() => '');
-      if (!val.toLowerCase().includes('ireland')) {
-        await countrySelect.selectOption({ label: 'IRELAND' }).catch(() => {});
-      }
-    }
-  } catch { /* already correct — confirmed live it defaults to Ireland */ }
 
   const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
@@ -1637,6 +1801,62 @@ async function fillMobileStep3Address(page: Page, scope: Scope, data: Registrati
   console.log('REG-01 (mobile) Step 3/5 complete');
 }
 
+/**
+ * SNG AB mobile "STEP 3 OF 6" address — same fields/layout as UK mobile's
+ * fillMobileStep3Address, but confirmed live this page ALSO adds a "Pick
+ * your state" province dropdown (defaults to Ontario, must be set to
+ * Alberta explicitly) once Canada is selected as the mobile country code,
+ * and does NOT try to force the country back to UK — the country here is
+ * already correctly "Canada" from Step 0, forcing UK would break it.
+ */
+async function fillMobileStep3AddressAB(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (AB mobile) Step 3/6 address');
+
+  const addr = data.address;
+
+  const houseInput = scope.getByPlaceholder('House No./Name').first();
+  await expect(houseInput).toBeVisible({ timeout: 10_000 });
+  await houseInput.click();
+  await houseInput.fill(addr.houseNumber);
+  await page.waitForTimeout(300);
+
+  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  await expect(streetInput).toBeVisible({ timeout: 5_000 });
+  await streetInput.click();
+  await streetInput.fill(addr.street);
+  await page.waitForTimeout(800);
+
+  const cityInput = scope.getByRole('textbox', { name: 'City' }).first();
+  await expect(cityInput).toBeVisible({ timeout: 5_000 });
+  await cityInput.click();
+  await cityInput.fill(addr.city);
+  await page.waitForTimeout(300);
+
+  // Confirmed live: defaults to Ontario regardless of the selected country —
+  // must be set explicitly, same reasoning as the mobile country-code
+  // dropdown in fillStep0WithRetry.
+  const stateSelect = scope.getByRole('combobox', { name: 'Pick your state' }).first();
+  await expect(stateSelect).toBeVisible({ timeout: 5_000 });
+  if (addr.state) {
+    await stateSelect.selectOption({ label: addr.state }).catch(() => {});
+  }
+  await page.waitForTimeout(300);
+
+  const postcodeInput = scope.getByRole('textbox', { name: 'Postcode' }).first();
+  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  await postcodeInput.click();
+  await postcodeInput.fill(addr.postcode);
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.locator('#username')
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (AB mobile) Step 3/6 complete');
+}
+
 /** Mobile "STEP 4 OF 5": Username (pre-filled with a suggestion) + Password. */
 async function fillMobileStep4Credentials(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
   console.log('REG-01 (mobile) Step 4/5 credentials');
@@ -1674,20 +1894,82 @@ async function fillMobileStep4Credentials(page: Page, scope: Scope, data: Regist
   console.log('REG-01 (mobile) Step 4/5 complete');
 }
 
+/**
+ * SNG AB mobile "STEP 4 OF 6" credentials — same username/password fields
+ * as UK mobile's fillMobileStep4Credentials, but confirmed live AB has NO
+ * separate "Set deposit limits" sub-step at all — Continue here goes
+ * straight to the consents screen (PEP/HIO + T&Cs + third-party
+ * declaration), so this waits for that screen instead.
+ */
+async function fillMobileStep4CredentialsAB(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (AB mobile) Step 4/6 credentials');
+
+  const usernameInput = scope.locator('#username').first();
+  await expect(usernameInput).toBeVisible({ timeout: 10_000 });
+  await usernameInput.click();
+  await usernameInput.fill(data.username);
+  await page.waitForTimeout(300);
+
+  const passwordInput = scope.locator('#password').first();
+  await expect(passwordInput).toBeVisible({ timeout: 5_000 });
+  await passwordInput.click();
+  await passwordInput.fill(data.password);
+  await passwordInput.press('Escape');
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click({ force: true });
+  // Wait for the PEP declaration TEXT, not the #isPepConsent checkbox itself
+  // — confirmed live: that checkbox is deliberately hidden via a "hidden"
+  // CSS class (its visible representation is this text label a user
+  // actually clicks, same shadow-DOM/hidden-checkbox pattern
+  // fillMobileStep5Final already handles for UK's checkboxes), and it's
+  // already attached to the DOM even before Continue is clicked, so
+  // checking mere attachment wouldn't reliably confirm we've advanced.
+  const pepText = scope.getByText(/Politically Exposed Person/i).first();
+  const advanced = await pepText.waitFor({ state: 'visible', timeout: 4_000 }).then(() => true).catch(() => false);
+  if (!advanced) {
+    await page.waitForTimeout(1_000);
+    await continueBtn.click({ force: true });
+    await pepText.waitFor({ state: 'visible', timeout: 15_000 });
+  }
+  console.log('REG-01 (AB mobile) Step 4/6 complete');
+}
+
+/**
+ * SNG AB mobile "STEP 5 OF 6" consents — confirmed live this is a genuinely
+ * different consent set from UK's (no over_18/gdprBingo here; instead a
+ * PEP/HIO declaration and a "not acting on behalf of a third party"
+ * declaration, matching Canadian gambling/AML-compliance requirements), and
+ * has no separate deposit-limit Yes/No sub-step at all — reuses the same
+ * shadow-DOM-aware checkbox-clicking loop as fillMobileStep5Final via its
+ * checkboxIds param instead of duplicating that logic.
+ */
+async function fillMobileStep5FinalAB(page: Page, scope: Scope): Promise<void> {
+  console.log('REG-01 (AB mobile) Step 5/6 consents');
+  await fillMobileStep5Final(page, scope, ['isPepConsent', 'gdpr', 'terms_accept', 'playerDeclaration'], true);
+  console.log('REG-01 (AB mobile) Step 5/6 complete');
+}
+
 /** Mobile "STEP 5 OF 5": Deposit limit (No) + consent checkboxes, ending on "GO PLAY" — same
  * checkbox ids as desktop's Step 3, confirmed live, just under different visible copy.
  * checkboxIds defaults to UK's 4; IE mobile passes its own 3 (no gdprBingo), same as IE
- * desktop's fillStep3 call. */
+ * desktop's fillStep3 call. skipDepositLimit — SNG AB has no deposit-limit Yes/No sub-step
+ * at all, confirmed live; the consents checkboxes are the entire screen there. */
 async function fillMobileStep5Final(
   page: Page, scope: Scope,
   checkboxIds: string[] = ['over_18', 'gdpr', 'gdprBingo', 'terms_accept'],
+  skipDepositLimit = false,
 ): Promise<void> {
   console.log('REG-01 (mobile) Step 5/5 deposit limit + consents');
 
-  const noBtn = scope.getByText('No', { exact: true }).first();
-  await expect(noBtn).toBeVisible({ timeout: 5_000 });
-  await noBtn.click();
-  await page.waitForTimeout(300);
+  if (!skipDepositLimit) {
+    const noBtn = scope.getByText('No', { exact: true }).first();
+    await expect(noBtn).toBeVisible({ timeout: 5_000 });
+    await noBtn.click();
+    await page.waitForTimeout(300);
+  }
 
   for (const id of checkboxIds) {
     try {

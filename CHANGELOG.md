@@ -24,6 +24,29 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-17
+
+### Added
+
+- **SpinGenie (SNG) Alberta (AB) is now fully working across the whole checklist, on both computer and phone screens.** Everything found broken was fixed today: the game category menu, the sidebar menu, the payment methods page, the footer's regulation-logo links, the sign-up form, and the game info pop-up. A full run of the entire checklist came back clean (35 passed, 1 one-off retry that fixed itself, 0 real problems).
+- **Reused the checklist for three more SpinGenie markets that are already live for real customers: UK, Ireland, and Canada** — previously only the not-yet-live Alberta market had been tried. UK and Canada worked with little to no changes needed. Ireland's sign-up form needed the same kind of fix as Alberta's (see below).
+- Added SpinGenie's real market details (contact email, currency, what pages exist, category menu shape) for UK, Ireland, and Canada, replacing generic placeholder assumptions.
+
+### Fixed
+
+- **SpinGenie Alberta's sign-up form was rejecting every phone number, no matter the format.** The phone country dropdown was defaulting to Israel instead of Canada (a side effect of the office VPN connection needed to reach this pre-live site), so the number was being checked against the wrong country's rules. The check now explicitly picks the correct country from the dropdown first — same for Ireland's sign-up form, which had the identical problem while testing from a UK connection instead of an Irish one.
+- **SpinGenie Alberta's sign-up form also rejected every home address**, once the phone number issue above was fixed — turns out this brand's site only currently allows Ontario as the home province for new sign-ups, even though the whole site is built and branded for Alberta players. This looks like the Alberta market's backend isn't fully turned on yet behind the scenes, worth flagging to the team separately. The check now uses Ontario for this brand's test data so sign-up can still be fully checked end-to-end.
+- **SpinGenie Alberta's game category menu was clicking the wrong thing on both computer and phone screens** — an invisible leftover menu was sitting on top of the real one and swallowing clicks. Also found and fixed two clicking mix-ups: a "New Slots" link inside the phone's slide-out menu getting mistaken for an actual game, and the game info pop-up's Play button (which only shows itself on mouse-hover, so it never worked when checked from a phone screen) — fixed by clicking it directly instead of relying on hover.
+- **The sidebar menu check had a real bug affecting every single brand, not just Alberta** — opening the slide-out menu twice in a row (which happened by accident while checking for optional categories) accidentally closed it again right before the next click, causing the whole check to hang for nearly two minutes on its very first step. Confirmed this same bug existed for the original Slingo UK site too, not just the new brand. Fixed so opening the menu only happens once it's actually needed.
+- **SpinGenie Alberta's payment methods page shows all the payment logos as one single image instead of separate ones per provider** — the check was only looking for separate images, so it saw zero and failed. It now also recognises this single-image style as valid.
+- **One of SpinGenie Alberta's regulation-logo links (a responsible-gambling one) opens the page in the same browser tab instead of a new one**, unlike the others — the check now accepts either behaviour instead of assuming every logo always opens a new tab. A second, unrelated link in that same row also needed a full page refresh instead of "go back" to reliably reappear for the next check in line.
+- **SpinGenie UK's "email address matches this market" check was comparing against the wrong email** — a leftover placeholder from the original Slingo site instead of this brand's real support email, now fixed with this brand's actual confirmed address.
+
+### Known open items (carrying into next session)
+
+- **Ireland's sign-up form still rejects a genuinely correctly-formatted home postcode**, even after fixing the phone number and country dropdown — looks like the postcode check may be using a different, not-yet-found setting that isn't fixed by picking the right country from the dropdown. Needs a proper Irish connection to test this correctly rather than a UK one.
+- Canada and Ireland haven't yet had a full whole-checklist run with the summary report generated (only the sign-up and category-menu checks were tried individually) — planned for next session.
+
 ## [Unreleased] - 2026-07-16
 
 ### Added

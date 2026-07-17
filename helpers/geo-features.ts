@@ -89,6 +89,77 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasAccountModal: true, // confirmed live: header LOG IN/JOIN buttons are currently unreliable (passed in one spec run, no-opped in an isolated check — matches "still some issues from dev"), but clicking a game tile's "Play It" reliably opens #account with a real popup, so the modal itself does work
       hasPaymentMethodsPage: true, // confirmed live 200
     },
+
+    // UK/IE/CA — LIVE English-language markets, confirmed live 2026-07-17.
+    // Same underlying SkillOnNet/SNG platform as AB — same Nav_ CSS classes,
+    // same registration-widget shape, contact email shared across all three.
+    // Tested from a UK VPN/IP throughout (per Reeve) — UK needed no fixes at
+    // all, CA needed no fixes at all, but IE's registration needed the same
+    // explicit country-selection fix as AB's mobile step (see
+    // fillStep0WithRetry's countryCodeLabel + fillIEAddress in
+    // registration.spec.ts) since the form defaults to the tester's real IP
+    // (UK), not Ireland — re-verify fully from a real Irish IP if retesting.
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed 200
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed 200
+      featuresPath: 'features/', // confirmed 200
+      mobileAppPath: 'mobile-app/', // not independently re-verified this session — carried over from AB/Slingo's common slug
+      bingoCardGeneratorPath: 'bingo-card-generator/', // not independently re-verified — footer confirmed no such link (skips cleanly either way)
+      currencySymbol: '£', // confirmed via bonus copy
+      contactEmail: 'contact@spingenie.com', // confirmed live on /contact/
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // not independently identified — 3 social icons confirmed present homepage-wide, exact handles not captured this session
+      hasSocialMedia: true, // confirmed live: 3 social links found homepage-wide
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/casino/', '/slots/'], // not independently re-verified via in-app search — carried over assumption from AB
+      hasGameFilterCarousel: true, // not independently re-verified — assumed true (SC's common case)
+      hasFeedbackForm: true, // "Report a problem" link confirmed present on /contact/ (Step 3 of contact-us-page.spec.ts passed)
+      hasGameCategoryNav: true, // confirmed live 18/18 on game-category-navigation.spec.ts: Slots/Megaways/Jackpots/Daily Jackpots/Bingo/Casino/Roulette/BlackJack/Other all real; no Slingo/New Slots/Plinko/Live Casino
+      hasLoginRegistration: true,
+      hasAccountModal: true, // confirmed live via login.spec.ts (5/5) and registration.spec.ts (6/6)
+      hasPaymentMethodsPage: true, // confirmed 200
+    },
+    IE: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed 404
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed 200
+      featuresPath: 'features/', // confirmed 200
+      mobileAppPath: 'mobile-app/',
+      bingoCardGeneratorPath: 'bingo-card-generator/',
+      currencySymbol: '€', // confirmed via bonus copy
+      contactEmail: 'contact@spingenie.com', // confirmed live on /contact/ — same as UK/CA
+      socialMedia: { twitter: null, facebook: null, instagram: null },
+      hasSocialMedia: false, // confirmed live: only 1 social-domain link found homepage-wide (likely a footer/legal link, not a real social icon strip) — treat as no strip until independently confirmed otherwise
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/casino/', '/slots/'],
+      hasGameFilterCarousel: true, // not independently re-verified
+      hasFeedbackForm: true, // not independently re-verified this session — carried over from UK/AB pattern
+      hasGameCategoryNav: true, // confirmed live 18/18: Slots/Jackpots/Daily Jackpots/Casino/Roulette/BlackJack/Other real; no Slingo/New Slots/Megaways/Bingo/Plinko/Live Casino for this brand+GEO (a DIFFERENT sub-taxonomy than SNG UK's — Megaways/Bingo present on UK but not IE)
+      hasLoginRegistration: true,
+      hasAccountModal: true,
+      hasPaymentMethodsPage: true, // confirmed 200
+    },
+    CA: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed 200
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed 200
+      featuresPath: 'features/', // confirmed 200
+      mobileAppPath: 'mobile-app/',
+      bingoCardGeneratorPath: 'bingo-card-generator/',
+      currencySymbol: '$', // CAD — confirmed via bonus copy
+      contactEmail: 'contact@spingenie.com', // confirmed live on /contact/ — same as UK/IE
+      socialMedia: { twitter: null, facebook: null, instagram: null },
+      hasSocialMedia: false, // confirmed live: only 1 social-domain link found homepage-wide, same caveat as IE
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/casino/', '/slots/'],
+      hasGameFilterCarousel: true, // not independently re-verified
+      hasFeedbackForm: true, // not independently re-verified this session
+      hasGameCategoryNav: true, // confirmed live 18/18: same sub-taxonomy as IE (Slots/Megaways/Jackpots/Daily Jackpots/Casino/Roulette/BlackJack/Other; no Slingo/New Slots/Bingo/Plinko/Live Casino)
+      hasLoginRegistration: true,
+      hasAccountModal: true,
+      hasPaymentMethodsPage: true, // confirmed 200
+      // registration.spec.ts confirmed 6/6 fully unmodified from a UK IP —
+      // unlike IE, CA's mobile/address steps didn't need any explicit
+      // country override. Falls into registration.spec.ts's generic/default
+      // branch (no isAlbertaFormat-style special case needed for 'CA').
+    },
   },
 };
 

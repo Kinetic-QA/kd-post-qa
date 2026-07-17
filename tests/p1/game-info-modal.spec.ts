@@ -72,10 +72,39 @@ test.describe('P1 - Game Information Modal', () => {
       const links = page.locator(
         'a[href*="/slingo/"]:not([href$="/slingo/"]), a[href*="/slots/"]:not([href$="/slots/"])'
       );
+      // Confirmed live on SNG AB desktop: the exact-href exclusion above
+      // only rules out "/slingo/"/"/slots/" themselves — it doesn't rule out
+      // a sub-category NAV link like "/slots/new/" ("New Slots"), which also
+      // passes a bounding-box-based in-viewport check (it's part of the
+      // sticky sub-nav row) and then times out on click since the sticky
+      // header moves it "outside of the viewport" by click time. An
+      // ancestor-based check (closest("[class*='Nav_nav__']")) was tried
+      // first but proved unreliable at this later point in the test (Step
+      // 10, after prior navigation) — likely a timing race against page
+      // state, not a real "not in nav" case. Directly excluding hrefs that
+      // the real nav wrapper itself contains is driven by live data instead
+      // of a heuristic, so it isn't sensitive to DOM/timing differences.
+      // evaluateAll's return value is JSON-serialized across the page/Node
+      // boundary, so build the Set in Node from a plain array — a Set
+      // returned directly from page context doesn't survive that.
+      // Confirmed live: Nav_nav__ alone isn't enough — its sub-nav row
+      // (Nav_sub-nav__, containing "New Slots"/"Megaways"/etc.) only renders
+      // when actually on a category page (e.g. /slots/), not on the
+      // homepage where this test starts. The hamburger sidebar drawer
+      // (MainMenu_main-menu__, a completely separate container) duplicates
+      // the same sub-category links on every page including the homepage,
+      // which is what was actually being matched here — include it too.
+      const navHrefList = await page.locator('[class*="Nav_nav__"] a[href], [class*="MainMenu_main-menu"] a[href]')
+        .evaluateAll(els => els.map(el => (el as HTMLAnchorElement).href));
+      const navHrefs = new Set(navHrefList);
       const count = await links.count();
       for (let i = 0; i < Math.min(count, 30); i++) {
-        const box = await links.nth(i).boundingBox().catch(() => null);
-        if (box && box.y > 100 && box.y < vh && box.width > 30) return links.nth(i);
+        const candidate = links.nth(i);
+        const href = await candidate.getAttribute('href').catch(() => null);
+        if (href && navHrefs.has(new URL(href, page.url()).href)) continue;
+        const box = await candidate.boundingBox().catch(() => null);
+        if (!box || box.y <= 100 || box.y >= vh || box.width <= 30) continue;
+        return candidate;
       }
       return links.first();
     }
@@ -142,9 +171,18 @@ test.describe('P1 - Game Information Modal', () => {
       // elsewhere on the page (confirmed live: a "Content_block-center"
       // promo tile also says "A JUGAR" on ES).
       const modal = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
-      const playItBtn = modal.locator('a, button').filter({ hasText: strings.playCta }).filter({ visible: true }).first();
-      await expect(playItBtn).toBeVisible({ timeout: 8_000 });
-      await playItBtn.click({ force: true });
+      const playItBtn = modal.locator('a, button').filter({ hasText: strings.playCta }).first();
+      // Confirmed count 1 in the modal, so it's the right element — but on
+      // SNG AB mobile it has a genuine 0×0 bounding box (a desktop-only
+      // hover-reveal element, class GameTile_tile-hover, that never gets a
+      // real size on a touch viewport — confirmed via computed style: not
+      // scroll position, not CSS visibility, an actual zero-size element).
+      // scrollIntoViewIfNeeded()/a coordinate-based click can't act on a
+      // zero-size target. Native el.click() bypasses hit-testing/size
+      // entirely and DOES trigger the real navigation to #account —
+      // confirmed live — same pattern as the desktop header nav fix in
+      // game-category-navigation.spec.ts.
+      await playItBtn.evaluate((el: HTMLElement) => el.click());
       await page.waitForTimeout(2_000);
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
     });
@@ -261,22 +299,29 @@ test.describe('P1 - Game Information Modal', () => {
       // modal's own Play CTA (same button confirmed working in Step 3b) so
       // this step reaches registration regardless of which tile landed us
       // in the modal.
+      // Confirmed live on SNG AB mobile: this CTA can exist (count 1) with a
+      // genuine 0×0 bounding box (desktop-only hover-reveal element, see
+      // Step 3b's note) — `.filter({ visible: true })` then reports it as
+      // absent even though it's the correct, right element, silently
+      // falling through to the tile-click branch and never reaching
+      // registration. Check existence by count, not visibility, and use a
+      // native click either way so a zero-size element still works.
       const tileCta = gameLink.locator('xpath=..').locator('a, button')
-        .filter({ hasText: strings.playCta }).filter({ visible: true }).first();
-      const ctaVisible = await tileCta.isVisible({ timeout: 3_000 }).catch(() => false);
-      if (ctaVisible) {
-        await tileCta.click({ force: true });
+        .filter({ hasText: strings.playCta }).first();
+      const ctaExists = await tileCta.count() > 0;
+      if (ctaExists) {
+        await tileCta.evaluate((el: HTMLElement) => el.click());
       } else {
         await gameLink.click({ force: true });
       }
-      console.log('GIM-01 Play CTA found on tile: ' + ctaVisible);
+      console.log('GIM-01 Play CTA found on tile: ' + ctaExists);
       await page.waitForTimeout(2_000);
 
       if (page.url().includes('#gamepage/')) {
         const modal = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
-        const modalPlayCta = modal.locator('a, button').filter({ hasText: strings.playCta }).filter({ visible: true }).first();
-        if (await modalPlayCta.isVisible({ timeout: 5_000 }).catch(() => false)) {
-          await modalPlayCta.click({ force: true });
+        const modalPlayCta = modal.locator('a, button').filter({ hasText: strings.playCta }).first();
+        if (await modalPlayCta.count() > 0) {
+          await modalPlayCta.evaluate((el: HTMLElement) => el.click());
           await page.waitForTimeout(2_000);
         }
       }
