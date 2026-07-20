@@ -1,6 +1,6 @@
 import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateAbRegistrationData, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateCanadianAddress, generateAbRegistrationData, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -103,6 +103,15 @@ test.describe('Registration Flow', () => {
     // (unlike GEO) is fixed for the whole process, not per-project.
     const isAlbertaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SNG'
       && test.info().project.name.replace(/-mobile$/, '') === 'AB';
+    // SNG CA — confirmed live 2026-07-20: shares AB's problem of the mobile
+    // country-code dropdown defaulting to the tester's real VPN/IP country
+    // (previously spot-checked from a UK IP, where the default happened to
+    // already match generateUKMobile's format — masking this until tested
+    // from a real Canada IP). Only Step 0's country selection is shared with
+    // AB; the rest of CA's flow is the generic/UK shape, not AB's Alberta
+    // fields (province/postal code, PEP consent, etc.).
+    const isCanadianMobileFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SNG'
+      && test.info().project.name.replace(/-mobile$/, '') === 'CA';
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
 
@@ -409,12 +418,23 @@ test.describe('Registration Flow', () => {
       // Name+Email+Gender) across separate steps. Step 0 (mobile/DOB) is
       // identical to desktop and reuses fillStep0WithRetry unchanged.
       const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
+      // SNG CA (confirmed live 2026-07-20): the DOB field rejects UK's
+      // DD/MM/YYYY — its own validation message states the format it wants
+      // is dot-separated, year-first (YYYY.MM.DD). AB uses its own DOB
+      // shape via generateAbRegistrationData already, so this only applies
+      // to CA's otherwise-generic data object. Address is also overridden —
+      // CA's real address step has no house-number field (confirmed live,
+      // see fillStep2CA) so a UK-shaped address is the wrong fixture here.
+      if (isCanadianMobileFormat) {
+        data.dob = generateCanadianDOB();
+        data.address = generateCanadianAddress();
+      }
 
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        // SNG AB: country-code dropdown defaults to the tester's real
-        // IL/CY-VPN country, not Canada — see fillStep0WithRetry's
-        // countryCodeLabel handling and generateCanadianMobile's docstring.
-        await (isAlbertaFormat
+        // SNG AB/CA: country-code dropdown defaults to the tester's real
+        // VPN/IP country — see fillStep0WithRetry's countryCodeLabel
+        // handling and generateCanadianMobile's docstring.
+        await ((isAlbertaFormat || isCanadianMobileFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada')
           : fillStep0WithRetry(page, scope, data));
       });
@@ -424,15 +444,20 @@ test.describe('Registration Flow', () => {
       });
 
       await runStep('Step 2 of 5: Gender + Email → Continue', async () => {
-        await fillMobileStep2GenderEmail(page, scope, data);
+        await (isCanadianMobileFormat
+          ? fillMobileStep2GenderEmailCA(page, scope, data)
+          : fillMobileStep2GenderEmail(page, scope, data));
       });
 
       await runStep('Step 3 of 5: Address → Continue', async () => {
         // SNG AB: selecting Canada as mobile country switches this step to
         // Canadian fields (Province dropdown + postal-code validation) —
-        // see fillMobileStep3AddressAB's docstring.
+        // see fillMobileStep3AddressAB's docstring. SNG CA: no house-number
+        // field at all — see fillMobileStep3AddressCA's docstring.
         await (isAlbertaFormat
           ? fillMobileStep3AddressAB(page, scope, data)
+          : isCanadianMobileFormat
+          ? fillMobileStep3AddressCA(page, scope, data)
           : fillMobileStep3Address(page, scope, data));
       });
 
@@ -448,8 +473,12 @@ test.describe('Registration Flow', () => {
         // SNG AB: genuinely different consent checkboxes (PEP/HIO + third-party
         // declaration, no over_18/gdprBingo) and no deposit-limit sub-step —
         // see fillMobileStep5FinalAB's docstring.
+        // SNG CA: confirmed live 2026-07-20 — no gdprBingo checkbox either,
+        // consistent with CA having no Bingo category at all (same as IE/ROW).
         await (isAlbertaFormat
           ? fillMobileStep5FinalAB(page, scope)
+          : isCanadianMobileFormat
+          ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
           : fillMobileStep5Final(page, scope));
       });
 
@@ -460,28 +489,47 @@ test.describe('Registration Flow', () => {
       });
     } else {
       const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
+      // SNG CA (confirmed live 2026-07-20): the DOB field rejects UK's
+      // DD/MM/YYYY — its own validation message states the format it wants
+      // is dot-separated, year-first (YYYY.MM.DD). AB uses its own DOB
+      // shape via generateAbRegistrationData already, so this only applies
+      // to CA's otherwise-generic data object. Address is also overridden —
+      // CA's real address step has no house-number field (confirmed live,
+      // see fillStep2CA) so a UK-shaped address is the wrong fixture here.
+      if (isCanadianMobileFormat) {
+        data.dob = generateCanadianDOB();
+        data.address = generateCanadianAddress();
+      }
 
       // ── Step 2: Step 0 — Mobile + DOB ─────────────────────────────────
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        // SNG AB: country-code dropdown defaults to the tester's real
-        // IL/CY-VPN country, not Canada — see fillStep0WithRetry's
-        // countryCodeLabel handling and generateCanadianMobile's docstring.
-        await (isAlbertaFormat
+        // SNG AB/CA: country-code dropdown defaults to the tester's real
+        // VPN/IP country — see fillStep0WithRetry's countryCodeLabel
+        // handling and generateCanadianMobile's docstring.
+        await ((isAlbertaFormat || isCanadianMobileFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada')
           : fillStep0WithRetry(page, scope, data));
       });
 
       // ── Step 3: Step 1 — Name + Email + Gender ─────────────────────────
       await runStep('Step 1: Name + Email + Gender → Continue', async () => {
-        await fillStep1(page, scope, data);
+        // CA's next step (address) has no house-number field (confirmed
+        // live) — the default readyLocator would wait forever for a field
+        // that never appears, same class of issue as IE's readyLocator override.
+        await fillStep1(page, scope, data, isCanadianMobileFormat
+          ? scope.getByPlaceholder('Start typing your address').first()
+          : undefined);
       });
 
       // ── Step 4: Step 2 — Address ───────────────────────────────────────
       await runStep('Step 2: Address → Continue', async () => {
         // SNG AB: selecting Canada as mobile country switches this step to
         // Canadian fields (Province dropdown + postal-code validation) —
-        // see fillStep2AB's docstring.
-        await (isAlbertaFormat ? fillStep2AB(page, scope, data) : fillStep2(page, scope, data));
+        // see fillStep2AB's docstring. SNG CA: a different shape again — no
+        // house-number field at all, see fillStep2CA's docstring.
+        await (isAlbertaFormat ? fillStep2AB(page, scope, data)
+          : isCanadianMobileFormat ? fillStep2CA(page, scope, data)
+          : fillStep2(page, scope, data));
       });
 
       // ── Step 5: Step 3 — Username + Password + Checkboxes ──────────────
@@ -489,8 +537,12 @@ test.describe('Registration Flow', () => {
         // SNG AB: genuinely different consent checkboxes (PEP/HIO + third-party
         // declaration, no over_18/gdprBingo) — see fillMobileStep5FinalAB's
         // docstring for the same set confirmed on mobile.
+        // SNG CA: confirmed live 2026-07-20 — no gdprBingo checkbox either,
+        // consistent with CA having no Bingo category at all (same as IE/ROW).
         await (isAlbertaFormat
           ? fillStep3(page, scope, data, ['isPepConsent', 'gdpr', 'terms_accept', 'playerDeclaration'])
+          : isCanadianMobileFormat
+          ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
       });
 
@@ -1855,6 +1907,123 @@ async function fillMobileStep3AddressAB(page: Page, scope: Scope, data: Registra
   await scope.locator('#username')
     .first().waitFor({ state: 'visible', timeout: 15_000 });
   console.log('REG-01 (AB mobile) Step 3/6 complete');
+}
+
+/** CA (live market) mobile "STEP 2 OF 5": same as UK mobile's Gender + Email step, but the next
+ * screen has no house-number field (confirmed live 2026-07-20) — wait on the street address input
+ * instead of the "House No./Name" placeholder, same fix pattern as IE's mobile equivalent. */
+async function fillMobileStep2GenderEmailCA(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (CA mobile) Step 2/5 gender + email');
+
+  const genderBtn = scope.getByText(data.gender, { exact: true }).first();
+  await expect(genderBtn).toBeVisible({ timeout: 10_000 });
+  await genderBtn.click();
+  await page.waitForTimeout(200);
+
+  const emailInput = scope.locator('#email').first();
+  await expect(emailInput).toBeVisible({ timeout: 5_000 });
+  await emailInput.click();
+  await emailInput.fill(data.email);
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.getByPlaceholder('Start typing your address')
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (CA mobile) Step 2/5 complete');
+}
+
+/** CA (live market) desktop Step 2 — confirmed live 2026-07-20: NO house-number field at all
+ * (unlike AB's fillStep2AB) — address/zipCode/city plus separate country + state selects. Country
+ * AND state both already default correctly (state to whichever real province the tester's actual
+ * IP resolves to) — do NOT force-select state here the way AB does; the form rejects a submission
+ * where the selected province doesn't match the real IP-derived one (confirmed live: forcing
+ * "Ontario" while connected from Calgary/Alberta silently failed to advance; leaving the untouched
+ * default advanced immediately from a real Montreal/Quebec connection). See CA_ADDRESSES's
+ * docstring in helpers/testData.ts for the full investigation. */
+async function fillStep2CA(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (CA) Step 2/3 address');
+
+  const addr = data.address;
+
+  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  await expect(streetInput).toBeVisible({ timeout: 10_000 });
+  await streetInput.click();
+  await streetInput.fill(addr.street);
+  await streetInput.press('Tab');
+  await page.waitForTimeout(800);
+
+  const postcodeInput = scope.locator('#zipCode').first();
+  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  await postcodeInput.click();
+  await postcodeInput.fill(addr.postcode);
+  await postcodeInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  const cityInput = scope.locator('#city').first();
+  await expect(cityInput).toBeVisible({ timeout: 5_000 });
+  await cityInput.click();
+  await cityInput.fill(addr.city);
+  await cityInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  const stateSelect = scope.locator('select#state').first();
+  await expect(stateSelect).toBeVisible({ timeout: 5_000 });
+  if (addr.state) {
+    await stateSelect.selectOption({ label: addr.state }).catch(() => {});
+  }
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.getByRole('textbox', { name: /username/i })
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (CA) Step 2/3 complete');
+}
+
+/** CA (live market) mobile "STEP 3 OF 5": same shape as desktop's Step 2 (see fillStep2CA) —
+ * no house-number field, address/zipCode/city by id plus a state/province select. */
+async function fillMobileStep3AddressCA(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (CA mobile) Step 3/5 address');
+
+  const addr = data.address;
+
+  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  await expect(streetInput).toBeVisible({ timeout: 10_000 });
+  await streetInput.click();
+  await streetInput.fill(addr.street);
+  await page.waitForTimeout(800);
+
+  const postcodeInput = scope.locator('#zipCode').first();
+  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  await postcodeInput.click();
+  await postcodeInput.fill(addr.postcode);
+  await page.waitForTimeout(300);
+
+  const cityInput = scope.locator('#city').first();
+  await expect(cityInput).toBeVisible({ timeout: 5_000 });
+  await cityInput.click();
+  await cityInput.fill(addr.city);
+  await page.waitForTimeout(300);
+
+  const stateSelect = scope.locator('select#state').first();
+  await expect(stateSelect).toBeVisible({ timeout: 5_000 });
+  if (addr.state) {
+    await stateSelect.selectOption({ label: addr.state }).catch(() => {});
+  }
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.locator('#username')
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (CA mobile) Step 3/5 complete');
 }
 
 /** Mobile "STEP 4 OF 5": Username (pre-filled with a suggestion) + Password. */

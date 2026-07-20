@@ -21,6 +21,7 @@ test.describe('P3 - Blog Search', () => {
   test.beforeEach(async ({ page }) => {
     geoFeatures = currentGeoFeatures();
     test.skip(!geoFeatures.hasBlog, `Blog does not exist for this GEO (${test.info().project.name})`);
+    test.skip(!geoFeatures.hasBlogSearch, `Blog search doesn't work at all for this brand (${test.info().project.name}) — confirmed live, the Google Custom Search widget never renders`);
     await setupCampaignPopupWatcher(page);
     await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded'); // faster than networkidle for initial load

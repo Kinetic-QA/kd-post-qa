@@ -591,3 +591,81 @@ Negative-path validation for this step (invalid PLZ format, etc.) was **not** ca
 ---
 
 *Findings added by: Cowork Agent (Claude) — 2026-07-13*
+
+---
+
+## SNG AB Primary Nav — Category Locator Findings — Cowork Agent (Claude) — 2026-07-17
+
+**For Claude CLI:** this is a findings-only entry explaining why the primary navigation categories (Home, Slots, Casino, Live Casino) on `https://qa-ab.spingenie.ca/` were not reliably detectable, plus the working locator. No code was written or changed.
+
+### Root cause
+
+`data-tk-value` ("home"/"slots"/"casino"/"liveCasino") is **not unique per page**. Each value appears on 3–4 elements simultaneously:
+- The header logo link (desktop + a duplicate mobile copy), which also carries `data-tk-value="home"`
+- In-page promotional/body or footer links that reuse the same tracking values (e.g. a body "Online Slots" link, a footer "Casino games" link)
+- A hidden hamburger/drawer menu (`MainMenu_*` classes) duplicating the same four category links off-screen
+
+Any locator matching on `data-tk-value` or `data-tk-type="category"` alone resolves to multiple elements → strict-mode/ambiguous match failure. This is almost certainly why detection failed.
+
+CSS module classes (`Nav_slots__xUofK`, etc.) are hash-suffixed and not guaranteed stable across builds/deploys, so they shouldn't be relied on alone either.
+
+### Confirmed DOM (visible bottom/primary nav bar)
+
+```html
+<div class="Nav_nav___GogH">
+  <div class="Nav_level-one__960_J">
+    <ul>
+      <li class="Nav_active___LVUs">
+        <a class="Nav_home__65mP4" data-tk-value="home" href="https://qa-ab.spingenie.ca/">Home</a>
+      </li>
+      <li>
+        <a class="Nav_slots__xUofK" data-tk-type="category" data-tk-value="slots" href="https://qa-ab.spingenie.ca/slots/">Slots</a>
+      </li>
+      <li>
+        <a class="Nav_casino__mMPT5" data-tk-type="category" data-tk-value="casino" href="https://qa-ab.spingenie.ca/casino/">Casino</a>
+      </li>
+      <li>
+        <a class="Nav_liveCasino__lu9YM" data-tk-type="category" data-tk-value="liveCasino" href="https://qa-ab.spingenie.ca/live-casino/">Live Casino</a>
+      </li>
+    </ul>
+  </div>
+</div>
+```
+
+No `data-testid` exists anywhere in this nav.
+
+### Working locator (Playwright)
+
+Scope to the `Nav_nav___GogH` container, then match on `data-tk-value`:
+
+```ts
+const primaryNav = page.locator('div.Nav_nav___GogH');
+
+await primaryNav.locator('a[data-tk-value="home"]').click();
+await primaryNav.locator('a[data-tk-value="slots"]').click();
+await primaryNav.locator('a[data-tk-value="casino"]').click();
+await primaryNav.locator('a[data-tk-value="liveCasino"]').click();
+```
+
+Role-based equivalent:
+
+```ts
+await primaryNav.getByRole('link', { name: 'Slots', exact: true }).click();
+```
+
+**Avoid these** — each matches multiple elements on the page:
+
+```ts
+page.locator('[data-tk-value="slots"]')     // matches 4 elements (header logo, body link, drawer menu, nav)
+page.locator('a[data-tk-type="category"]')  // matches header/body/menu duplicates too
+page.locator('.Nav_slots__xUofK')           // works today, but hash suffix isn't guaranteed stable across builds
+```
+
+### Suggested follow-up
+
+- Ask the dev team to add `data-testid` attributes to the four primary nav links (e.g. `nav-home`, `nav-slots`, `nav-casino`, `nav-live-casino`) to remove the need for container scoping or CSS-module class matching entirely.
+- Flag the duplicate `data-tk-value` usage (header/body/drawer all reusing the same values as the primary nav) to the dev/analytics team — it's a tracking-accuracy risk independent of test automation.
+
+---
+
+*Findings added by: Cowork Agent (Claude) — 2026-07-17*
