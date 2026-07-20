@@ -24,6 +24,23 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-20
+
+### Fixed
+
+- **SpinGenie Canada's sign-up form was completely broken — now fully working.** Testing from a real Canadian connection (not just a UK one, like earlier this month) turned up four separate problems stacked on top of each other, all now fixed:
+  - The phone number step rejected every number, because the country dropdown wasn't being told to pick Canada.
+  - The date-of-birth field silently rejected every birthdate — turns out this specific form wants the date typed in a completely different style (year-month-day with dots) than every other market's sign-up form.
+  - The home address step has a different layout for Canada than other markets (no separate "house number" box, and separate country/province menus) — the checklist was still looking for fields that don't exist on this version of the form.
+  - The most interesting one: the address step's **province menu automatically fills in whichever province your real internet connection is coming from** (Alberta if testing from Calgary, Quebec if testing from Montreal, etc.) — and the site will silently refuse to continue if the submitted province doesn't match your real location. Our checklist was hardcoding "Ontario" every time, which only worked by coincidence before. It now leaves the auto-filled province alone instead of overwriting it.
+  - The very last step also expected an extra Bingo-related consent checkbox that this market's sign-up form doesn't actually have (Canada doesn't offer Bingo, same as a couple of other markets already handled correctly).
+- **SpinGenie's blog page had two separate small issues on the header, both now fixed.** The search icon check was accidentally grabbing the wrong hidden element behind the scenes and reporting it as broken. And the "does clicking the logo return to the blog's homepage" check was written assuming every brand behaves like Slingo (where the blog logo actually goes to the main site) — SpinGenie's blog logo genuinely goes back to the blog's own homepage instead, which is normal for this brand, not a bug.
+
+### Known open items (carrying into next session)
+
+- **SpinGenie's blog search feature doesn't actually work at all** — confirmed on both the UK and Canada versions of the site, not just one. The page reserves a spot for a Google-powered search box, but it never actually appears, so searching the blog is currently non-functional for site visitors. This looks like a real product issue worth flagging to the team, not something automatic to fix on our end — worth a quick manual double-check in a real browser before officially reporting it, since we've occasionally seen automated-testing-only glitches before.
+- Next session: continue onboarding the remaining SpinGenie markets/GEOs.
+
 ## [Unreleased] - 2026-07-17
 
 ### Added

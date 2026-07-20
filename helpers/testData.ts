@@ -183,6 +183,38 @@ const AB_ADDRESSES: UKAddress[] = [
 ];
 
 /**
+ * CA (live market) addresses — confirmed live 2026-07-20: unlike AB, CA's
+ * address step has NO house-number field at all (address/zipCode/city plus
+ * separate country + state/province selects). Country already defaults
+ * correctly to Canada. State/province ALSO already defaults correctly — to
+ * whichever real province the tester's actual IP resolves to (confirmed:
+ * Alberta when connected from Calgary, Quebec when connected from
+ * Montreal) — and, critically, the form REJECTS a submission where the
+ * selected province doesn't match that real IP-derived one (confirmed live:
+ * forcing "Ontario" while genuinely connected from Calgary silently failed
+ * to advance past the address step; leaving the default untouched from
+ * Montreal advanced immediately). Unlike AB (whose backend genuinely
+ * restricts registration to Ontario regardless of real IP — a confirmed
+ * separate quirk of that pre-live environment), CA's `state` must NEVER be
+ * force-selected — `.state` is deliberately left unset here so
+ * fillStep2CA/fillMobileStep3AddressCA's `if (addr.state)` guard skips
+ * selection entirely and leaves the real, correct auto-detected value in
+ * place. City/postal code text do NOT need to geographically match the
+ * real province (confirmed: Ontario city/postal text + real Quebec IP +
+ * untouched Quebec state selection advanced fine) — only the state SELECT
+ * element itself matters.
+ */
+const CA_ADDRESSES: UKAddress[] = [
+  { houseNumber: '', street: 'Queen Street West', postcode: 'M5V 3L9', city: 'Toronto', country: 'CANADA' },
+  { houseNumber: '', street: 'Bank Street',        postcode: 'K1P 5N4', city: 'Ottawa',  country: 'CANADA' },
+  { houseNumber: '', street: 'King Street West',   postcode: 'L8P 1A2', city: 'Hamilton', country: 'CANADA' },
+];
+
+export function generateCanadianAddress(): UKAddress {
+  return randomFrom(CA_ADDRESSES);
+}
+
+/**
  * Hardcoded valid Irish addresses — Eircodes (not UK-style postcodes)
  * confirmed live: IE's address step has no separate house-number field
  * (unlike UK's), so houseNumber here is unused by fillIEAddress but kept
@@ -326,6 +358,26 @@ function generateDOBWithSeparator(separator: string): string {
 
 function generateDOB(): string {
   return generateDOBWithSeparator('/');
+}
+
+/**
+ * SNG CA's registration DOB field (confirmed live 2026-07-20) rejects UK's
+ * DD/MM/YYYY format with "Please enter a valid year of birth", then rejects
+ * MM/DD/YYYY with "Please enter a valid date format (YYYY.MM.DD)" — the
+ * field's own error message states the format it actually wants:
+ * dot-separated, year-first. Confirmed working live with this exact shape.
+ */
+export function generateCanadianDOB(): string {
+  const currentYear = new Date().getFullYear();
+  const year  = currentYear - 25 - Math.floor(Math.random() * 26); // 25–50 years old
+  const month = 1 + Math.floor(Math.random() * 12);
+  const maxDay = new Date(year, month, 0).getDate();
+  const day   = 1 + Math.floor(Math.random() * maxDay);
+  return [
+    String(year),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('.');
 }
 
 /**
