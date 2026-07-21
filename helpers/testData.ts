@@ -183,6 +183,18 @@ const AB_ADDRESSES: UKAddress[] = [
 ];
 
 /**
+ * SNG ON's real registration address step (confirmed live 2026-07-21) has
+ * the same house-number-bearing shape as AB_ADDRESSES above — unsurprising
+ * in hindsight, since AB's pre-live QA environment was already confirmed to
+ * silently route through Ontario's real backend. Reuses the exact same
+ * fixture data as AB rather than duplicating it; see fillStep2AB/
+ * fillMobileStep3AddressAB in registration.spec.ts for the fill logic.
+ */
+export function generateOntarioAddress(): UKAddress {
+  return randomFrom(AB_ADDRESSES);
+}
+
+/**
  * CA (live market) addresses — confirmed live 2026-07-20: unlike AB, CA's
  * address step has NO house-number field at all (address/zipCode/city plus
  * separate country + state/province selects). Country already defaults
@@ -378,6 +390,26 @@ export function generateCanadianDOB(): string {
     String(month).padStart(2, '0'),
     String(day).padStart(2, '0'),
   ].join('.');
+}
+
+/**
+ * SNG FR-CA's registration DOB field — confirmed live 2026-07-21 via a real
+ * browser screenshot (Reeve): the registration widget's date field shows a
+ * placeholder of "Année-Mois-Jour" (Year-Month-Day), DASH-separated — NOT
+ * CA's dot-separated YYYY.MM.DD. Don't reuse generateCanadianDOB() for
+ * FR-CA on the assumption the two share a format; they don't.
+ */
+export function generateFrCaDOB(): string {
+  const currentYear = new Date().getFullYear();
+  const year  = currentYear - 25 - Math.floor(Math.random() * 26); // 25–50 years old
+  const month = 1 + Math.floor(Math.random() * 12);
+  const maxDay = new Date(year, month, 0).getDate();
+  const day   = 1 + Math.floor(Math.random() * maxDay);
+  return [
+    String(year),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-');
 }
 
 /**

@@ -49,6 +49,7 @@ export interface GeoFeatureConfig {
   hasGameCategoryNav: boolean; // false = confirmed live no Slingo/Slots/Bingo/Casino category nav links anywhere on the homepage (no exact "/slots/" link exists at all, only individual game tiles) — skip GCN entirely, not a broken selector
   hasLoginRegistration: boolean; // false = this GEO has no traditional username/password login+registration widget to test (e.g. SE's Pay N Play/Trustly-based deposit flow, no test account exists) — skip login/registration specs entirely
   hasTestAccount?: boolean;  // false = the login/registration WIDGET exists and is safe to inspect (registration.spec.ts never submits; login-widget.spec.ts only ever uses a deliberately wrong username/password), but no real, working test ACCOUNT exists yet to actually log in with — skip only login.spec.ts's real successful-login test. Distinct from hasLoginRegistration: a brand can have the widget worth inspecting (true) while having no usable account yet (hasTestAccount: false), e.g. a pre-live brand where registration itself is still broken/unsubmittable. Defaults to true (has a working account) when omitted, so existing GEOs need no change.
+  extraPageSettleMs?: number; // confirmed live 2026-07-21 on SNG FR-CA: the header Log In/Join buttons render visible+clickable well before their click handlers are actually wired up — clicking immediately after the standard load wait is silently a no-op (button click succeeds, but no navigation to #account, no error either). A real user's slower manual click never hits this; only fast automated clicks do. Extends the post-load settle wait in specs that click login/join/search shortly after page load. Defaults to 0 (no extra wait) when omitted.
   hasAccountModal: boolean;   // false = clicking into Play/Deposit CTAs does NOT open an "#account" login/registration modal for this GEO (e.g. SE's Pay N Play flow requires real BankID auth, confirmed live no modal opens at all) — skip just the "opens account modal" assertion in specs that otherwise still apply (game-info-modal, website-header, banner, sidebar-navigation)
   hasPaymentMethodsPage: boolean; // false = confirmed live /payment-methods/ 404s for this GEO — skip PM-01 entirely
   hasBlogDesktopSearch: boolean; // false = confirmed live the blog's ONLY search entry point (data-tk-value="blogSearch") lives inside the mobile-only footer nav (display:none at desktop widths) — there is no separate desktop header search icon at all, unlike Slingo's BlogHeader_search-demi. Desktop blog-page-header.spec.ts's search-icon step should skip gracefully rather than fail on a real UX gap it can't work around
@@ -121,8 +122,8 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasLoginRegistration: true,
       hasAccountModal: true, // confirmed live via login.spec.ts (5/5) and registration.spec.ts (6/6)
       hasPaymentMethodsPage: true, // confirmed 200
-      hasBlogDesktopSearch: false, // confirmed live 2026-07-20: the blog's only [data-tk-value="blogSearch"] link lives inside MobileFooter_footer (display:none at desktop widths) — unlike Slingo's blog, there is no separate desktop BlogHeader_search-demi icon at all. Same underlying platform/blog template as IE/CA, so applies brand-wide, not just this GEO
-      hasBlogSearch: false, // confirmed live 2026-07-20: the blog's search feature doesn't work at all — the Google Custom Search widget the page reserves a slot for never renders (console errors, checked directly on /blog/search/). Not a per-GEO thing — brand-wide, confirmed same on CA too
+      hasBlogDesktopSearch: true, // RE-CONFIRMED live 2026-07-21 (UK VPN): a real, visible, clickable desktop search icon DOES exist (searchIconVisible diagnostic returned true) — the 2026-07-20 "no desktop icon at all" claim was wrong (or the site changed since), don't trust it going forward without re-checking
+      hasBlogSearch: true, // RE-CONFIRMED live 2026-07-21 (UK VPN, both desktop AND mobile): typing "casino" returns REAL results (gsc.q=casino URL with actual article/post content, not the empty-placeholder "no results" state) — the 2026-07-20 "widget never renders" claim was wrong (or stale), don't clone this "broken" assumption onto other GEOs without checking live first
     },
     IE: {
       locale: 'en', uiLocalized: false,
@@ -163,14 +164,83 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasLoginRegistration: true,
       hasAccountModal: true,
       hasPaymentMethodsPage: true, // confirmed 200
-      hasBlogDesktopSearch: false, // confirmed live 2026-07-20: same as UK — the blog's only [data-tk-value="blogSearch"] link lives inside MobileFooter_footer (display:none at desktop widths), no separate desktop search icon exists
-      hasBlogSearch: false, // confirmed live 2026-07-20: same as UK — the Google Custom Search widget never renders (empty placeholder, console errors on /blog/search/), the search feature simply doesn't work for this brand
+      hasBlogDesktopSearch: false, // RE-CONFIRMED live 2026-07-21 (searchIconVisible diagnostic, real Toronto/Canada IP): no clickable desktop icon found. NOT a brand-wide gap, though — UK and ON were re-tested the same day and DO have a real working desktop search icon; CA genuinely is the odd one out here, don't clone this onto other SNG GEOs
+      hasBlogSearch: false, // RE-CONFIRMED live 2026-07-21 (real Toronto/Canada IP, both desktop AND mobile): "Type casino → search executes" step fails outright on both viewports — desktop has no icon at all, and mobile's icon DOES exist and gets clicked but the resulting search still doesn't work. NOT a brand-wide gap — UK and ON were re-tested the same day and their search genuinely works (real results returned). Don't assume this "broken" finding applies to any other SNG GEO without checking live first
       // registration.spec.ts: earlier UK-IP spot-check showed 6/6 unmodified,
       // but a full run from a REAL Canada VPN (2026-07-20) found the mobile
       // step DOES need the same explicit country-selection fix as AB/IE —
       // the UK-IP spot-check had been masking this the same way AB's/IE's
       // issues were masked before being tested from their real countries.
       // See isCanadianMobileFormat in registration.spec.ts.
+    },
+
+    // FR-CA (French Canada) — onboarding started 2026-07-21. Same underlying
+    // www.spingenie.com site/platform as CA, just at /fr-CA/ instead of
+    // /en-CA/ (per Reeve). Live inspection 2026-07-21 confirmed the UI is
+    // genuinely French (SE CONNECTER/S'INSCRIRE/JOUER, <html lang="fr">,
+    // page title "Casino en ligne au Canada | Spin Genie") — the cookie
+    // consent banner itself is NOT localized (still shows English "Allow
+    // all cookies", already in helpers/common.ts's KNOWN_ACCEPT_TEXTS, no
+    // fix needed there). Most boolean/path fields below are CLONED from CA
+    // as a starting baseline — NOT yet independently confirmed for FR-CA —
+    // run the full suite and correct via real failures, same pattern as
+    // every other GEO onboarded this project.
+    'FR-CA': {
+      locale: 'fr', uiLocalized: true,
+      hasBlog: false, blogPath: null, // confirmed live 2026-07-21: /fr-CA/blog/ 404s, and no Blog link appears anywhere in the footer/nav DOM (unlike CA) — do NOT clone CA's hasBlog:true onto FR-CA
+      hasPromotionsPage: true, promotionsPath: 'offres-promotionnelles/', // confirmed live 2026-07-21 (Reeve + DOM snapshot evidence): FR-CA's Promotions link/slug is genuinely translated, unlike most other pages — NOT the English "promotions/" slug CA/UK/IE share
+      featuresPath: 'fonctionnalites/', // confirmed live via DOM snapshot 2026-07-21: header nav "Fonctionnalités" link points to /fr-CA/fonctionnalites/, not the English "features/" slug
+      mobileAppPath: 'mobile-app/', // unconfirmed — cloned from CA
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — cloned from CA
+      currencySymbol: '$', // CAD — unconfirmed, cloned from CA, verify live bonus copy
+      contactEmail: 'contact@spingenie.com', // unconfirmed — cloned from CA/UK/IE, verify live (may be French-specific)
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // unconfirmed — cloned from CA
+      hasSocialMedia: false, // unconfirmed — cloned from CA
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/casino/', '/slots/'], // unconfirmed — cloned from CA, may need a French search term
+      hasGameFilterCarousel: true, // unconfirmed — cloned from CA
+      hasFeedbackForm: false, // confirmed by Reeve 2026-07-21: FR-CA has no feedback form — skip FF-01 entirely rather than treating repeated failures as a real bug
+      hasGameCategoryNav: true, // confirmed live 2026-07-21: header nav shows MACHINES À SOUS/GAIN INSTANTANÉ/CASINO plus a MEGAWAYS/JACKPOTS/SLINGO/CARTES À GRATTER/ROULETTE/BLACKJACK/JEUX TÉLÉVISÉS sub-taxonomy — needs a French-aware category-nav spec pass, don't assume CA's English category labels apply
+      hasLoginRegistration: true, // confirmed live 2026-07-21: SE CONNECTER/S'INSCRIRE buttons present in header
+      hasTestAccount: true, // real test account confirmed 2026-07-21 (leon@test.com)
+      hasAccountModal: true, // unconfirmed — cloned from CA, verify live
+      hasPaymentMethodsPage: true, // unconfirmed — cloned from CA
+      hasBlogDesktopSearch: false, // confirmed live 2026-07-21: no blog exists at all for FR-CA (see hasBlog), so no blog search icon either — consistent by necessity, not cloned from CA's separate (and since-corrected) finding
+      hasBlogSearch: false, // confirmed live 2026-07-21: no blog exists at all for FR-CA — blog-search.spec.ts skips on hasBlog anyway, but keep this consistent
+      extraPageSettleMs: 6_000, // confirmed live 2026-07-21: login button click was a silent no-op with the standard wait; a longer settle (6s post-load + existing waits) reliably lets the click actually navigate to #account
+    },
+
+    // ON (Ontario) — real AGCO-regulated live market at on.spingenie.ca,
+    // onboarded 2026-07-21 from a real Toronto VPN/IP. Full desktop+mobile
+    // suite run: 38 passed, 6 failed (3 distinct root causes, each hitting
+    // both viewports), 4 skipped (brand-wide blog-search/social-strip gaps,
+    // same as UK/CA). All 3 failures were test-code issues, not real site
+    // bugs — registration.spec.ts's Canadian branch (mobile country +
+    // generateCanadianDOB's YYYY.MM.DD format) needed to include 'ON'
+    // alongside 'CA', expectedPlaysecureUrlPattern() needed to collapse to
+    // the root two-label domain (on.spingenie.ca's real post-login redirect
+    // is playsecure.spingenie.ca, not playsecure.on.spingenie.ca), and the
+    // contact email below was a wrong clone guess, now corrected.
+    ON: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed live 2026-07-21: /blog/ 200, full blog-page/blog-sidebar/blog-page-header suites passed
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-07-21: PP-01 6/6
+      featuresPath: 'features/', // confirmed live 2026-07-21: FP-01 2/2
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-07-21: footer link resolves to /mobile-app/
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-07-21: footer has no such link for this GEO (skips cleanly, same as UK/CA)
+      currencySymbol: '$', // CAD — confirmed via bonus copy 2026-07-21
+      contactEmail: 'contact.ontario@spingenie.ca', // confirmed live 2026-07-21 on /contact/ — Ontario-specific, same "regional prefix + .ca" pattern as AB's contact.alberta@spingenie.ca (NOT the shared UK/IE/CA contact@spingenie.com)
+      socialMedia: { twitter: null, facebook: 'SpinGenieON', instagram: 'spingenieon' }, // confirmed live 2026-07-21 — real footer "Follow us on" strip found in the registration test's page snapshot (facebook.com/SpinGenieON, instagram.com/spingenieon), no twitter link present
+      hasSocialMedia: true, // confirmed live 2026-07-21 — real footer social strip exists (see socialMedia above). This was WRONGLY left as a false/unverified clone guess initially despite the evidence already being visible in a captured DOM snapshot — don't carry over a sibling GEO's flag value without checking data already in hand
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/casino/', '/slots/'], // confirmed live 2026-07-21: GS-01 11/11
+      hasGameFilterCarousel: true, // confirmed live 2026-07-21: GF-01 4/4, 3 slider rows found
+      hasFeedbackForm: true, // confirmed live 2026-07-21: FF-01 7/7
+      hasGameCategoryNav: true, // confirmed live 2026-07-21: GCN 18/18 — same sub-taxonomy as IE/CA (Slots/New Slots/Megaways/Jackpots/Casino/Roulette/BlackJack/Other/Live Casino sub-categories) plus Live Casino; no Slingo/Daily Jackpots/Bingo/Plinko
+      hasLoginRegistration: true, // confirmed live 2026-07-21: widget present, RW-01/LW-02 fully pass
+      hasTestAccount: true, // real test account confirmed 2026-07-21 (kmc@test.com) — login now succeeds after the expectedPlaysecureUrlPattern() fix
+      hasAccountModal: true, // confirmed live 2026-07-21: GIM-01/WH-01/SN-01 all confirm #account modal opens correctly
+      hasPaymentMethodsPage: true, // confirmed live 2026-07-21: PM-01 3/3, /payment-methods/ 200
+      hasBlogDesktopSearch: true, // confirmed live 2026-07-21 (BS-01 searchIconVisible diagnostic, from a real Toronto/Canada IP): a real, clickable desktop search icon exists (not just inferred from a passing test — the diagnostic distinguishes "clicked a real icon" from "fell back to a direct URL", and this was the former). UK re-confirmed the same way same day — the earlier brand-wide "no desktop icon" claim was wrong, re-check CA too rather than assuming it still holds
+      hasBlogSearch: true, // confirmed live 2026-07-21 (both desktop AND mobile, real Toronto/Canada IP): typing "casino" returns REAL results (article/post elements visible, URL shows gsc.q=casino with actual content, not the empty-placeholder state). UK re-confirmed the same way same day — the earlier brand-wide "widget never renders" claim was wrong, re-check CA too rather than assuming it still holds
     },
   },
 };

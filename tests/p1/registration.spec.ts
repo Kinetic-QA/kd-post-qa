@@ -1,6 +1,6 @@
 import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
-import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateCanadianAddress, generateAbRegistrationData, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
+import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle } from '../../helpers/common';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateOntarioAddress, generateAbRegistrationData, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -46,6 +46,7 @@ test.describe('Registration Flow', () => {
     await dismissCookieConsent(page);
     await dismissCampaignPopup(page);
     await page.waitForTimeout(500);
+    await waitForExtraPageSettle(page);
   });
 
   test('REG-01: Complete new player registration flow', async ({ page }) => {
@@ -103,15 +104,50 @@ test.describe('Registration Flow', () => {
     // (unlike GEO) is fixed for the whole process, not per-project.
     const isAlbertaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SNG'
       && test.info().project.name.replace(/-mobile$/, '') === 'AB';
+    // SNG ON — confirmed live 2026-07-21: real Ontario-regulated market.
+    // Step 0 (mobile+DOB) and Step 1 (name/gender/email) match CA's shape
+    // (see isCanadianMobileFormat below), but the ADDRESS step matches AB's
+    // shape instead — a "House No./Name" field IS present (confirmed live:
+    // it renders empty with an "Invalid address" error when left unfilled),
+    // unlike CA's address step which genuinely has no such field. Makes
+    // sense in hindsight: AB's pre-live QA environment was already
+    // confirmed to silently route through Ontario's real backend/shape
+    // (see AB_ADDRESSES's docstring) — ON is that same real Ontario flow.
+    // Reuses fillStep2AB/fillMobileStep3AddressAB + AB-shaped address data,
+    // NOT fillStep2CA/CA_ADDRESSES.
+    const isOntarioFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SNG'
+      && test.info().project.name.replace(/-mobile$/, '') === 'ON';
     // SNG CA — confirmed live 2026-07-20: shares AB's problem of the mobile
     // country-code dropdown defaulting to the tester's real VPN/IP country
     // (previously spot-checked from a UK IP, where the default happened to
     // already match generateUKMobile's format — masking this until tested
     // from a real Canada IP). Only Step 0's country selection is shared with
     // AB; the rest of CA's flow is the generic/UK shape, not AB's Alberta
-    // fields (province/postal code, PEP consent, etc.).
+    // fields (province/postal code, PEP consent, etc.). ON shares this same
+    // Step 0/DOB handling (see isOntarioFormat above for where it diverges).
+    // SNG FR-CA — onboarding started 2026-07-21: per Reeve, same underlying
+    // www.spingenie.com site/platform as CA, just at /fr-CA/ instead of
+    // /en-CA/ — expected to share CA's Step 1/address shape (no house
+    // number field), NOT ON's/AB's. The DOB format is NOT the same as CA's,
+    // though — confirmed live via a real browser screenshot (Reeve): the
+    // registration widget's date field placeholder reads "Année-Mois-Jour"
+    // (dash-separated YYYY-MM-DD), not CA's dot-separated YYYY.MM.DD. See
+    // generateFrCaDOB() in helpers/testData.ts.
+    const isFrCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SNG'
+      && test.info().project.name.replace(/-mobile$/, '') === 'FR-CA';
+    // FR-CA field labels for fillStep0WithRetry/fillStep1/fillMobileStep1Name.
+    // mobile/dob/continue confirmed live 2026-07-21 (Reeve's screenshot);
+    // firstName/lastName/email/genderStepText are best-guess, not yet
+    // independently confirmed — correct via real failures like everything
+    // else here.
+    const frCaStep0Labels = { mobile: 'Numéro de mobile', dob: 'Quel est la date de votre anniversaire?', continue: 'CONTINUER' };
+    const frCaStep1Labels = { firstName: /pr[ée]nom/i, lastName: /nom de famille|^nom$/i, email: /courriel|e-?mail/i, continue: 'CONTINUER' };
     const isCanadianMobileFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SNG'
-      && test.info().project.name.replace(/-mobile$/, '') === 'CA';
+      && ['CA', 'ON', 'FR-CA'].includes(test.info().project.name.replace(/-mobile$/, ''));
+    // Address-step shape only — AB and ON both use the house-number-bearing
+    // form; CA does not. Keep separate from isCanadianMobileFormat, which
+    // covers Step 0/DOB and is true for CA+ON together.
+    const usesAbAddressShape = isAlbertaFormat || isOntarioFormat;
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
 
@@ -133,6 +169,10 @@ test.describe('Registration Flow', () => {
       await waitForPageReady(page);
       await page.waitForTimeout(2_000);
       await dismissCampaignPopup(page);
+      // SNG FR-CA (confirmed live 2026-07-21 via login.spec.ts): the account
+      // widget's URL/backdrop can appear well before its actual content
+      // mounts — same slow-hydration symptom, same extra settle wait.
+      await waitForExtraPageSettle(page);
     });
 
     const scope = await detectWidgetScope(page);
@@ -418,96 +458,114 @@ test.describe('Registration Flow', () => {
       // Name+Email+Gender) across separate steps. Step 0 (mobile/DOB) is
       // identical to desktop and reuses fillStep0WithRetry unchanged.
       const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
-      // SNG CA (confirmed live 2026-07-20): the DOB field rejects UK's
+      // SNG CA/ON (confirmed live 2026-07-20/21): the DOB field rejects UK's
       // DD/MM/YYYY — its own validation message states the format it wants
       // is dot-separated, year-first (YYYY.MM.DD). AB uses its own DOB
       // shape via generateAbRegistrationData already, so this only applies
-      // to CA's otherwise-generic data object. Address is also overridden —
-      // CA's real address step has no house-number field (confirmed live,
-      // see fillStep2CA) so a UK-shaped address is the wrong fixture here.
+      // to CA/ON's otherwise-generic data object. Address is also
+      // overridden, but NOT the same shape for both: CA's real address step
+      // has no house-number field (see fillStep2CA), while ON's DOES (same
+      // AB-shaped form — see generateOntarioAddress's docstring).
       if (isCanadianMobileFormat) {
-        data.dob = generateCanadianDOB();
-        data.address = generateCanadianAddress();
+        data.dob = isFrCaFormat ? generateFrCaDOB() : generateCanadianDOB();
+        data.address = isOntarioFormat ? generateOntarioAddress() : generateCanadianAddress();
       }
 
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        // SNG AB/CA: country-code dropdown defaults to the tester's real
+        // SNG AB/CA/ON: country-code dropdown defaults to the tester's real
         // VPN/IP country — see fillStep0WithRetry's countryCodeLabel
         // handling and generateCanadianMobile's docstring.
         await ((isAlbertaFormat || isCanadianMobileFormat)
-          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada')
+          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
           : fillStep0WithRetry(page, scope, data));
       });
 
       await runStep('Step 1 of 5: First/Last name → Continue', async () => {
-        await fillMobileStep1Name(page, scope, data);
+        await (isFrCaFormat
+          ? fillMobileStep1Name(page, scope, data, 'CONTINUER', /choisissez votre sexe|genre/i)
+          : fillMobileStep1Name(page, scope, data));
       });
 
       await runStep('Step 2 of 5: Gender + Email → Continue', async () => {
         await (isCanadianMobileFormat
-          ? fillMobileStep2GenderEmailCA(page, scope, data)
+          ? fillMobileStep2GenderEmailCA(page, scope, data,
+              isFrCaFormat ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined,
+              isFrCaFormat ? 'CONTINUER' : 'Continue', isFrCaFormat)
           : fillMobileStep2GenderEmail(page, scope, data));
       });
 
       await runStep('Step 3 of 5: Address → Continue', async () => {
-        // SNG AB: selecting Canada as mobile country switches this step to
-        // Canadian fields (Province dropdown + postal-code validation) —
-        // see fillMobileStep3AddressAB's docstring. SNG CA: no house-number
-        // field at all — see fillMobileStep3AddressCA's docstring.
-        await (isAlbertaFormat
+        // SNG AB/ON: house-number-bearing form (Province dropdown + postal-
+        // code validation) — see fillMobileStep3AddressAB's docstring. SNG
+        // CA: no house-number field at all — see fillMobileStep3AddressCA's
+        // docstring.
+        await (usesAbAddressShape
           ? fillMobileStep3AddressAB(page, scope, data)
           : isCanadianMobileFormat
-          ? fillMobileStep3AddressCA(page, scope, data)
+          ? fillMobileStep3AddressCA(page, scope, data,
+              isFrCaFormat ? 'Adresse' : 'Start typing your address',
+              isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue')
           : fillMobileStep3Address(page, scope, data));
       });
 
       await runStep('Step 4 of 5: Username + Password → Continue', async () => {
-        // SNG AB: no separate "Set deposit limits" sub-step — see
-        // fillMobileStep4CredentialsAB's docstring.
-        await (isAlbertaFormat
+        // SNG AB/ON: no separate "Set deposit limits" sub-step — confirmed
+        // live 2026-07-21 ON matches AB here too, not the generic/CA shape —
+        // see fillMobileStep4CredentialsAB's docstring.
+        await (usesAbAddressShape
           ? fillMobileStep4CredentialsAB(page, scope, data)
-          : fillMobileStep4Credentials(page, scope, data));
+          : fillMobileStep4Credentials(page, scope, data,
+              isFrCaFormat ? 'CONTINUER' : 'Continue',
+              isFrCaFormat ? 'Fixer des limites de dépôt' : 'Set deposit limits'));
       });
 
       await runStep('Step 5 of 5: Deposit limit + consents', async () => {
-        // SNG AB: genuinely different consent checkboxes (PEP/HIO + third-party
+        // SNG AB/ON: genuinely different consent checkboxes (PEP/HIO + third-party
         // declaration, no over_18/gdprBingo) and no deposit-limit sub-step —
         // see fillMobileStep5FinalAB's docstring.
         // SNG CA: confirmed live 2026-07-20 — no gdprBingo checkbox either,
         // consistent with CA having no Bingo category at all (same as IE/ROW).
-        await (isAlbertaFormat
+        await (usesAbAddressShape
           ? fillMobileStep5FinalAB(page, scope)
           : isCanadianMobileFormat
-          ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
+          ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'], false,
+              isFrCaFormat ? 'Non' : 'No')
           : fillMobileStep5Final(page, scope));
       });
 
       await runStep('GO PLAY button visible and enabled', async () => {
-        const goPlayBtn = scope.getByRole('button', { name: /go play/i }).first();
+        // FR-CA: "Jouer" alone matches every homepage game tile's CTA too —
+        // scope to the actual popup container (confirmed live 2026-07-21
+        // this widget is NOT in an iframe, "scope" === the main page here,
+        // same as login.spec.ts's Step 4 fix for the identical ambiguity).
+        const goPlayBtn = (isFrCaFormat
+          ? page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first().getByRole('button', { name: /jouer/i })
+          : scope.getByRole('button', { name: /go play/i })).first();
         await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
         await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
       });
     } else {
       const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
-      // SNG CA (confirmed live 2026-07-20): the DOB field rejects UK's
+      // SNG CA/ON (confirmed live 2026-07-20/21): the DOB field rejects UK's
       // DD/MM/YYYY — its own validation message states the format it wants
       // is dot-separated, year-first (YYYY.MM.DD). AB uses its own DOB
       // shape via generateAbRegistrationData already, so this only applies
-      // to CA's otherwise-generic data object. Address is also overridden —
-      // CA's real address step has no house-number field (confirmed live,
-      // see fillStep2CA) so a UK-shaped address is the wrong fixture here.
+      // to CA/ON's otherwise-generic data object. Address is also
+      // overridden, but NOT the same shape for both: CA's real address step
+      // has no house-number field (see fillStep2CA), while ON's DOES (same
+      // AB-shaped form — see generateOntarioAddress's docstring).
       if (isCanadianMobileFormat) {
-        data.dob = generateCanadianDOB();
-        data.address = generateCanadianAddress();
+        data.dob = isFrCaFormat ? generateFrCaDOB() : generateCanadianDOB();
+        data.address = isOntarioFormat ? generateOntarioAddress() : generateCanadianAddress();
       }
 
       // ── Step 2: Step 0 — Mobile + DOB ─────────────────────────────────
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        // SNG AB/CA: country-code dropdown defaults to the tester's real
+        // SNG AB/CA/ON: country-code dropdown defaults to the tester's real
         // VPN/IP country — see fillStep0WithRetry's countryCodeLabel
         // handling and generateCanadianMobile's docstring.
         await ((isAlbertaFormat || isCanadianMobileFormat)
-          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada')
+          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
           : fillStep0WithRetry(page, scope, data));
       });
 
@@ -515,40 +573,56 @@ test.describe('Registration Flow', () => {
       await runStep('Step 1: Name + Email + Gender → Continue', async () => {
         // CA's next step (address) has no house-number field (confirmed
         // live) — the default readyLocator would wait forever for a field
-        // that never appears, same class of issue as IE's readyLocator override.
-        await fillStep1(page, scope, data, isCanadianMobileFormat
-          ? scope.getByPlaceholder('Start typing your address').first()
-          : undefined);
+        // that never appears, same class of issue as IE's readyLocator
+        // override. ON's next step DOES have a house-number field (AB
+        // shape) so it uses the default readyLocator like AB does.
+        await fillStep1(page, scope, data, (isCanadianMobileFormat && !isOntarioFormat)
+          ? (isFrCaFormat ? scope.getByLabel('Adresse').first() : scope.getByPlaceholder('Start typing your address').first())
+          : undefined, isFrCaFormat ? frCaStep1Labels : undefined,
+          isFrCaFormat ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined);
       });
 
       // ── Step 4: Step 2 — Address ───────────────────────────────────────
       await runStep('Step 2: Address → Continue', async () => {
-        // SNG AB: selecting Canada as mobile country switches this step to
-        // Canadian fields (Province dropdown + postal-code validation) —
+        // SNG AB/ON: selecting Canada as mobile country switches this step
+        // to Canadian fields (Province dropdown + postal-code validation) —
         // see fillStep2AB's docstring. SNG CA: a different shape again — no
         // house-number field at all, see fillStep2CA's docstring.
-        await (isAlbertaFormat ? fillStep2AB(page, scope, data)
-          : isCanadianMobileFormat ? fillStep2CA(page, scope, data)
+        await (usesAbAddressShape ? fillStep2AB(page, scope, data)
+          : isCanadianMobileFormat ? fillStep2CA(page, scope, data,
+              isFrCaFormat ? 'Adresse' : 'Start typing your address',
+              isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue',
+              isFrCaFormat ? /nom d'utilisateur/i : /username/i)
           : fillStep2(page, scope, data));
       });
 
       // ── Step 5: Step 3 — Username + Password + Checkboxes ──────────────
       await runStep('Step 3: Username + Password + Checkboxes', async () => {
-        // SNG AB: genuinely different consent checkboxes (PEP/HIO + third-party
-        // declaration, no over_18/gdprBingo) — see fillMobileStep5FinalAB's
-        // docstring for the same set confirmed on mobile.
+        // SNG AB/ON: genuinely different consent checkboxes (PEP/HIO + third-party
+        // declaration, no over_18/gdprBingo) — confirmed live 2026-07-21 that
+        // ON's final step is identical to AB's here too, not CA's — see
+        // fillMobileStep5FinalAB's docstring for the same set confirmed on mobile.
         // SNG CA: confirmed live 2026-07-20 — no gdprBingo checkbox either,
         // consistent with CA having no Bingo category at all (same as IE/ROW).
-        await (isAlbertaFormat
+        await (usesAbAddressShape
           ? fillStep3(page, scope, data, ['isPepConsent', 'gdpr', 'terms_accept', 'playerDeclaration'])
           : isCanadianMobileFormat
-          ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
+          ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'],
+              isFrCaFormat ? /nom d'utilisateur/i : /username/i,
+              isFrCaFormat ? /mot de passe/i : 'Minimum 10 characters',
+              isFrCaFormat)
           : fillStep3(page, scope, data));
       });
 
       // ── Step 6: GO PLAY button visible ─────────────────────────────────
       await runStep('GO PLAY button visible and enabled', async () => {
-        const goPlayBtn = scope.getByRole('button', { name: /go play/i }).first();
+        // FR-CA: "Jouer" alone matches every homepage game tile's CTA too —
+        // scope to the actual popup container (confirmed live 2026-07-21
+        // this widget is NOT in an iframe, "scope" === the main page here,
+        // same as login.spec.ts's Step 4 fix for the identical ambiguity).
+        const goPlayBtn = (isFrCaFormat
+          ? page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first().getByRole('button', { name: /jouer/i })
+          : scope.getByRole('button', { name: /go play/i })).first();
         await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
         await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
       });
@@ -968,6 +1042,12 @@ async function fillStep0WithRetry(
   page: Page, scope: Scope, data: RegistrationData,
   mobileGenerator: () => string = generateUKMobile,
   countryCodeLabel?: string,
+  // FR-CA (confirmed live 2026-07-21): the same Step 0 shape as CA/AB/ON,
+  // but genuinely translated field labels — "Numéro de mobile" and "Quel
+  // est la date de votre anniversaire?" instead of the English defaults.
+  fieldLabels: { mobile: string; dob: string; continue: string } = {
+    mobile: 'Mobile number', dob: "What's your date of birth?", continue: 'Continue',
+  },
 ): Promise<void> {
   let mobile = data.mobile;
 
@@ -1001,14 +1081,14 @@ async function fillStep0WithRetry(
   for (let attempt = 1; attempt <= MAX_MOBILE_RETRIES; attempt++) {
     console.log('REG-01 Step 0 attempt ' + attempt + ' mobile: ' + mobile);
 
-    const mobileInput = scope.getByRole('textbox', { name: 'Mobile number' }).first();
+    const mobileInput = scope.getByRole('textbox', { name: fieldLabels.mobile }).first();
     await expect(mobileInput).toBeVisible({ timeout: 15_000 });
     await mobileInput.click();
     await mobileInput.fill(mobile);
     await mobileInput.press('Tab');
     await page.waitForTimeout(500);
 
-    const dobInput = scope.getByRole('textbox', { name: "What's your date of birth?" }).first();
+    const dobInput = scope.getByRole('textbox', { name: fieldLabels.dob }).first();
     await expect(dobInput).toBeVisible({ timeout: 10_000 });
     await dobInput.click();
     await dobInput.clear();
@@ -1016,7 +1096,7 @@ async function fillStep0WithRetry(
     await dobInput.press('Tab');
     await page.waitForTimeout(500);
 
-    const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+    const continueBtn = scope.getByRole('button', { name: fieldLabels.continue }).first();
     await expect(continueBtn).toBeVisible({ timeout: 5_000 });
 
     const isEnabled = await continueBtn.isEnabled({ timeout: 5_000 }).catch(() => false);
@@ -1031,7 +1111,7 @@ async function fillStep0WithRetry(
     await continueBtn.click();
     await page.waitForTimeout(2_500);
 
-    const onStep1 = await scope.getByRole('textbox', { name: /first name/i })
+    const onStep1 = await scope.getByRole('textbox', { name: /first name|pr[ée]nom/i })
       .first().isVisible({ timeout: 3_000 }).catch(() => false);
 
     if (onStep1) {
@@ -1047,36 +1127,47 @@ async function fillStep0WithRetry(
   throw new Error('REG-01: mobile not accepted after ' + MAX_MOBILE_RETRIES + ' attempts');
 }
 
-async function fillStep1(page: Page, scope: Scope, data: RegistrationData, readyLocator?: Locator): Promise<void> {
+async function fillStep1(
+  page: Page, scope: Scope, data: RegistrationData, readyLocator?: Locator,
+  // FR-CA: ALL of firstName/lastName/email/continue/genderLabel CONFIRMED
+  // live 2026-07-21 via a real registration-flow walkthrough — "Quel est
+  // votre prénom?"/"Quel est votre nom de famille?"/"Quel est votre
+  // courriel?"/"CONTINUER", gender options "Homme"/"Femme" (not the English
+  // "Male"/"Female" data.gender itself is generated as).
+  fieldLabels: { firstName: RegExp; lastName: RegExp; email: RegExp; continue: string } = {
+    firstName: /first name/i, lastName: /last name/i, email: /email/i, continue: 'Continue',
+  },
+  genderLabel?: string,
+): Promise<void> {
   console.log('REG-01 Step 1/3 personal details');
 
-  const firstNameInput = scope.getByRole('textbox', { name: /first name/i }).first();
+  const firstNameInput = scope.getByRole('textbox', { name: fieldLabels.firstName }).first();
   await expect(firstNameInput).toBeVisible({ timeout: 10_000 });
   await firstNameInput.click();
   await firstNameInput.fill(data.firstName);
   await firstNameInput.press('Tab');
   await page.waitForTimeout(200);
 
-  const lastNameInput = scope.getByRole('textbox', { name: /last name/i }).first();
+  const lastNameInput = scope.getByRole('textbox', { name: fieldLabels.lastName }).first();
   await expect(lastNameInput).toBeVisible({ timeout: 5_000 });
   await lastNameInput.click();
   await lastNameInput.fill(data.lastName);
   await lastNameInput.press('Tab');
   await page.waitForTimeout(200);
 
-  const genderBtn = scope.getByText(data.gender, { exact: true }).first();
+  const genderBtn = scope.getByText(genderLabel ?? data.gender, { exact: true }).first();
   await expect(genderBtn).toBeVisible({ timeout: 5_000 });
   await genderBtn.click();
   await page.waitForTimeout(200);
 
-  const emailInput = scope.getByRole('textbox', { name: /email/i }).first();
+  const emailInput = scope.getByRole('textbox', { name: fieldLabels.email }).first();
   await expect(emailInput).toBeVisible({ timeout: 5_000 });
   await emailInput.click();
   await emailInput.fill(data.email);
   await emailInput.press('Tab');
   await page.waitForTimeout(300);
 
-  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  const continueBtn = scope.getByRole('button', { name: fieldLabels.continue }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
   await continueBtn.click();
 
@@ -1524,11 +1615,18 @@ async function fillDECredentials(page: Page, scope: Scope, data: DeRegistrationD
 async function fillStep3(
   page: Page, scope: Scope, data: RegistrationData,
   checkboxIds: string[] = ['over_18', 'gdpr', 'gdprBingo', 'terms_accept'],
+  // FR-CA: username/password fields CONFIRMED live 2026-07-21 — real
+  // labels "Créer un nom d'utilisateur"/"Créer un mot de passe", not the
+  // English placeholder "Minimum 10 characters" (no such placeholder
+  // exists in the French form — use the label instead via useLabelForPassword).
+  usernameLabel: RegExp = /username/i,
+  passwordPlaceholder: string | RegExp = 'Minimum 10 characters',
+  useLabelForPassword: boolean = false,
 ): Promise<void> {
   console.log('REG-01 Step 3/3 account credentials');
 
   // Username
-  const usernameInput = scope.getByRole('textbox', { name: /username/i }).first();
+  const usernameInput = scope.getByRole('textbox', { name: usernameLabel }).first();
   await expect(usernameInput).toBeVisible({ timeout: 10_000 });
   await usernameInput.click();
   await usernameInput.fill(data.username);
@@ -1545,7 +1643,9 @@ async function fillStep3(
   }
 
   // Password
-  const passwordInput = scope.getByPlaceholder('Minimum 10 characters').first();
+  const passwordInput = (useLabelForPassword
+    ? scope.getByRole('textbox', { name: passwordPlaceholder })
+    : scope.getByPlaceholder(passwordPlaceholder)).first();
   await expect(passwordInput).toBeVisible({ timeout: 5_000 });
   await passwordInput.click();
   await passwordInput.fill(data.password);
@@ -1623,7 +1723,13 @@ async function fillStep3(
 }
 
 /** Mobile "STEP 1 OF 5": just First/Last name (desktop's Step 1 splits Name/Email/Gender across three separate mobile steps). */
-async function fillMobileStep1Name(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+async function fillMobileStep1Name(
+  page: Page, scope: Scope, data: RegistrationData,
+  // FR-CA (confirmed live 2026-07-21 for continue; gender-step text NOT yet
+  // independently confirmed — best-guess, correct via real failures).
+  continueLabel: string = 'Continue',
+  genderStepText: string | RegExp = 'Choose your gender',
+): Promise<void> {
   console.log('REG-01 (mobile) Step 1/5 name');
 
   const firstNameInput = scope.locator('#firstName').first();
@@ -1638,11 +1744,11 @@ async function fillMobileStep1Name(page: Page, scope: Scope, data: RegistrationD
   await lastNameInput.fill(data.lastName);
   await page.waitForTimeout(200);
 
-  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  const continueBtn = scope.getByRole('button', { name: continueLabel }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
   await continueBtn.click();
 
-  await scope.getByText('Choose your gender', { exact: true })
+  await scope.getByText(genderStepText, { exact: true })
     .first().waitFor({ state: 'visible', timeout: 15_000 });
   console.log('REG-01 (mobile) Step 1/5 complete');
 }
@@ -1912,10 +2018,17 @@ async function fillMobileStep3AddressAB(page: Page, scope: Scope, data: Registra
 /** CA (live market) mobile "STEP 2 OF 5": same as UK mobile's Gender + Email step, but the next
  * screen has no house-number field (confirmed live 2026-07-20) — wait on the street address input
  * instead of the "House No./Name" placeholder, same fix pattern as IE's mobile equivalent. */
-async function fillMobileStep2GenderEmailCA(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+async function fillMobileStep2GenderEmailCA(
+  page: Page, scope: Scope, data: RegistrationData,
+  // FR-CA: gender options are "Homme"/"Femme", not data.gender's English
+  // "Male"/"Female" — confirmed live 2026-07-21. Continue button confirmed
+  // "CONTINUER".
+  genderLabel?: string, continueLabel: string = 'Continue',
+  useLabelNotPlaceholderForReady: boolean = false,
+): Promise<void> {
   console.log('REG-01 (CA mobile) Step 2/5 gender + email');
 
-  const genderBtn = scope.getByText(data.gender, { exact: true }).first();
+  const genderBtn = scope.getByText(genderLabel ?? data.gender, { exact: true }).first();
   await expect(genderBtn).toBeVisible({ timeout: 10_000 });
   await genderBtn.click();
   await page.waitForTimeout(200);
@@ -1926,11 +2039,13 @@ async function fillMobileStep2GenderEmailCA(page: Page, scope: Scope, data: Regi
   await emailInput.fill(data.email);
   await page.waitForTimeout(300);
 
-  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  const continueBtn = scope.getByRole('button', { name: continueLabel }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
   await continueBtn.click();
 
-  await scope.getByPlaceholder('Start typing your address')
+  await (useLabelNotPlaceholderForReady
+    ? scope.getByLabel('Adresse')
+    : scope.getByPlaceholder('Start typing your address'))
     .first().waitFor({ state: 'visible', timeout: 15_000 });
   console.log('REG-01 (CA mobile) Step 2/5 complete');
 }
@@ -1943,12 +2058,27 @@ async function fillMobileStep2GenderEmailCA(page: Page, scope: Scope, data: Regi
  * "Ontario" while connected from Calgary/Alberta silently failed to advance; leaving the untouched
  * default advanced immediately from a real Montreal/Quebec connection). See CA_ADDRESSES's
  * docstring in helpers/testData.ts for the full investigation. */
-async function fillStep2CA(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+async function fillStep2CA(
+  page: Page, scope: Scope, data: RegistrationData,
+  // FR-CA: CONFIRMED live 2026-07-21 via a real address-step walkthrough —
+  // street field has no placeholder, it's a real label "Adresse" instead of
+  // CA's "Start typing your address" placeholder. Postcode/city/state use
+  // CSS IDs (locale-agnostic, no override needed). Continue confirmed
+  // "CONTINUER". Username field label NOT yet confirmed for FR-CA — still
+  // Username field CONFIRMED live 2026-07-21: "Créer un nom d'utilisateur",
+  // not the generic /username/i.
+  streetLabel: string | RegExp = 'Start typing your address',
+  useLabelNotPlaceholder: boolean = false,
+  continueLabel: string = 'Continue',
+  usernameLabel: RegExp = /username/i,
+): Promise<void> {
   console.log('REG-01 (CA) Step 2/3 address');
 
   const addr = data.address;
 
-  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  const streetInput = (useLabelNotPlaceholder
+    ? scope.getByLabel(streetLabel)
+    : scope.getByPlaceholder(streetLabel)).first();
   await expect(streetInput).toBeVisible({ timeout: 10_000 });
   await streetInput.click();
   await streetInput.fill(addr.street);
@@ -1976,23 +2106,33 @@ async function fillStep2CA(page: Page, scope: Scope, data: RegistrationData): Pr
   }
   await page.waitForTimeout(300);
 
-  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  const continueBtn = scope.getByRole('button', { name: continueLabel }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
   await continueBtn.click();
 
-  await scope.getByRole('textbox', { name: /username/i })
+  await scope.getByRole('textbox', { name: usernameLabel })
     .first().waitFor({ state: 'visible', timeout: 15_000 });
   console.log('REG-01 (CA) Step 2/3 complete');
 }
 
 /** CA (live market) mobile "STEP 3 OF 5": same shape as desktop's Step 2 (see fillStep2CA) —
  * no house-number field, address/zipCode/city by id plus a state/province select. */
-async function fillMobileStep3AddressCA(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+async function fillMobileStep3AddressCA(
+  page: Page, scope: Scope, data: RegistrationData,
+  // FR-CA: same real label confirmed live 2026-07-21 as desktop's fillStep2CA
+  // ("Adresse" instead of a placeholder). Postcode/city/state use CSS IDs
+  // (locale-agnostic). Continue confirmed "CONTINUER".
+  streetLabel: string | RegExp = 'Start typing your address',
+  useLabelNotPlaceholder: boolean = false,
+  continueLabel: string = 'Continue',
+): Promise<void> {
   console.log('REG-01 (CA mobile) Step 3/5 address');
 
   const addr = data.address;
 
-  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  const streetInput = (useLabelNotPlaceholder
+    ? scope.getByLabel(streetLabel)
+    : scope.getByPlaceholder(streetLabel)).first();
   await expect(streetInput).toBeVisible({ timeout: 10_000 });
   await streetInput.click();
   await streetInput.fill(addr.street);
@@ -2017,7 +2157,7 @@ async function fillMobileStep3AddressCA(page: Page, scope: Scope, data: Registra
   }
   await page.waitForTimeout(300);
 
-  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  const continueBtn = scope.getByRole('button', { name: continueLabel }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
   await continueBtn.click();
 
@@ -2027,7 +2167,14 @@ async function fillMobileStep3AddressCA(page: Page, scope: Scope, data: Registra
 }
 
 /** Mobile "STEP 4 OF 5": Username (pre-filled with a suggestion) + Password. */
-async function fillMobileStep4Credentials(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+async function fillMobileStep4Credentials(
+  page: Page, scope: Scope, data: RegistrationData,
+  // FR-CA: continue button confirmed "CONTINUER". Deposit-limit step text
+  // NOT yet independently confirmed for FR-CA — still using the English
+  // guess ("Set deposit limits"), correct if this turns out wrong live.
+  continueLabel: string = 'Continue',
+  depositLimitText: string = 'Set deposit limits',
+): Promise<void> {
   console.log('REG-01 (mobile) Step 4/5 credentials');
 
   const usernameInput = scope.locator('#username').first();
@@ -2046,18 +2193,18 @@ async function fillMobileStep4Credentials(page: Page, scope: Scope, data: Regist
   await passwordInput.press('Escape');
   await page.waitForTimeout(300);
 
-  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  const continueBtn = scope.getByRole('button', { name: continueLabel }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
   // Confirmed live: username-availability validation can still be running
   // when this first click lands, silently no-opping it — retry once after
   // a short wait rather than treating a single click as reliable here.
   await continueBtn.click({ force: true });
-  const advanced = await scope.getByText('Set deposit limits', { exact: true })
+  const advanced = await scope.getByText(depositLimitText, { exact: true })
     .first().waitFor({ state: 'visible', timeout: 4_000 }).then(() => true).catch(() => false);
   if (!advanced) {
     await page.waitForTimeout(1_000);
     await continueBtn.click({ force: true });
-    await scope.getByText('Set deposit limits', { exact: true })
+    await scope.getByText(depositLimitText, { exact: true })
       .first().waitFor({ state: 'visible', timeout: 15_000 });
   }
   console.log('REG-01 (mobile) Step 4/5 complete');
@@ -2130,11 +2277,14 @@ async function fillMobileStep5Final(
   page: Page, scope: Scope,
   checkboxIds: string[] = ['over_18', 'gdpr', 'gdprBingo', 'terms_accept'],
   skipDepositLimit = false,
+  // FR-CA: deposit-limit "No" button text NOT yet independently confirmed —
+  // still using the English guess ("No"), correct if this turns out wrong.
+  noButtonText: string = 'No',
 ): Promise<void> {
   console.log('REG-01 (mobile) Step 5/5 deposit limit + consents');
 
   if (!skipDepositLimit) {
-    const noBtn = scope.getByText('No', { exact: true }).first();
+    const noBtn = scope.getByText(noButtonText, { exact: true }).first();
     await expect(noBtn).toBeVisible({ timeout: 5_000 });
     await noBtn.click();
     await page.waitForTimeout(300);
