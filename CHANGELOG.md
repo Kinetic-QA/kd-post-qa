@@ -48,10 +48,16 @@ Each release or change set uses this structure:
 - **Sweden's Contact page checklist was failing** — the page has a leftover "LOG IN" link that opens an empty pop-up with no actual sign-in form inside it (expected for this deposit-only market, confirmed intentional). The checklist now skips trying to close a pop-up that was never really there.
 - **Rest-of-World's sign-up test kept failing with "phone number not accepted."** The test was still using a South African-format phone number left over from when this market was last checked from a South Africa connection. Since the sign-up form checks the phone number against the tester's real location, this session's Cyprus connection rejected it every time. Now generates a Cyprus-format number to match.
 
+### Confirmed
+
+- **SpinGenie (SNG) — every market (UK, Ireland, Canada, Ontario, French Canada, Alberta, Spain, Germany, Sweden, Rest-of-World) is now confirmed fully working on both desktop and mobile.** This closes out the SpinGenie onboarding checklist.
+- **Slingo (SC) — UK, Spain, Germany, Sweden, and Ireland are confirmed fully working on both desktop and mobile.** Rest-of-World (ROW) is **not** included in that confirmation — see below.
+
 ### Known open items (carrying into next session)
 
+- **Slingo (SC) Rest-of-World has a recurring pop-up/overlay problem that hasn't been fixed yet.** Several different checks (search, the site header, and sign-up on mobile) get stuck with a pop-up or overlay that won't close properly, and it happened again on a repeat run, so it's a real, repeatable problem rather than an occasional glitch. Best guess so far is that the Rest-of-World site itself responds slower than our other markets, but that's not confirmed yet — needs a closer look at what's happening behind the scenes before we can fix it. Scheduled to be looked at first thing next session, before starting Genting Casino.
 - **Mega Casino UK's live site is currently guarded by a security service that occasionally blocks our automated checks** (not real site visitors — confirmed by opening the exact same page in a normal, non-automated browser with no issue at all). This mostly affects the login/sign-up checks and occasionally a few others. Needs someone on the dev/security side to allow our automated checker through; not something fixable from our checklist. A working test login for Mega Casino UK is also still needed.
-- Next session: continue onboarding the remaining Mega Casino markets (Ireland is the most likely quick win — same site design as the three markets done today).
+- Next session: fix Slingo Rest-of-World's pop-up problem first, then continue onboarding the remaining Mega Casino markets (Ireland is the most likely quick win — same site design as the three markets done today).
 
 ## [Unreleased] - 2026-07-21
 
