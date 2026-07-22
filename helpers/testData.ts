@@ -320,6 +320,22 @@ export function generateSouthAfricanMobile(): string {
 }
 
 /**
+ * Generates a random valid Cyprus mobile number WITHOUT the leading 0.
+ * Confirmed live 2026-07-22: testing SNG ROW from a real Cyprus VPN/IP, the
+ * country-code dropdown auto-detected to "CY"/"Cyprus (+ 357)" — NOT South
+ * Africa, which is what generateSouthAfricanMobile assumed when ROW was
+ * first onboarded from a South Africa VPN. Same "verified, never forced"
+ * auto-detect behavior documented on generateSouthAfricanMobile — swap to
+ * whichever generator matches the real VPN/IP in use, don't assume this one
+ * carries forward either. Cyprus mobiles are 8 digits nationally, starting
+ * with 9.
+ */
+export function generateCyprusMobile(): string {
+  const rest = Array.from({ length: 7 }, () => Math.floor(Math.random() * 10)).join('');
+  return `9${rest}`;
+}
+
+/**
  * Generates a random valid German mobile number WITHOUT the leading 0. The
  * form defaults its country-code selector to "+49" (confirmed live), so we
  * supply the national number — German mobiles start 15/16/17 nationally.

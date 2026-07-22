@@ -145,14 +145,31 @@ test.describe('P2 - Promotions Page', () => {
       // elements match this text (some are desktop-only and CSS-hidden at
       // mobile breakpoints), and .first() alone can grab a hidden one
       // (same ambiguity already handled this way in search.spec.ts).
-      const playBtn = page.getByText(strings.playCta).filter({ visible: true }).first();
+      //
+      // Restrict to actual clickable elements (button/link/role=button) —
+      // confirmed live on FR-CA: the playCta regex also matches "jouer"
+      // inside a plain marketing paragraph's body text (not a button), and
+      // clicking that <p>'s bounding box lands on whatever link happens to
+      // be underneath, producing inconsistent, non-widget navigation
+      // instead of a real failure to open login. That paragraph is not a
+      // Play CTA at all, so it must be filtered out rather than clicked.
+      const playCandidates = page.getByText(strings.playCta).filter({ visible: true });
+      const candidateCount = await playCandidates.count();
+      let playBtn = null;
+      for (let i = 0; i < candidateCount; i++) {
+        const candidate = playCandidates.nth(i);
+        const isClickable = await candidate.evaluate(el =>
+          el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button'
+        );
+        if (isClickable) { playBtn = candidate; break; }
+      }
       // Confirmed live on DE: this umbrella page's only "Spielen" match is a
       // per-game-tile hover CTA (same as the homepage's showcase grid) —
       // hidden until hovered, not a standalone always-visible Play button
       // like other GEOs have. Skip rather than false-fail; a hover-based
       // version of this check would need the same mouse-glide approach
       // search.spec.ts uses for its own hover CTA.
-      const hasPlayBtn = await playBtn.isVisible({ timeout: 10_000 }).catch(() => false);
+      const hasPlayBtn = playBtn !== null && await playBtn.isVisible({ timeout: 10_000 }).catch(() => false);
       if (!hasPlayBtn) {
         console.log('PP-01 Step 5 skipped — no standalone Play CTA visible without hover for this GEO');
         return;

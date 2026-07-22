@@ -64,6 +64,7 @@ test.describe('P3 - Contact Us Page', () => {
     const strings = currentLocaleStrings();
     const geoFeatures = currentGeoFeatures();
     const GEO_EMAIL = geoFeatures.contactEmail;
+    const contactPath = geoFeatures.contactPath ?? 'contact/';
     const isMobile = test.info().project.name.endsWith('-mobile');
 
     // Mobile's login/feedback widget is a fullscreen takeover with its own
@@ -90,11 +91,11 @@ test.describe('P3 - Contact Us Page', () => {
       await page.waitForTimeout(600);
 
       // Click Contact us link in sidebar
-      const contactLink = page.locator(SIDEBAR + ' a[href*="/contact/"]').first();
+      const contactLink = page.locator(SIDEBAR + ` a[href*="/${contactPath}"]`).first();
       await contactLink.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
-      await expect(page).toHaveURL(/\/contact\//, { timeout: 8_000 });
+      await expect(page).toHaveURL(new RegExp(`/${contactPath}`), { timeout: 8_000 });
       console.log('CU-01 navigated to: ' + page.url());
     });
 
@@ -140,6 +141,14 @@ test.describe('P3 - Contact Us Page', () => {
     // ── Steps 7-8: Click LOGIN -> modal appears ───────────────────────────
     await runStep('Steps 7-8: Click LOGIN -> login modal appears (/#account)', async () => {
       if (!hasContactLoginLink) { console.log('CU-01 skipped — no LOGIN link on this GEO'); return; }
+      // Confirmed live on SE: the LOGIN link exists and does change the URL
+      // hash to #account/login, but geoFeatures.hasAccountModal: false means
+      // no real, visible modal ever renders (boundingBox() returns null) —
+      // same underlying Pay N Play gap as the homepage Play button, just
+      // manifesting as a "stuck" hash with nothing to close instead of no
+      // navigation at all. Skip the click/close assertions entirely rather
+      // than fail on a real product gap they can't work around.
+      if (!geoFeatures.hasAccountModal) { console.log('CU-01 skipped — LOGIN link exists but no real account modal renders for this GEO'); return; }
       const loginLink = page.locator('a[href*="#account/login"]').first();
       await loginLink.click();
       await page.waitForTimeout(2_000);
@@ -150,6 +159,7 @@ test.describe('P3 - Contact Us Page', () => {
     // ── Step 9: Click X on login modal ───────────────────────────────────
     await runStep('Step 9: Click X -> login modal closes', async () => {
       if (!hasContactLoginLink) { console.log('CU-01 skipped — no LOGIN link on this GEO'); return; }
+      if (!geoFeatures.hasAccountModal) { console.log('CU-01 skipped — LOGIN link exists but no real account modal renders for this GEO'); return; }
       if (isMobile) {
         await closeMobileModal();
       } else {

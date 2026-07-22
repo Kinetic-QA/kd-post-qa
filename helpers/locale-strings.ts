@@ -80,7 +80,7 @@ const STRINGS: Record<string, LocaleStrings> = {
     loginButton: /iniciar sesión/i,
     loginSubmitButton: /iniciar sesión/i,
     usernameOrEmailLabel: /nombre de usuario o correo electrónico/i,
-    joinButton: /únete/i,
+    joinButton: /únete|unirse/i, // "Únete" confirmed live on SC (slingocasino.es); "Unirse" confirmed live on SNG (spingenie.es) — same language, different brand copy, so this shared-by-locale string needs to match both
     loginErrorText: /datos de inicio de sesión.*incorrectos/i,
     reportProblemText: /reportar un problema/i,
     membersLoginText: /inicio de sesión/i,
