@@ -1,6 +1,6 @@
 import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateOntarioAddress, generateAbRegistrationData, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -148,6 +148,21 @@ test.describe('Registration Flow', () => {
     // form; CA does not. Keep separate from isCanadianMobileFormat, which
     // covers Step 0/DOB and is true for CA+ON together.
     const usesAbAddressShape = isAlbertaFormat || isOntarioFormat;
+    // MC/COM — confirmed live 2026-07-22: same auto-detect-from-real-IP
+    // pattern as ROW/DE (not SNG AB/CA's explicit-dropdown-selection case) —
+    // country code correctly shows Malta/+356 when tested from a Malta VPN,
+    // no explicit selection needed. Only the mobile number format needs to
+    // match (see generateMalteseMobile's docstring for why UK's failed).
+    const isMcComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
+      && test.info().project.name.replace(/-mobile$/, '') === 'COM';
+    // MC/CA — confirmed live 2026-07-22 (correct Canada VPN/IP verified via
+    // ipinfo.io): same auto-detect-from-real-IP pattern as COM/ROW/DE —
+    // country code correctly shows Canada with no explicit selection needed.
+    // Reuses SNG's generateCanadianMobile (real NANP format, confirmed live
+    // a 403-area-code number is accepted) rather than adding a near-duplicate
+    // generator for the same number format.
+    const isMcCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
+      && test.info().project.name.replace(/-mobile$/, '') === 'CA';
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
 
@@ -483,6 +498,8 @@ test.describe('Registration Flow', () => {
         // handling and generateCanadianMobile's docstring.
         await ((isAlbertaFormat || isCanadianMobileFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
+          : isMcComFormat
+          ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
           : fillStep0WithRetry(page, scope, data));
       });
 
@@ -564,6 +581,14 @@ test.describe('Registration Flow', () => {
         data.dob = isFrCaFormat ? generateFrCaDOB() : generateCanadianDOB();
         data.address = isOntarioFormat ? generateOntarioAddress() : generateCanadianAddress();
       }
+      // MC/CA confirmed live 2026-07-22: same DOB-format rejection as SNG CA
+      // ("Please enter a valid year of birth" on UK-shaped DD/MM/YYYY) — only
+      // the DOB needs overriding here, not the address (MC/CA's address step
+      // uses the generic street/postcode/city shape via fillComAddress, not
+      // SNG CA's province/postal-code shape).
+      if (isMcCaFormat) {
+        data.dob = generateCanadianDOB();
+      }
 
       // ── Step 2: Step 0 — Mobile + DOB ─────────────────────────────────
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
@@ -572,6 +597,12 @@ test.describe('Registration Flow', () => {
         // handling and generateCanadianMobile's docstring.
         await ((isAlbertaFormat || isCanadianMobileFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
+          : isMcComFormat
+          ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
+          // MC/CA: country already auto-detects correctly (no 'Canada' label
+          // needed, unlike SNG AB/CA) — just needs a NANP-format number.
+          : isMcCaFormat
+          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile)
           : fillStep0WithRetry(page, scope, data));
       });
 
@@ -581,8 +612,10 @@ test.describe('Registration Flow', () => {
         // live) — the default readyLocator would wait forever for a field
         // that never appears, same class of issue as IE's readyLocator
         // override. ON's next step DOES have a house-number field (AB
-        // shape) so it uses the default readyLocator like AB does.
-        await fillStep1(page, scope, data, (isCanadianMobileFormat && !isOntarioFormat)
+        // shape) so it uses the default readyLocator like AB does. MC/COM
+        // and MC/CA confirmed live 2026-07-22: same no-house-number shape —
+        // address step is a "Start typing your address" autocomplete field.
+        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isMcCaFormat)
           ? (isFrCaFormat ? scope.getByLabel('Adresse').first() : scope.getByPlaceholder('Start typing your address').first())
           : undefined, isFrCaFormat ? frCaStep1Labels : undefined,
           isFrCaFormat ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined);
@@ -593,12 +626,17 @@ test.describe('Registration Flow', () => {
         // SNG AB/ON: selecting Canada as mobile country switches this step
         // to Canadian fields (Province dropdown + postal-code validation) —
         // see fillStep2AB's docstring. SNG CA: a different shape again — no
-        // house-number field at all, see fillStep2CA's docstring.
+        // house-number field at all, see fillStep2CA's docstring. MC/COM
+        // confirmed live 2026-07-22: same no-house-number shape as IE/CA,
+        // see fillComAddress's docstring. MC/CA: same underlying platform as
+        // MC/COM — assumed same shape, not independently re-verified field-
+        // by-field this session; re-check live if this step starts failing.
         await (usesAbAddressShape ? fillStep2AB(page, scope, data)
           : isCanadianMobileFormat ? fillStep2CA(page, scope, data,
               isFrCaFormat ? 'Adresse' : 'Start typing your address',
               isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue',
               isFrCaFormat ? /nom d'utilisateur/i : /username/i)
+          : (isMcComFormat || isMcCaFormat) ? fillComAddress(page, scope, data)
           : fillStep2(page, scope, data));
       });
 
@@ -610,6 +648,10 @@ test.describe('Registration Flow', () => {
         // fillMobileStep5FinalAB's docstring for the same set confirmed on mobile.
         // SNG CA: confirmed live 2026-07-20 — no gdprBingo checkbox either,
         // consistent with CA having no Bingo category at all (same as IE/ROW).
+        // MC/COM confirmed live 2026-07-22 — same reasoning: MC has no Bingo
+        // vertical at all (Home/Live Casino/Online Slots/Casino Games), so no
+        // gdprBingo checkbox exists here either. MC/CA: same brand-wide
+        // reasoning applies (no Bingo vertical on MC at all).
         await (usesAbAddressShape
           ? fillStep3(page, scope, data, ['isPepConsent', 'gdpr', 'terms_accept', 'playerDeclaration'])
           : isCanadianMobileFormat
@@ -617,6 +659,8 @@ test.describe('Registration Flow', () => {
               isFrCaFormat ? /nom d'utilisateur/i : /username/i,
               isFrCaFormat ? /mot de passe/i : 'Minimum 10 characters',
               isFrCaFormat)
+          : (isMcComFormat || isMcCaFormat)
+          ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
       });
 
@@ -2119,6 +2163,51 @@ async function fillStep2CA(
   await scope.getByRole('textbox', { name: usernameLabel })
     .first().waitFor({ state: 'visible', timeout: 15_000 });
   console.log('REG-01 (CA) Step 2/3 complete');
+}
+
+/**
+ * MC/COM's address step, confirmed live 2026-07-22: an autocomplete "Start
+ * typing your address" field + Postcode + City + a country select — no
+ * house-number field (same shape as IE/CA's address step). Unlike IE, the
+ * country select does NOT need explicit selection here — it already
+ * auto-detects correctly to Malta from the tester's real IP/VPN (same
+ * auto-detect pattern as SC's ROW/DE), so forcing a selection the way
+ * fillIEAddress does would be unnecessary and risks fighting the already-
+ * correct value.
+ */
+async function fillComAddress(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+  console.log('REG-01 (COM) Step 2/3 address');
+
+  const addr = data.address;
+
+  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  await expect(streetInput).toBeVisible({ timeout: 10_000 });
+  await streetInput.click();
+  await streetInput.fill(addr.street);
+  await streetInput.press('Tab');
+  await page.waitForTimeout(800);
+
+  const postcodeInput = scope.getByRole('textbox', { name: 'Postcode' }).first();
+  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  await postcodeInput.click();
+  await postcodeInput.fill(addr.postcode);
+  await postcodeInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  const cityInput = scope.getByRole('textbox', { name: 'City' }).first();
+  await expect(cityInput).toBeVisible({ timeout: 5_000 });
+  await cityInput.click();
+  await cityInput.fill(addr.city);
+  await cityInput.press('Tab');
+  await page.waitForTimeout(300);
+
+  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
+  await continueBtn.click();
+
+  await scope.getByRole('textbox', { name: /username/i })
+    .first().waitFor({ state: 'visible', timeout: 15_000 });
+  console.log('REG-01 (COM) Step 2/3 complete');
 }
 
 /** CA (live market) mobile "STEP 3 OF 5": same shape as desktop's Step 2 (see fillStep2CA) —

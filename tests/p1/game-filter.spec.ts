@@ -57,6 +57,9 @@ test.describe('P1 - Game Filter', () => {
     }
 
     const isMobile = test.info().project.name.endsWith('-mobile');
+    const gameHrefSubstrings = currentGeoFeatures().gameTileHrefSubstrings
+      ?? ['/slingo/', '/slots/', '/casino/', '/bingo/'];
+    const gameLinkSelector = gameHrefSubstrings.map(sub => `a[href*="${sub}"]`).join(', ');
 
     try {
 
@@ -65,7 +68,7 @@ test.describe('P1 - Game Filter', () => {
       const count = await filterRows.count();
       expect(count).toBeGreaterThan(0);
       console.log('GF-01 game slider rows found: ' + count);
-      const firstRowGames = filterRows.first().locator('a[href*="/slingo/"], a[href*="/slots/"], a[href*="/casino/"], a[href*="/bingo/"]');
+      const firstRowGames = filterRows.first().locator(gameLinkSelector);
       const gameCount = await firstRowGames.count();
       expect(gameCount).toBeGreaterThan(0);
       console.log('GF-01 games in first row: ' + gameCount);
@@ -105,7 +108,7 @@ test.describe('P1 - Game Filter', () => {
         // tile-count comparison below only makes sense if the click didn't
         // navigate away.
         const urlBefore = page.url();
-        const tilesBefore = await page.locator('a[href*="/slots/"], a[href*="/casino/"]').count();
+        const tilesBefore = await page.locator(gameLinkSelector).count();
         await loadMoreBtn.click();
         await page.waitForTimeout(1_500);
         if (page.url() !== urlBefore) {
@@ -114,7 +117,7 @@ test.describe('P1 - Game Filter', () => {
           await page.waitForLoadState('domcontentloaded');
           await page.waitForTimeout(500);
         } else {
-          const tilesAfter = await page.locator('a[href*="/slots/"], a[href*="/casino/"]').count();
+          const tilesAfter = await page.locator(gameLinkSelector).count();
           record('Load more/See all expands visible games', tilesAfter > tilesBefore);
         }
       } else {

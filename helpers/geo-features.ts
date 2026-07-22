@@ -54,6 +54,9 @@ export interface GeoFeatureConfig {
   hasPaymentMethodsPage: boolean; // false = confirmed live /payment-methods/ 404s for this GEO — skip PM-01 entirely
   hasBlogDesktopSearch: boolean; // false = confirmed live the blog's ONLY search entry point (data-tk-value="blogSearch") lives inside the mobile-only footer nav (display:none at desktop widths) — there is no separate desktop header search icon at all, unlike Slingo's BlogHeader_search-demi. Desktop blog-page-header.spec.ts's search-icon step should skip gracefully rather than fail on a real UX gap it can't work around
   hasBlogSearch: boolean; // false = confirmed live the blog's search feature doesn't actually work at all for this brand — the page has an empty placeholder reserved for a Google Custom Search widget that never renders anything into it (confirmed via console errors, checked both SNG UK and CA, not just one GEO). This is distinct from hasBlogDesktopSearch (which icon exists where) — this flag means the underlying feature itself is non-functional, so blog-search.spec.ts should skip entirely rather than fail on a real product gap it can't work around
+  gameTileHrefSubstrings?: string[]; // optional — substrings identifying a real game-tile link (as opposed to a bare category nav link) in game-filter.spec.ts and game-info-modal.spec.ts. Defaults to the classic Slingo-family taxonomy (/slingo/, /slots/, /casino/, /bingo/) when omitted, so existing GEOs need no change. Set this when a brand's game category taxonomy differs (e.g. MC's /online-slots/, /casino-games/, /live-casino/).
+  paymentMethodsPath?: string; // optional — baseURL-relative path for the footer's Payment Options link. Defaults to 'payment-methods/' when omitted (the common case); set when a brand uses a different slug (e.g. MC's /payment-options/).
+  hasPromotionsIconInHeader?: boolean; // optional — false means the header/banner has no dedicated Promotions icon linking to the promotions page, even though the page itself exists (hasPromotionsPage/promotionsPath). Distinct from those: this is specifically about a header entry point. Defaults to true when omitted, so existing GEOs need no change.
   contactPath?: string;  // baseURL-relative, no leading slash — defaults to 'contact/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "contacto/", unlike every other GEO onboarded so far which kept the English "contact/" regardless of uiLocalized
   aboutUsPath?: string;  // baseURL-relative, no leading slash — defaults to 'about-us/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "sobre-nosotros/"
 }
@@ -363,6 +366,125 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPaymentMethodsPage: true, // confirmed live 200
       hasBlogDesktopSearch: false, // no blog exists at all (see hasBlog) — consistent by necessity
       hasBlogSearch: false, // no blog exists at all — consistent by necessity
+    },
+  },
+
+  // ── Mega Casino (MC) ─────────────────────────────────────────────────────
+  MC: {
+    // UK — confirmed live 2026-07-22. Same underlying SkillOnNet/SON platform
+    // family as SC/SNG (Nav_/MainMenu_/Header_/Button_ CSS conventions), but a
+    // DIFFERENT game category taxonomy: Home/Live Casino/Online Slots/Casino
+    // Games — no Slingo/Slots/Bingo/Casino naming like SC, no Slots/Megaways/
+    // Jackpots like SNG (see gameTileHrefSubstrings). Live site is behind
+    // Cloudflare bot-detection that intermittently challenges automated
+    // traffic (confirmed: a real, non-automated browser sees no challenge and
+    // a fully working site) — expect login/registration/feedback-form and
+    // occasional other specs to fail on this GEO until QA automation is
+    // allowlisted; that is a known automation-detection gap, not a product
+    // bug (see PLAN.md's dated MC/UK findings entries for detail).
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed 200
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed 200
+      featuresPath: null, // confirmed 404 — no /features/ page for this brand
+      mobileAppPath: 'mobile-app/', // confirmed 200
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 — not a Slingo-brand feature, skips gracefully same as SC's DE/SE
+      currencySymbol: '£', // confirmed via bonus copy ("£25")
+      contactEmail: 'support@megacasino.com', // confirmed live 2026-07-21 on /contact/ — re-confirmation attempt 2026-07-22 hit the same intermittent Cloudflare challenge documented in PLAN.md rather than a changed value
+      socialMedia: { twitter: null, facebook: 'MegaCasinoUK', instagram: 'megacasinouk' }, // confirmed live: facebook.com/MegaCasinoUK/ and instagram.com/megacasinouk/ found homepage-wide; no twitter/x link found
+      hasSocialMedia: true, // confirmed live: 2 social links found homepage-wide
+      searchTerm: 'Casino', // confirmed live: returns real results via the actual in-app search flow
+      searchResultHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // confirmed live via real search flow (typed "Casino", inspected actual result links inside GameSearchPopup)
+      gameTileHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // confirmed live via homepage crawl — MC's game tiles use this brand's own taxonomy, not Slingo's /slingo//slots//casino//bingo/
+      hasGameFilterCarousel: true, // confirmed live: homepage has [class*="GamesSlider_wrapper"] rows
+      hasFeedbackForm: true, // confirmed live: "Report a problem" entry point exists in the son-auth-modals widget shell (present in DOM regardless of the widget's automation-blocked state, see PLAN.md)
+      hasGameCategoryNav: true, // confirmed live: Home/Live Casino/Online Slots/Casino Games nav — different taxonomy than SC/SNG, see gameTileHrefSubstrings
+      hasLoginRegistration: true, // widget exists and is safe to inspect (registration.spec.ts never submits, login-widget.spec.ts only uses a deliberately wrong username/password)
+      hasTestAccount: false, // no working MC/UK test account exists yet — TEST_CREDENTIALS_MC_UK_USERNAME/PASSWORD still needed in .env (see PLAN.md 2026-07-21 findings) — skips only login.spec.ts's real successful-login test
+      hasAccountModal: true, // confirmed live: LOG IN/JOIN CTAs correctly advance the URL to #account (the widget itself failing to render content is a separate, automation-detection issue — see PLAN.md — not a modal-doesn't-open issue)
+      hasPaymentMethodsPage: false, // confirmed 404
+      hasBlogDesktopSearch: true, // confirmed live: blog page's search icon exists and is visible at desktop width
+      hasBlogSearch: false, // confirmed live: clicking the blog search icon does not reveal a working input/results — consistent with the same platform-wide non-functional blog search already confirmed on SNG UK/CA
+    },
+
+    // COM — confirmed live 2026-07-22, tested from a Malta VPN/IP (real test
+    // account now exists: TEST_CREDENTIALS_MC_COM_USERNAME/PASSWORD). Same
+    // taxonomy as UK (/online-slots/, /casino-games/, /live-casino/) and no
+    // Cloudflare interference seen this session (unlike UK) — both plain and
+    // browser-UA curl requests returned 200 cleanly throughout. Registration's
+    // mobile-number step auto-detects country from real IP (Malta/+356, same
+    // auto-detect pattern as SC's ROW/DE, not SNG AB/CA's explicit-dropdown
+    // case) — see generateMalteseMobile's docstring in helpers/testData.ts.
+    COM: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed 404
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed 200
+      featuresPath: null, // confirmed 404
+      mobileAppPath: 'mobile-app/', // confirmed 404 — kept as the common slug; footerStep already soft-skips this link gracefully since it doesn't exist in COM's footer at all
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 — soft-skips gracefully, no such footer link either
+      currencySymbol: '€', // confirmed via homepage bonus copy ("€100")
+      contactEmail: 'support@megacasino.com', // confirmed live on /contact/ — same as UK
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: no facebook/twitter/instagram links found homepage-wide
+      hasSocialMedia: false, // confirmed live: no social icon strip
+      searchTerm: 'Casino', // confirmed live: search Steps 1-3 (open, type, results appear) already passed under the old fallback config
+      searchResultHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // same taxonomy as UK, confirmed via homepage crawl
+      gameTileHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // same taxonomy as UK, confirmed via homepage crawl
+      paymentMethodsPath: 'payment-options/', // confirmed live: COM's real slug differs from the common 'payment-methods/' default (which 404s here) — used by footer-navigation.spec.ts's Payment Options step
+      hasGameFilterCarousel: true, // confirmed live: "3 game slider rows found"
+      hasFeedbackForm: true, // confirmed live: "Report a problem" present on /contact/ (count 2)
+      hasGameCategoryNav: true, // confirmed live: Home/Casino/Slots/Games nav
+      hasLoginRegistration: true,
+      hasTestAccount: true, // real test account confirmed working live 2026-07-22 (login.spec.ts passed)
+      hasAccountModal: true, // confirmed live: JOIN widget opens correctly with Mobile/DOB fields, no automation-detection issue seen on this domain this session
+      hasPaymentMethodsPage: true, // confirmed live: PM-01 passes (payment logos found on the page) despite the literal /payment-methods/ URL 404ing — see paymentMethodsPath for the real slug used elsewhere
+      hasBlogDesktopSearch: false, // no blog for COM anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for COM anyway — set false for consistency
+      hasPromotionsIconInHeader: false, // confirmed live: header/banner only contains the logo and search links — no Promotions icon at all, even though the promotions page itself exists (promotionsPath above)
+    },
+
+    // CA — confirmed live 2026-07-22, path-prefixed at /en-CA/ (see
+    // brand-urls.ts). Same taxonomy/platform as UK/COM. No Cloudflare
+    // interference seen — plain curl (no UA) and browser-UA curl both
+    // returned clean 200s throughout.
+    //
+    // CORRECTION (same day, later session): an earlier version of this block
+    // set hasAccountModal: false based on LOGIN/JOIN appearing completely
+    // non-functional — that finding was an artifact of testing with the wrong
+    // VPN/IP (not actually Canada at the time). Re-tested with a confirmed
+    // Canada IP (verified via ipinfo.io): login.spec.ts passes 5/5, real
+    // login succeeds. The real, confirmed behavior is just that the login
+    // modal is slower to fully render here than other GEOs — the widget shell
+    // mounts and the URL advances to #account quickly, but the actual
+    // username/password inputs (behind an Altcha proof-of-work widget in the
+    // shadow root) can take 15-20+ seconds to become visible. Lesson: always
+    // double check the active VPN/IP before trusting a "nothing happens"
+    // finding on a market-specific domain — confirm via a real IP-check
+    // (ipinfo.io/api.ipify.org), not just the site loading at all.
+    CA: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed 404
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed 200 — page exists, but no footer or header link to it (footerStep's existing soft-skip already handles the footer case)
+      featuresPath: null, // confirmed 404
+      mobileAppPath: 'mobile-app/', // confirmed 404 — soft-skips gracefully, no such footer link either
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 — soft-skips gracefully
+      currencySymbol: '$', // confirmed via homepage bonus copy ("$100")
+      contactEmail: 'support@megacasino.com', // confirmed live on /en-CA/contact/ — same as UK/COM
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: no facebook/twitter/instagram links found homepage-wide
+      hasSocialMedia: false, // confirmed live: no social icon strip
+      searchTerm: 'Casino', // inherited default — not independently re-verified via in-app search this session
+      searchResultHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // same taxonomy as UK/COM, confirmed via homepage crawl
+      gameTileHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // same taxonomy as UK/COM, confirmed via homepage crawl
+      paymentMethodsPath: 'payment-options/', // confirmed live: same real slug as COM, common 'payment-methods/' default 404s here too
+      hasGameFilterCarousel: true, // not independently re-verified this session — assumed true matching UK/COM's common case
+      hasFeedbackForm: true, // confirmed live: "Report a problem" present on /contact/ (count 2)
+      hasGameCategoryNav: true, // confirmed live: Home/Casino/Slots/Games nav, same as UK/COM
+      hasLoginRegistration: true,
+      hasTestAccount: true, // real test account confirmed working live 2026-07-22 (login.spec.ts passed 5/5, correct Canada IP)
+      hasAccountModal: true, // confirmed live with correct Canada IP: LOGIN/JOIN correctly open the modal — see CORRECTION note above
+      hasPaymentMethodsPage: true, // confirmed live: same pattern as COM — PM-01 passes despite the literal /payment-methods/ URL 404ing
+      hasBlogDesktopSearch: false, // no blog for CA anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for CA anyway — set false for consistency
+      hasPromotionsIconInHeader: false, // confirmed live: header/banner only contains the logo and search links — no Promotions icon
     },
   },
 };

@@ -169,7 +169,11 @@ test.describe('P2 - Promotions Page', () => {
       // like other GEOs have. Skip rather than false-fail; a hover-based
       // version of this check would need the same mouse-glide approach
       // search.spec.ts uses for its own hover CTA.
-      const hasPlayBtn = playBtn !== null && await playBtn.isVisible({ timeout: 10_000 }).catch(() => false);
+      if (!playBtn) {
+        console.log('PP-01 Step 5 skipped — no standalone Play CTA visible without hover for this GEO');
+        return;
+      }
+      const hasPlayBtn = await playBtn.isVisible({ timeout: 10_000 }).catch(() => false);
       if (!hasPlayBtn) {
         console.log('PP-01 Step 5 skipped — no standalone Play CTA visible without hover for this GEO');
         return;
@@ -181,6 +185,10 @@ test.describe('P2 - Promotions Page', () => {
     });
 
     await runStep('Step 6: Promotion icon in header leads back to Promotions page', async () => {
+      if (currentGeoFeatures().hasPromotionsIconInHeader === false) {
+        console.log('PP-01 Step 6 skipped — no Promotions icon in header for this GEO (page exists, just no header entry point)');
+        return;
+      }
       await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);

@@ -28,15 +28,30 @@ Each release or change set uses this structure:
 
 ### Added
 
+- **Mega Casino (MC) is now onboarded for three markets: UK, the main international site (.com), and Canada.** This is a brand-new brand for our checklist, on a site design that's different enough from our other brands that several checks needed real updates, not just new market details.
+- Added Mega Casino's real market details (contact email, currency, what pages exist, category menu shape) for UK, COM, and Canada.
 - **Onboarded SpinGenie's Spain (ES), Germany (DE), Sweden (SE), and Rest-of-World (ROW) markets — all four now pass the full checklist cleanly.** Spain and Germany share a login with our other brand's Spanish/German sites, so no new test accounts were needed there. Sweden uses the same "deposit first, no separate login" model already confirmed for our other brand, and Rest-of-World was tested from a Cyprus connection.
 - Added a Cyprus phone-number generator for the Rest-of-World sign-up test, since that market's form checks the phone number against whatever country the tester is actually connecting from.
 
 ### Fixed
 
+- **Mega Casino's game category names are completely different from our other brands, and two checks didn't know that.** Our other brands use names like "Slots"/"Casino"/"Bingo" in their web addresses — Mega Casino uses "Online Slots"/"Casino Games"/"Live Casino" instead. The game-filter check and the game info pop-up check were both silently assuming the old naming and failing to find any games at all. Both now read the real category names for whichever brand they're checking instead of assuming one fixed set.
+- **The game info pop-up also had a hidden game tile problem specific to Mega Casino** — some tiles only reveal their title link when you actually hover over them with a mouse, and a couple of layout quirks meant a real click could land just outside the visible screen area right after scrolling to it. Both now handled properly instead of timing out.
+- **Mega Casino's sign-up form needed the same kind of country-specific fixes we've hit before on other brands**, once we could actually test it properly:
+  - The phone number step rejects any number that doesn't match the format of whichever country your connection is coming from (confirmed on both the Malta and Canada versions of the site) — added the correct phone number generators for each.
+  - Canada's version also silently rejects the date of birth unless it's typed in a completely different style (year-month-day) than the standard form — same kind of issue we'd already found on another brand's Canadian sign-up form.
+  - The home address step on the international/Canada sites has a different layout (no separate "house number" box) than our other brands' forms — the checklist was still looking for a field that doesn't exist there.
+  - The final consent step also expected a Bingo-related checkbox that doesn't exist for Mega Casino, since this brand doesn't offer Bingo at all.
+- **The footer's "Payment Options" link and a promotions icon in the header point to a different address, or don't exist at all, on some Mega Casino markets** — the checklist now reads the correct address per market instead of assuming one fixed one, and skips gracefully where the icon genuinely isn't there.
 - **Finished confirming French Canada (FR-CA) is fully working** — the "Play Now" button check on the Promotions page was accidentally clicking a random sentence of marketing text instead of a real button (the word "play" happened to appear inside it), sending the test to the wrong page. Now it only clicks real, clickable buttons.
 - **Spain's sign-up/login checklist was failing across the board** — turned out several page addresses and the "Join" button's expected wording were copied from our other brand's Spanish site instead of being checked on SpinGenie's own Spanish site directly. Corrected the Promotions and Features page addresses, the Contact and About Us page addresses (Spain translates these, unlike every other market so far), the support email, and widened the "Join" button check to recognize SpinGenie's own wording.
 - **Sweden's Contact page checklist was failing** — the page has a leftover "LOG IN" link that opens an empty pop-up with no actual sign-in form inside it (expected for this deposit-only market, confirmed intentional). The checklist now skips trying to close a pop-up that was never really there.
 - **Rest-of-World's sign-up test kept failing with "phone number not accepted."** The test was still using a South African-format phone number left over from when this market was last checked from a South Africa connection. Since the sign-up form checks the phone number against the tester's real location, this session's Cyprus connection rejected it every time. Now generates a Cyprus-format number to match.
+
+### Known open items (carrying into next session)
+
+- **Mega Casino UK's live site is currently guarded by a security service that occasionally blocks our automated checks** (not real site visitors — confirmed by opening the exact same page in a normal, non-automated browser with no issue at all). This mostly affects the login/sign-up checks and occasionally a few others. Needs someone on the dev/security side to allow our automated checker through; not something fixable from our checklist. A working test login for Mega Casino UK is also still needed.
+- Next session: continue onboarding the remaining Mega Casino markets (Ireland is the most likely quick win — same site design as the three markets done today).
 
 ## [Unreleased] - 2026-07-21
 

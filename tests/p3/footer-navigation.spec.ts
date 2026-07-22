@@ -153,7 +153,8 @@ test.describe('P3 - Footer Navigation', () => {
     }
 
     // ── Steps 22-23: Payment Options ──────────────────────────────────────
-    await footerStep('Payment Options -> /payment-methods/', strings.footerPaymentOptionsText, '/payment-methods/');
+    const paymentMethodsPath = geoFeatures.paymentMethodsPath ?? 'payment-methods/';
+    await footerStep(`Payment Options -> /${paymentMethodsPath}`, strings.footerPaymentOptionsText, `/${paymentMethodsPath}`);
 
     // ── Steps 24-25: Affiliates ───────────────────────────────────────────
     await footerStep('Affiliates -> /affiliates/', strings.footerAffiliatesText, '/affiliates/');

@@ -201,6 +201,10 @@ test.describe('P1 - Website Header', () => {
         console.log('WH-01 Step 4 skipped — no Promotions page for this GEO');
         return;
       }
+      if (geoFeatures.hasPromotionsIconInHeader === false) {
+        console.log('WH-01 Step 4 skipped — no Promotions icon in header for this GEO (page exists, just no header entry point)');
+        return;
+      }
       await dismissCampaignPopup(page);
       // href*="promotion" is English-domain-path-only (e.g. "casino-promotions") —
       // ES's promotions path is "promociones" and doesn't contain that substring.
