@@ -669,3 +669,280 @@ page.locator('.Nav_slots__xUofK')           // works today, but hash suffix isn'
 ---
 
 *Findings added by: Cowork Agent (Claude) — 2026-07-17*
+
+---
+
+## MC (Mega Casino) UK Live Site — Manual DOM-Inspection Findings — Claude CLI — 2026-07-21
+
+**For Claude CLI:** this is a findings-only entry from manually walking `https://www.megacasino.co.uk/` (live production, MC brand, UK GEO) after a full p1/p2/p3 suite run (desktop + mobile) came back 10 passed / 14 skipped / **24 failed**. No spec files or `geo-features.ts` were changed. `helpers/brand-urls.ts` already had full MC URL coverage before this session; no code changes were needed to make MC/UK resolvable.
+
+### Platform confirmed same family as SC/SNG, different taxonomy
+
+MC's homepage uses the same CSS-module naming convention as Slingo/SpinGenie (`Nav_`, `MainMenu_`, `Header_`, `Button_`, `GamesSlider_`, `MainBannerSlider_`) — same underlying template, not a different vendor. Category taxonomy differs though: `Nav_home`, `Nav_liveCasino`, `Nav_onlineSlots`, `Nav_casinoGames` (no Slots/Bingo/Casino naming like Slingo, no Slots/Megaways/Jackpots like SNG).
+
+### Root cause #1 — promotional popup, timing unconfirmed on closer look (revised 2026-07-21, later same session)
+
+Initial testing (a standalone script that did NOT call `setupCampaignPopupWatcher`) saw an offer popup (`Popup_popup__92LSJ` wrapping `OfferPopup_offer-popup__wBVUN`, close button `Popup_close__Pvbzv OfferPopup_close__bJLYp`) appear a few seconds after page load and block clicks, matching the known "collapses to 0×0, becomes visible later" pattern from `helpers/common.ts`'s `setupCampaignPopupWatcher` comments.
+
+**However:** two follow-up attempts using the exact sequence real specs use (`setupCampaignPopupWatcher(page)` registered before `page.goto()`, then a 3.5s wait, matching `website-header.spec.ts`'s `beforeEach`) did **not** reproduce the popup at all across ~12s of observation each time, and the LOGIN click succeeded cleanly with no manual `dismissCampaignPopup` polling. This suggests the popup is frequency-capped (likely server-side — possibly by real IP, given repeated automated hits from the same office connection during this session — or tied to session/page-view count rather than a simple fixed delay after load), not a deterministic "always appears ~8s after load" behavior.
+
+**Do not treat this as a confirmed, fixable timing bug.** I can't currently force the popup to reappear to test whether the existing `setupCampaignPopupWatcher` (MutationObserver + 500ms interval, already active in every spec's `beforeEach`) correctly handles it when it does show up. Shipping a speculative poll-longer fix to `dismissPopups`/`dismissCampaignPopup` — shared code every brand's suite depends on — isn't justified without being able to demonstrate the current mechanism actually fails. If this resurfaces in a future full-suite run, capture screenshots/video at the moment of failure (the suite already records these) before changing shared helper code.
+
+### Root cause #2 — login/registration modal does not visually render on MC/UK (needs real investigation, not a selector fix)
+
+This is the big one. Clicking the header's LOGIN button (confirmed unambiguous — scoped to `button[class*="Header_buttons"]`, ruling out the known locator-ambiguity pattern) correctly updates the URL to `#account`, but:
+- A full-page screenshot immediately after shows the plain homepage — **no modal overlay ever appears visually**.
+- `page.locator('input:visible').count()` = **0** anywhere on the page.
+- `document.querySelector('son-auth-modals').shadowRoot` is `null` — either a closed shadow root or the component never actually mounts its form content — and `el.childElementCount` is only 2 (just the two light-DOM slot-anchor `<div>`s for "Report a problem", no real form).
+- `page.content()` (full serialized DOM) contains no occurrence of "password" or "mobile number" anywhere.
+- No iframe on the page corresponds to a login/registration form (the 5 iframes present are Partytown sandbox, an ad-tracking pixel, and blanks).
+
+This is a **different, worse situation than Slingo DE's `<son-auth-modals>` widget** (see the DE findings entry above), which has a confirmed *open*, Playwright-inspectable shadow root. On MC/UK, the widget is either using a closed shadow root or genuinely not rendering its form — either way, this is not fixable with a better selector. This fully explains why `login.spec.ts`, `registration.spec.ts`, `login-widget.spec.ts`, `registration-widget.spec.ts`, and `feedback-form.spec.ts` all failed looking for fields that were never there to find.
+
+**Not yet resolved — needs a follow-up session, ideally with a real second pair of eyes in a real (non-automated) browser:** is this a genuine MC/UK production bug (login literally broken for real visitors too), or does the modal need some additional trigger (longer wait, real mouse movement, a different entry point) that a plain scripted click doesn't provide? Recommend manually clicking LOGIN in a real browser on megacasino.co.uk before concluding this is a site bug worth reporting — same caution called out for SpinGenie's blog search finding on 2026-07-20.
+
+### Contact-us page — findings-only, likely not a real bug
+
+Manually revisiting `/contact/` in isolation (fresh page load, cookie consent dismissed) found the mailto link fine: `mailto:support@megacasino.com`. This suggests CU-01's failure in the full-suite run was environmental rather than a real missing-content bug (possibly the same popup seen earlier, though its timing/frequency is unconfirmed — see above), but this isn't fully proven either. Note for whenever `geo-features.ts` gets a real MC block: UK's `contactEmail` is `support@megacasino.com`, not carried over from any other brand.
+
+### Help page — real gap, needs a fresh look
+
+`button.accordion-button` (the selector `help-page.spec.ts` uses) matches 0 elements, and a broad case-insensitive scan for any class containing "accordion" also matched 0 elements — MC's `/help/` FAQ (if it has one in this form at all) does not use an accordion-style component with that naming. Needs a dedicated inspection pass on the actual `/help/` page structure before this spec can be adapted.
+
+### Sidebar menu / game filter / search — inconclusive, re-run cleanly before trusting
+
+These three checks were run back-to-back on the same page instance immediately after opening the hamburger menu, without confirming the menu had actually opened first — results (0 links found in `MainMenu_main-menu`, 0 `GamesSlider_wrapper`/game-link matches, search icon click timeout) are likely contaminated by that, not new findings. Don't treat these as confirmed gaps — they need a clean, isolated re-run (confirm menu is actually open via a visibility check, then inspect) before drawing any conclusion.
+
+### Suggested next steps
+
+1. Get a second, real-browser (non-automated) confirmation on whether MC/UK login is genuinely broken for real users, or a scripted-click-specific issue.
+2. Re-run the sidebar/game-filter/search checks cleanly, one page-state at a time.
+3. Inspect `/help/` page's real FAQ markup.
+4. If the offer popup resurfaces in a future full-suite run, capture the exact moment (screenshots/video/trace are already recorded per test) rather than assuming it's the same fixed-delay behavior seen in this session's initial (non-representative) script — two follow-up attempts using the real watcher path couldn't reproduce it.
+5. Once the above are resolved, populate a real `MC` block in `helpers/geo-features.ts` (currently falls back to the generic `FALLBACK` config) — per `AGENT-STANDARDS.md`, only with values confirmed live, not guessed.
+6. MC test account credentials (`TEST_CREDENTIALS_MC_UK_USERNAME/PASSWORD`) are still needed in `.env` before `login.spec.ts` can pass even once the modal-rendering issue is understood.
+
+---
+
+*Findings added by: Claude CLI — 2026-07-21*
+
+---
+
+## MC (Mega Casino) UK — Root Cause Found: Cloudflare Bot Challenge — Claude CLI — 2026-07-22
+
+**For Claude CLI:** re-ran the full MC/UK p1+p2+p3 suite against live (`TEST_BRAND=MC TEST_GEO=UK TEST_ENV=live`) to check whether yesterday's 24 failures could now pass. They can't yet, and the reason is different — and more concrete — than the 2026-07-21 entry's "modal doesn't render" theory. No spec files or `geo-features.ts` were changed; this is findings-only.
+
+### What actually happens
+
+This run: **16 failed, 7 skipped, 1 passed**. Nearly every failure was `page.goto: Timeout 15000ms exceeded` navigating to `https://www.megacasino.co.uk/` itself — the site never got in front of any test logic at all, unlike 2026-07-21's failures which were mid-flow (login modal, help accordion, etc.).
+
+A standalone Playwright probe (headless Chromium, not part of the suite) confirmed the cause directly: the homepage response is a literal **Cloudflare Turnstile challenge page** — "Performing security verification... Verify you are human" — not the real site. `curl` without a browser User-Agent got `HTTP 403`; the same `curl` with a realistic browser UA got `HTTP 200`. Console showed `Failed to load resource: 403` on the document itself, plus failed requests to `challenges.cloudflare.com` and `brunhild.challenges.cloudflare.com` (Cloudflare's bot-challenge platform, `ERR_NAME_NOT_RESOLVED`/`401` — likely this environment's DNS/network blocking Cloudflare's own challenge asset domain, which would make the challenge un-passable even by a real user on this network).
+
+This also explains yesterday's session's inconsistent results: one attempt at `website-header.spec.ts` in isolation loaded the real homepage fine and got as far as clicking LOGIN (but the URL never changed to `#account` — consistent with the click doing nothing on a challenge/interstitial), then the automatic retry immediately hit the same `page.goto` timeout. This matches the running suspicion in the 2026-07-21 entry that MC/UK's protection is **frequency/reputation-based** (repeated automated hits from this office IP), not a fixed timing quirk — Cloudflare is intermittently letting requests through and intermittently challenging them, from the same IP, in the same run.
+
+### Why this changes the plan
+
+- The 2026-07-21 "login modal doesn't visually render" and "help page has no accordion" findings are likely **symptoms of hitting the Cloudflare challenge page instead of the real site**, not confirmed product bugs. They should be re-verified once a real page is confirmed loading, not acted on as-is.
+- This is not fixable with better selectors, longer waits, or `dismissCampaignPopup` changes — no test-suite change can solve a Cloudflare challenge served to this IP/network.
+- Contact-us (`CU-01`) and footer-navigation (`FN-01`) failures in this run were also plain `goto` timeouts — same root cause, not the "environmental, likely not a real bug" theory from yesterday (which was closer to right, just for a different underlying reason).
+
+### Suggested next steps
+
+1. Don't spend more time adjusting MC/UK specs until this is resolved at the network level — re-running the suite as-is will keep intermittently failing.
+2. Ask IT/dev whether this office network/IP is on any Cloudflare allowlist for MC/UK QA, or whether a corporate VPN egress (used for other multi-GEO brands per [[feedback_agent_standards_gotchas]]) avoids the challenge.
+3. Once a run is confirmed to load the real homepage consistently (no Cloudflare interstitial in the screenshot), re-run the full MC/UK suite fresh — only then do the 2026-07-21 findings (login modal, help accordion, sidebar/search) deserve real investigation.
+4. Still needed regardless: `TEST_CREDENTIALS_MC_UK_USERNAME/PASSWORD` in `.env`, and a real `MC` block in `helpers/geo-features.ts` once confirmed values exist.
+
+---
+
+*Findings added by: Claude CLI — 2026-07-22*
+
+---
+
+## MC (Mega Casino) UK — Narrowed to Auth-API-Level Bot Detection — Claude CLI — 2026-07-22 (later same session)
+
+**For Claude CLI:** follow-up on the same-day entry above, live only (per instruction — do not test MC/UK against QA; QA is not representative of what the end user sees). Flushed local DNS cache and cleared `test-results/`/`playwright-report/` before retrying, and reproduced with the exact production helpers (`setupCampaignPopupWatcher`, `dismissCookieConsent`, `dismissCampaignPopup`) plus an extra 6s wait after popup dismissal before clicking LOGIN. No spec files changed — this was a standalone probe script, deleted after use.
+
+### Cache-clear / longer-wait retry: partial improvement, real blocker found
+
+- With DNS flushed and a longer wait after dismissing the campaign popup, the outer Cloudflare page-level challenge did **not** appear this time, and clicking LOGIN correctly advanced the URL to `#account` — an improvement over the earlier same-day run in this session.
+- The campaign popup *does* appear on live (confirmed via screenshot — a "1st Deposit... LEARN MORE" overlay), just later than a short fixed wait accounts for. This matches the existing "frequency-capped, not fixed-delay" theory from 2026-07-21 — no code change made, `setupCampaignPopupWatcher`'s MutationObserver already exists to handle it whenever it appears.
+- **However, the login modal still rendered empty** — `<son-auth-modals>` present with `childCount: 2` (same two light-DOM slot anchors as always), no shadow root, no visible inputs, even though the URL was correctly at `#account`.
+
+### Real root cause, narrowed down: `/son-auth/config` API call is blocked, not the page
+
+Network logging on the probe caught it directly: `HTTP 403 https://www.megacasino.co.uk/son-auth/config?lang=1` — the auth widget's own backend config call, which it presumably needs before it can mount its form.
+
+Confirmed with `curl`:
+- `son-auth/config` with no UA → `403`
+- `son-auth/config` with a normal browser UA → `200`
+- Main page (`/`) with a normal browser UA → `200`
+
+So a plain UA-string check would explain the page-level block, but **it does not explain the Playwright failure** — Playwright's Chromium presents a fully realistic browser UA and still gets `403` on this specific endpoint while the main page loads fine under the same session. This points to bot-detection that specifically fingerprints automation (headless/CDP markers like `navigator.webdriver`) applied more strictly to the auth API than to the page itself — not something curl can detect or reproduce, and not something a longer wait, DNS flush, or cache clear can work around, since none of those touch automation fingerprinting.
+
+### What this means
+
+- This is **not fixable from the test side** — no amount of waiting, popup-handling, or cache-clearing changes whether the browser is detected as automated.
+- This explains why login/registration/login-widget/registration-widget/feedback-form all fail: they all depend on `<son-auth-modals>` successfully mounting, which depends on this one API call succeeding.
+- Per the earlier ask: this specific endpoint (or Playwright's automation fingerprint generally) needs an allowlist exception from whoever manages MC/UK's bot protection — the same conversation as the page-level Cloudflare ask, but now with a precise endpoint to point them at (`/son-auth/config`).
+
+---
+
+*Findings added by: Claude CLI — 2026-07-22 (follow-up)*
+
+---
+
+## MC (Mega Casino) UK — Confirmed NOT a Real Product Bug — Claude CLI — 2026-07-22 (final, same session)
+
+**For Claude CLI:** the open question from 2026-07-21 ("is login genuinely broken for real users, or a scripted-click-specific issue?") is now resolved: **it is automation-specific, not a real bug.**
+
+Reeve manually opened `https://www.megacasino.co.uk/` in a real (non-automated) browser during this session — no Cloudflare challenge appeared, and the login/registration modal opened and rendered normally. This directly confirms the theory from both same-day entries above: `/son-auth/config` (and possibly the outer page challenge too, depending on session) blocks specifically based on automation/headless-CDP fingerprinting, not a broken widget. A real user on the same network, same day, gets a fully working site.
+
+### Conclusion
+
+- **Not a product bug.** Do not file this as a MC/UK site defect.
+- **Not fixable from the test suite.** No selector, wait, retry, cache-clear, or popup-timing change can make Playwright's automation fingerprint stop being detected — confirmed by the 30-second polled retry above finding zero change over time.
+- The only real fix is an allowlist/exception from whoever manages MC/UK's bot protection, scoped to this QA runner or to `/son-auth/config` specifically — same ask as the two entries above, now with certainty this is worth asking for (it's blocking legitimate QA automation, not masking a real bug).
+- Until that exception exists, `login.spec.ts`, `registration.spec.ts`, `login-widget.spec.ts`, `registration-widget.spec.ts`, and `feedback-form.spec.ts` are expected to keep failing on MC/UK live — this is a known, explained gap, not an unknown one.
+
+---
+
+*Findings added by: Claude CLI — 2026-07-22 (final)*
+
+---
+
+## MC (Mega Casino) UK — Onboarding Complete, Real Code Fixes Applied — Claude CLI — 2026-07-22 (session close)
+
+**For Claude CLI:** per Reeve's request to finish MC/UK before moving to the next brand/GEO, went through every remaining unexplained failure from today's live full-suite runs (not just the auth cluster above) and either confirmed it as the known Cloudflare intermittency or fixed a real, brand-specific spec gap. Live only throughout, per instruction (QA is not representative of what end users see).
+
+### Real code changes made this session
+
+1. **`helpers/geo-features.ts`**: added a `MC` block (`UK` entry) — the first real MC config, replacing the silent `FALLBACK` it was using before. Every value is confirmed live today (blog/promotions/mobile-app pages exist, features/bingo-card-generator/payment-methods 404, currency `£`, contact email, social handles, search term/result pattern, game category nav). `hasTestAccount: false` — no MC/UK test account exists yet, same gap noted 2026-07-21.
+2. New optional `gameTileHrefSubstrings` field on `GeoFeatureConfig` — MC's game category taxonomy (`/online-slots/`, `/casino-games/`, `/live-casino/`) is completely different from Slingo's hardcoded (`/slingo/`, `/slots/`, `/casino/`, `/bingo/`), which `game-filter.spec.ts` and `game-info-modal.spec.ts` had hardcoded directly. Defaults to the old Slingo-family array when omitted, so no other brand's behavior changes.
+3. **`game-filter.spec.ts`**: now builds its game-link selector from `gameTileHrefSubstrings` instead of the hardcoded Slingo pattern. Confirmed fixed live (was failing on 0 matched games, now passes).
+4. **`game-info-modal.spec.ts`**: three fixes, all confirmed live:
+   - `findGameLink()` uses `gameTileHrefSubstrings` too (was the same hardcoded-pattern problem as game-filter).
+   - Dropped the `box.y >= vh` upper bound in its viewport-sanity check — it was rejecting valid below-the-fold game tiles for no real benefit (`scrollIntoViewIfNeeded()` already runs right after regardless). Kept `box.y <= 100` to still exclude sticky-header duplicates.
+   - Added `hoverRevealAncestor()`: MC's tile title link lives inside a hover-reveal overlay (`GameTile_tile-hover__*`, `visibility:hidden` with real reserved dimensions, not zero-size) that only becomes actually clickable once its ancestor tile is hovered — walks up to the nearest ancestor with a real bounding box and hovers that first. Confirmed this is what a real click needs; a forced hover on the zero-visibility link itself does not work. Applied at all 3 plain-click call sites; the 4th (hover-triggered Play It routing) already had its own hardened zero-size-safe handling from an earlier SNG AB finding and didn't need changes.
+   - Confirmed live: Steps 1-5 now pass reliably (both a fresh run and its retry). Steps 6-9 (open game link in new tab) still fails intermittently — traced directly to the same Cloudflare challenge documented above, triggered by the new-tab's own navigation, not a code issue. Left as-is; re-run once Cloudflare access is sorted.
+5. **`search.spec.ts`**: no code change needed — it was already fully driven by `searchResultHrefSubstrings`; just needed the new MC config entry.
+
+### Confirmed NOT real bugs (Cloudflare noise, re-verified clean)
+
+`game-category-navigation`, `banner`, `footer-regulations`, `footer-navigation` all failed in earlier same-day live runs and passed cleanly on a fresh run once the investigation's own repeated traffic had a chance to cool down. `sidebar-navigation`'s "Responsible Gaming" link timeout and `help-page`'s accordion-not-found were both confirmed to be the same intermittent Cloudflare challenge landing on a specific in-app navigation mid-test (confirmed via direct DOM checks: the sidebar link and the FAQ accordion both exist exactly as the specs expect) — not missing content, not a wrong selector.
+
+### Remaining known gaps for MC/UK (not fixable from the test side)
+
+- Cloudflare bot-detection intermittently blocks automated traffic — confirmed both at the page level and specifically on `/son-auth/config` (the auth widget's own backend call). Affects `login`, `registration`, `login-widget`, `registration-widget`, `feedback-form` reliably, and occasionally other specs on secondary navigations (help page, sidebar links, new-tab opens). Needs a Cloudflare allowlist exception for the QA runner — not a product bug, confirmed by Reeve opening the site in a real browser with no issue.
+- No MC/UK test account yet (`TEST_CREDENTIALS_MC_UK_USERNAME/PASSWORD` needed in `.env`) — blocks `login.spec.ts`'s real successful-login test even once the above is resolved.
+
+MC/UK is otherwise onboarded: real `geo-features.ts` config in place, brand-specific taxonomy handled generically (not hardcoded), and every failure from today's runs is now either fixed or precisely explained.
+
+---
+
+*Findings added by: Claude CLI — 2026-07-22 (session close)*
+
+---
+
+## MC (Mega Casino) UK — Blog/Promotions Findings — Claude CLI — 2026-07-22 (final)
+
+**For Claude CLI:** correctly setting `hasBlog: true` and `hasPromotionsPage: true` in this session's new MC config (both confirmed real, 200 live) means `blog-page.spec.ts`, `blog-page-header.spec.ts`, `blog-sidebar.spec.ts`, and `promotions-page.spec.ts` now actually run for MC/UK instead of being silently skipped under the old `FALLBACK` — this is newly-exercised coverage, not something broken by today's changes. Investigated the two that failed.
+
+### blog-page.spec.ts Step 1 ("no blog category link found") — same Cloudflare issue, not a logic bug
+
+Read `navigateToBlogViaSidebar` (`helpers/common.ts`) and the category-matching logic in Step 1 carefully — both are correct. Manually confirmed live: MC's blog has real category links (`/blog/live-casino/`, `/blog/reviews/`, `/blog/exclusives/`, `/blog/slots/`, `/blog/promotions/`, `/blog/online-casino/`, `/blog/casino-games/`) that the existing regex-based matcher would correctly find. Re-ran the spec in isolation and captured the actual failure screenshot: the page was showing the same "Performing security verification" Cloudflare interstitial documented throughout this file, triggered by the sidebar-navigation step. No blog-page.spec.ts code change made — the logic is already correct.
+
+### promotions-page.spec.ts Step 4 ("T&C text displayed in pop-up banner") — same Cloudflare issue, not a logic bug
+
+Steps 1-3 passed consistently (confirmed twice). Manually confirmed MC's promotions page does show the expected text ("Bonus Policy applies" appears multiple times, matching `strings.bonusPolicyText`). Step 4 runs right after Step 3's internal `page.goto(promoPath!, ...)` re-navigation — captured the actual failure screenshot and it's the same interactive Cloudflare checkbox challenge (not the auto-resolving kind), which cannot be waited out. No promotions-page.spec.ts code change made — the logic is already correct.
+
+### Conclusion
+
+Every currently-known MC/UK failure — the original auth cluster, help-page, sidebar-navigation, contact-us-page, and now blog-page/promotions-page — traces back to exactly one root cause: intermittent Cloudflare bot-detection challenging this QA runner's automated traffic on secondary in-app navigations and the auth API. Nothing else remains unexplained. The path to a fully green MC/UK suite is the Cloudflare allowlist ask (or automation-fingerprint exception) plus a real MC/UK test account — both already flagged above, not new asks.
+
+---
+
+*Findings added by: Claude CLI — 2026-07-22 (final)*
+
+---
+
+## MC (Mega Casino) COM — Onboarded, Fully Green — Claude CLI — 2026-07-22
+
+**For Claude CLI:** onboarded MC/COM immediately after MC/UK, tested from a Malta VPN/IP with a real test account (`TEST_CREDENTIALS_MC_COM_USERNAME/PASSWORD`, now in `.env`). Unlike UK, **no Cloudflare interference was seen on COM at any point this session** — plain `curl` (no UA) and browser-UA `curl` both returned clean `200`s throughout, and login/registration/feedback-form all passed normally. Started at 6 failures out of 24 (17 passed, 1 skipped originally under `FALLBACK`); ended at **18 passed, 0 failed, 6 skipped** after real fixes.
+
+### Real code changes made
+
+1. **`geo-features.ts`**: added the `MC.COM` block — same taxonomy as UK (`/online-slots/`, `/casino-games/`, `/live-casino/`), `€` currency, `support@megacasino.com` (same email as UK), no blog/features/mobile-app/bingo-card-generator, real payment page at `/payment-options/` (not the common `/payment-methods/`), no social media strip, `hasTestAccount: true`.
+2. New optional `paymentMethodsPath` field (mirrors the existing `blogPath`/`promotionsPath` pattern) — `footer-navigation.spec.ts`'s Payment Options step now reads this instead of a hardcoded `/payment-methods/`. Defaults to the old hardcoded value when omitted, so no other brand changes behavior.
+3. New optional `hasPromotionsIconInHeader` field — COM's promotions *page* exists, but its header has no dedicated Promotions icon at all (confirmed live: banner only contains the logo and search links). Distinct from `hasPromotionsPage`/`promotionsPath`. Gated the relevant steps in `website-header.spec.ts` (Step 4) and `promotions-page.spec.ts` (Step 6).
+4. **`helpers/testData.ts`**: added `generateMalteseMobile()` (8-digit, real Maltese mobile prefixes 77/79/98/99). Root cause of registration's Step 0 failure: COM's mobile country-code dropdown auto-detects from the tester's real IP (Malta, confirmed `MT`/+356 — same auto-detect pattern as SC's ROW/DE, *not* SNG AB/CA's explicit-dropdown case), while the default `generateUKMobile()` produces a 10-digit UK-shaped number that Malta's 8-digit validation always rejects — confirmed empirically live (all-digit 8-length candidates passed regardless of prefix; length was the actual constraint, not the specific prefix).
+5. **`registration.spec.ts`**: added `isMcComFormat` (same pattern as `isAlbertaFormat`/`isCanadianMobileFormat`) and wired it through three places: the mobile-generator selection, a new `fillComAddress()` function (COM's address step has no house-number field — same shape as IE/CA — but unlike IE, the country field is left alone since it already auto-detects correctly to Malta), and the consent-checkbox set (`['over_18', 'gdpr', 'terms_accept']` — MC has no Bingo vertical at all, so no `gdprBingo` checkbox exists, same reasoning already established for IE/ROW/CA).
+6. **`game-info-modal.spec.ts`**: made the sticky-header/viewport fix from MC/UK more robust — added an explicit `window.scrollBy(0, -120)` nudge after `scrollIntoViewIfNeeded()` at both click call sites (Step 1 and Step 10), since `force: true` alone wasn't always enough to avoid the click point landing outside the viewport entirely. This is a generic improvement, not COM-specific — should help UK too.
+
+### Result
+
+MC/COM needed real, substantive fixes (not just Cloudflare noise like UK) — mobile number format, address-step shape, consent checkboxes, and a missing header icon — all now confirmed fixed live, twice (a targeted re-run and a full fresh suite run both came back clean). The 6 skips are genuine GEO gaps (no blog, no features page, no mobile-app page, no bingo-card-generator, no Bingo category, no social media strip) — correctly skipped, not silently masked.
+
+---
+
+*Findings added by: Claude CLI — 2026-07-22 (MC/COM)*
+
+---
+
+## MC (Mega Casino) CA — Onboarded, One Confirmed Real Bug Found — Claude CLI — 2026-07-22
+
+**For Claude CLI:** onboarded MC/CA (path-prefixed at `/en-CA/`, per `brand-urls.ts`) immediately after COM, with a real test account (`TEST_CREDENTIALS_MC_CA_USERNAME/PASSWORD`, now in `.env`). Same taxonomy/platform as UK/COM — config work was quick. The important finding this GEO is a **suspected real, reproducible product bug**, not a config gap or automation-detection issue.
+
+### Config added (same pattern as UK/COM)
+
+Added `MC.CA` to `geo-features.ts`: same taxonomy (`/online-slots/`, `/casino-games/`, `/live-casino/`), `$` currency, `support@megacasino.com`, `paymentMethodsPath: 'payment-options/'`, `hasPromotionsIconInHeader: false` — all the same shape as COM. No blog/features/mobile-app/bingo-card-generator, no social media strip. `game-category-navigation.spec.ts` needed no changes at all — it already has per-category soft-skip logic and passed 18/18 standalone once retested cleanly (the earlier full-run failure was noise).
+
+### Confirmed real bug: LOGIN/JOIN and other overlay widgets don't functionally open
+
+Reproduced multiple times, at different points in the session (including after two separate cooldowns of 90s and 120s, ruling out simple rate-limit flakiness for this specific symptom): clicking **LOGIN or JOIN in the header does nothing** — no URL change to `#account`, zero network requests fired (not even a failed one — contrast with UK's `/son-auth/config` 403), no popup/new tab, and the click demonstrably lands on the real button (verified via `elementFromPoint`, not an intercepting overlay). This is different in shape from both UK's issue (automation-fingerprint-blocked API call) and SE's issue (deliberate Pay N Play model, a different but real login mechanism) — this looks like the interactive widget simply isn't wired up or isn't mounting on `/en-CA/`.
+
+The same symptom reproduced on two other overlay-driven features this session: the **search panel** (URL can reach `#search` but the input never actually renders) and the **feedback form** (`contact-us-page.spec.ts`'s "Report a problem" link click never reaches `#account/feedback`). Plain page-to-page navigation (footer links, category pages, GCN, the contact page itself loading) all work fine — the pattern specifically affects client-side overlay/modal components, not the site generally.
+
+**Set `hasAccountModal: false`** so specs that only incidentally check "does the modal open" (`game-info-modal`, `website-header`, `banner`, `sidebar-navigation`) skip just that assertion gracefully. **Deliberately left `hasLoginRegistration` at its default `true`** so `login.spec.ts`, `registration.spec.ts`, `login-widget.spec.ts`, and `registration-widget.spec.ts` keep failing and correctly flag this as unresolved — this should not be configured away, since it looks like a genuine, business-critical bug (Canadian users may not be able to log in or register at all), not a deliberate business-model difference to quietly accommodate.
+
+**Recommend a real, non-automated browser check on `https://www.megacasino.com/en-CA/`** before escalating this further — same caution already applied to every other suspected-bug finding in this file. If a real browser also can't open LOGIN/JOIN/search, this is a live, customer-facing bug worth an urgent ticket, not a QA-automation artifact.
+
+### Noise, not new findings
+
+This session's cumulative testing volume against `megacasino.com` (COM immediately before CA, sharing the same domain) produced clear rate-limit-style noise late in this GEO's testing — several `page.goto` timeouts on the plain homepage that came and went across retries and cooldowns, unlike the LOGIN/JOIN symptom which reproduced identically every single time regardless of cooldown. Treat `help-page`'s and any other goto-timeout failures from this session as inconclusive — re-run cleanly, ideally after this domain has had a longer rest, before drawing conclusions from them.
+
+---
+
+*Findings added by: Claude CLI — 2026-07-22 (MC/CA)*
+
+---
+
+## MC (Mega Casino) CA — CORRECTION: Not a Real Bug, Was the Wrong VPN — Claude CLI — 2026-07-22 (later same session)
+
+**For Claude CLI:** Reeve flagged that the VPN may not have actually been switched to Canada during the investigation above. Checked the outbound IP directly (`ipinfo.io`/`api.ipify.org`) and confirmed it is now genuinely Canada (Montreal, QC) — but that only proves the *current* IP, not what it was during the earlier test run, so the original "LOGIN/JOIN do nothing" finding could not be trusted as-is. Retested from scratch with the confirmed-Canada IP. **The earlier "confirmed real bug" conclusion above was wrong** — retract it. Correct explanation:
+
+- With the right IP, `/son-auth/config` returns `200` (not blocked at all), and clicking LOGIN correctly advances the URL to `#account` within a few seconds.
+- The actual username/password inputs are gated behind an **Altcha proof-of-work widget** inside the shadow root, which took 15-20+ seconds to fully resolve and reveal the real form fields in this session — much slower than UK/COM, but not broken. Polling for up to 20s (the same technique used elsewhere in this file to distinguish "slow" from "broken") confirmed the fields do appear.
+- Re-ran `login.spec.ts` clean: **5/5 pass**, real login succeeds with `TEST_CREDENTIALS_MC_CA_USERNAME/PASSWORD`.
+- Flipped `hasAccountModal` back to `true` in `geo-features.ts` (was incorrectly set to `false`).
+
+### Real fix found once testing was actually against CA
+
+With login now working, `registration.spec.ts` surfaced two genuine, brand/GEO-specific gaps (same class of finding as MC/COM, not automation-related):
+1. **Mobile format** — same root cause as COM: default `generateUKMobile()` didn't match Canada's NANP format. Reused SNG's existing `generateCanadianMobile()` rather than adding a duplicate generator, since it already produces valid NANP numbers (confirmed live: a 403-area-code number is accepted). Country auto-detects to `CA` correctly with no explicit dropdown selection needed (same auto-detect pattern as COM/ROW/DE, not SNG AB/CA's explicit-selection case).
+2. **DOB format** — confirmed live: same rejection SNG CA already found ("Please enter a valid year of birth" on UK-shaped DD/MM/YYYY). Reused the existing `generateCanadianDOB()` (year-first, dot-separated) rather than adding a new one.
+3. Address step and consent-checkbox set assumed to match MC/COM's shape (same `fillComAddress`, same `['over_18', 'gdpr', 'terms_accept']` — no Bingo vertical) — not independently re-verified field-by-field, but consistent with same-brand-same-platform reasoning; flag for re-check if that step ever starts failing.
+
+Added `isMcCaFormat` (mirrors `isMcComFormat`) in `registration.spec.ts`, wired through the mobile generator, DOB override, address function, and consent checkboxes.
+
+### Final confirmed result
+
+Full suite re-run clean: **18 passed, 0 failed, 6 skipped** (same 6 genuine GEO gaps as before: no blog, no features page, no mobile-app page, no bingo-card-generator, no Bingo category, no social media strip). `game-info-modal` (13/13) and `website-header` (9/9) both confirmed clean on dedicated re-runs. One flaky `website-header` failure during the full run turned out to be a one-off timing flake (closeAccountModal's Escape-key check) — re-ran standalone and got 9/9 clean.
+
+### Lesson for future sessions
+
+**Before trusting any "nothing happens"/"completely broken" finding on a market-specific domain, verify the actual outbound IP** (`curl https://ipinfo.io/json` or similar) rather than assuming the configured VPN is active. A wrong-market IP can produce symptoms that look exactly like a genuine broken feature (no network calls, no modal, no popup) when the real cause is a market-eligibility gate never even being reached. This cost real time and produced an incorrect report — worth double-checking VPN state as a first step whenever testing a region-locked market going forward.
+
+---
+
+*Findings added by: Claude CLI — 2026-07-22 (MC/CA correction)*

@@ -164,6 +164,10 @@ test.describe('P2 - Promotions Page', () => {
     });
 
     await runStep('Step 6: Promotion icon in header leads back to Promotions page', async () => {
+      if (currentGeoFeatures().hasPromotionsIconInHeader === false) {
+        console.log('PP-01 Step 6 skipped — no Promotions icon in header for this GEO (page exists, just no header entry point)');
+        return;
+      }
       await page.goto('', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);

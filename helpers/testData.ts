@@ -308,6 +308,26 @@ export function generateSouthAfricanMobile(): string {
 }
 
 /**
+ * Generates a random valid Maltese mobile number. MC/COM's registration
+ * form country-code selector auto-detects from the tester's real IP
+ * (confirmed live: showed "MT"/+356 when tested from a Malta VPN — same
+ * auto-detect pattern as ROW/DE), so generateUKMobile's 10-digit UK-shaped
+ * number gets rejected there (confirmed live: 10 attempts, Continue never
+ * advanced). Maltese mobiles are 8 digits total, no leading 0 — confirmed
+ * live against the real form that an 8-digit number passes client-side
+ * validation regardless of leading digit; real mobile prefixes (77/79/98/99)
+ * are used here anyway for realism.
+ * NOTE: MC/COM's country-code field isn't fixed to Malta — it reflects
+ * whichever country the tester's IP resolves to, so this generator is only
+ * correct while testing MC/COM from a Malta IP/VPN.
+ */
+export function generateMalteseMobile(): string {
+  const prefix = randomFrom(['77', '79', '98', '99']);
+  const rest = Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join('');
+  return `${prefix}${rest}`;
+}
+
+/**
  * Generates a random valid German mobile number WITHOUT the leading 0. The
  * form defaults its country-code selector to "+49" (confirmed live), so we
  * supply the national number — German mobiles start 15/16/17 nationally.

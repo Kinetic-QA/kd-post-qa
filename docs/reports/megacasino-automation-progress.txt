@@ -1,0 +1,110 @@
+MEGACASINO (MC) BRAND — AUTOMATION PROGRESS TRACKER
+Last updated: 2026-07-22
+
+Total markets defined in helpers/brand-urls.ts: 10
+Markets onboarded so far: 3 / 10 (30%)
+
+=====================================================================
+MARKET STATUS
+=====================================================================
+
+[DONE - PARTIAL]  UK  (www.megacasino.co.uk)
+  Status: Config + all fixable bugs done. Live pass rate capped by an
+  external Cloudflare bot-detection gap, not by test code.
+  Result: real product bugs = none confirmed; everything failing is
+  either Cloudflare-blocked or already fixed.
+  Blocking items (not engineering work):
+    - Cloudflare allowlist exception needed for the QA runner /
+      the /son-auth/config endpoint
+    - No MC/UK test account yet (TEST_CREDENTIALS_MC_UK_USERNAME/PASSWORD)
+  Completion: ~85% (everything actionable is done)
+
+[DONE]  COM  (www.megacasino.com)
+  Status: Fully onboarded and green.
+  Result: 18 passed / 0 failed / 6 skipped (skips are real GEO gaps:
+  no blog, no features page, no mobile-app page, no bingo-card-generator,
+  no social media strip, no promotions icon in header)
+  Completion: 100%
+
+[DONE]  CA  (www.megacasino.com/en-CA/)
+  Status: Fully onboarded and green. Initial investigation was affected
+  by a VPN mix-up (see PLAN.md 2026-07-22 correction entry) - corrected
+  and re-verified with confirmed Canada IP.
+  Result: 18 passed / 0 failed / 6 skipped (same class of gaps as COM)
+  Completion: 100%
+
+[NOT STARTED]  IE  (www.megacasino.com/en-IE/)
+  Same platform/taxonomy expected as UK/COM/CA - onboarding should be
+  fast (config + registration mobile/DOB format check) based on the
+  pattern established today.
+  Completion: 0%
+
+[NOT STARTED]  DE  (www.megaspielhalle.de)
+  Different domain/brand name (Megaspielhalle) - likely German-localized
+  UI (uiLocalized: true expected, like SC's DE entry) - will need its
+  own locale-strings.ts work, not just a geo-features.ts block.
+  Completion: 0%
+
+[NOT STARTED]  FR-CA  (www.megacasino.com/fr-ca/)
+  French-Canadian - likely uiLocalized: true, French locale strings
+  needed, on top of whatever Canada-specific mobile/DOB quirks apply
+  (same platform as CA, so those may carry over).
+  Completion: 0%
+
+[NOT STARTED]  DK  (www.megacasino.dk)
+  Danish market, own domain - locale/currency (DKK) unconfirmed.
+  Completion: 0%
+
+[NOT STARTED]  SE  (se.megacasino.com)
+  Swedish market - other SC-brand SE markets use a Pay N Play/Trustly
+  model with no traditional login (hasLoginRegistration: false) - worth
+  checking early whether MC/SE is the same before assuming standard
+  login testing applies.
+  Completion: 0%
+
+[NOT STARTED]  ES  (www.megacasinos.es)
+  Spanish market, own domain (note: "megacasinos" plural, not
+  "megacasino") - uiLocalized: true expected, Spanish locale strings
+  needed.
+  Completion: 0%
+
+[NOT STARTED]  AB  (qa.megacasino.ca/ab)
+  Alberta, Canada - QA-only, not live yet (liveUrl: null in
+  brand-urls.ts). Same "pre-live market" pattern as SNG/AB was before
+  it went live. Nothing to test against production until this market
+  launches.
+  Completion: 0% (not testable yet - no live URL)
+
+=====================================================================
+PATTERNS CONFIRMED SO FAR (useful for onboarding the remaining markets)
+=====================================================================
+
+- Game category taxonomy is consistent across UK/COM/CA:
+  /online-slots/, /casino-games/, /live-casino/ (not Slingo's
+  /slingo//slots//casino//bingo/) - likely holds for IE too (same
+  English-language, same base platform).
+
+- MC has no Bingo vertical anywhere confirmed so far - registration's
+  consent-checkbox set should exclude gdprBingo for every MC market,
+  same as IE/CA/COM.
+
+- Contact email is support@megacasino.com across UK/COM/CA - may or
+  may not hold for the country-specific domains (DE/DK/SE/ES).
+
+- Registration's mobile number AND date-of-birth fields both
+  auto-detect/validate against the tester's real IP/VPN country on
+  this platform (not a fixed field per market) - confirmed on COM
+  (Malta) and CA (Canada). Expect the same on IE and any other market
+  tested going forward - always verify the actual outbound IP first
+  (curl https://ipinfo.io/json) before diagnosing a "broken" login or
+  registration field.
+
+- Cloudflare bot-detection is UK-specific so far (not seen on COM or
+  CA) - don't assume it applies brand-wide; re-check per domain.
+
+=====================================================================
+NEXT SUGGESTED STEP
+=====================================================================
+IE is the most likely quick win (same taxonomy, same platform, English
+language, live and already has a brand-urls.ts entry) - a good
+candidate for the next onboarding session.

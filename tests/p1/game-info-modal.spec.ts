@@ -69,8 +69,9 @@ test.describe('P1 - Game Information Modal', () => {
       // sidebar's own "Slingo"/"Slots" category link matches this selector
       // too and sorts ahead of any real game tile, so the fallback silently
       // opened the category page instead of a game's info modal.
+      const gameHrefSubstrings = geoFeatures.gameTileHrefSubstrings ?? ['/slingo/', '/slots/'];
       const links = page.locator(
-        'a[href*="/slingo/"]:not([href$="/slingo/"]), a[href*="/slots/"]:not([href$="/slots/"])'
+        gameHrefSubstrings.map(sub => `a[href*="${sub}"]:not([href$="${sub}"])`).join(', ')
       );
       // Confirmed live on SNG AB desktop: the exact-href exclusion above
       // only rules out "/slingo/"/"/slots/" themselves — it doesn't rule out
@@ -103,7 +104,16 @@ test.describe('P1 - Game Information Modal', () => {
         const href = await candidate.getAttribute('href').catch(() => null);
         if (href && navHrefs.has(new URL(href, page.url()).href)) continue;
         const box = await candidate.boundingBox().catch(() => null);
-        if (!box || box.y <= 100 || box.y >= vh || box.width <= 30) continue;
+        // Confirmed live on MC/UK: a tile's title link can sit inside a
+        // hover-reveal overlay (e.g. GameTile_tile-hover__*, also holding a
+        // "Play Now" button) that measures 0x0 until actually hovered — the
+        // topmost on-screen row can be entirely made of these, while a
+        // same-size, already-clickable row sits just below the current
+        // viewport. scrollIntoViewIfNeeded() runs right after this returns
+        // regardless, so requiring box.y < vh only rejected valid
+        // below-the-fold candidates for no benefit — dropped that upper
+        // bound; box.y <= 100 stays to avoid a sticky-header duplicate.
+        if (!box || box.y <= 100 || box.width <= 30) continue;
         return candidate;
       }
       return links.first();
@@ -129,10 +139,45 @@ test.describe('P1 - Game Information Modal', () => {
 
     try {
 
+    // Confirmed live on MC/UK: the title link can sit inside a hover-reveal
+    // overlay (visibility:hidden, not zero-size, until the tile is actually
+    // hovered) — a plain click()/hover() on the link itself correctly
+    // refuses to act on something CSS-invisible, and force-hovering the
+    // link's own (zero-size) box doesn't trigger the reveal either. What
+    // does: hovering the nearest ANCESTOR that actually has real dimensions
+    // (the tile's image/container) — confirmed live this reveals the link.
+    // Harmless no-op on brands where the link is already visible at rest
+    // (its own nearest sized ancestor is then itself).
+    async function hoverRevealAncestor(locator: ReturnType<typeof page.locator>) {
+      const handle = await locator.elementHandle();
+      if (!handle) return;
+      const ancestorHandle = await handle.evaluateHandle((el) => {
+        let node: Element | null = el.parentElement;
+        while (node) {
+          const r = node.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) return node;
+          node = node.parentElement;
+        }
+        return el;
+      });
+      const ancestorElement = ancestorHandle.asElement();
+      if (ancestorElement) await ancestorElement.hover().catch(() => {});
+    }
+
     await runStep('Step 1: Click game title -> info modal appears', async () => {
       const link = await findGameLink();
       await link.scrollIntoViewIfNeeded();
-      await link.click();
+      // Confirmed live on MC/UK and MC/COM: scrollIntoViewIfNeeded() can
+      // align the target right at the very top edge, directly under the
+      // sticky header — a plain click's pointer event gets intercepted
+      // there, and on some pages the resulting point falls fully outside
+      // the viewport instead. Nudge the page up slightly afterward so the
+      // target sits comfortably below the header before clicking.
+      await page.evaluate(() => window.scrollBy(0, -120));
+      await page.waitForTimeout(200);
+      await hoverRevealAncestor(link);
+      await page.waitForTimeout(300);
+      await link.click({ force: true });
       await page.waitForTimeout(2_000);
       await expect(page).toHaveURL(/#gamepage\//, { timeout: 10_000 });
       console.log('GIM-01 modal URL: ' + page.url());
@@ -208,6 +253,8 @@ test.describe('P1 - Game Information Modal', () => {
       await dismissCampaignPopup(page);
       const link = await findGameLink();
       await link.scrollIntoViewIfNeeded();
+      await hoverRevealAncestor(link);
+      await page.waitForTimeout(300);
       const href = await link.getAttribute('href') ?? '/';
       const fullUrl = new URL(href, page.url()).toString();
       const hrefPath = new URL(href, page.url()).pathname;
@@ -229,7 +276,11 @@ test.describe('P1 - Game Information Modal', () => {
       await dismissCampaignPopup(page);
       const link = await findGameLink();
       await link.scrollIntoViewIfNeeded();
-      await link.click();
+      await page.evaluate(() => window.scrollBy(0, -120));
+      await page.waitForTimeout(200);
+      await hoverRevealAncestor(link);
+      await page.waitForTimeout(300);
+      await link.click({ force: true });
       await page.waitForTimeout(2_000);
       await expect(page).toHaveURL(/#gamepage\//, { timeout: 10_000 });
     });
