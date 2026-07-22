@@ -26,6 +26,15 @@ Each release or change set uses this structure:
 
 ## [Unreleased] - 2026-07-22
 
+### Automation Coverage Status (per brand, for tracker use)
+
+Two different questions, tracked separately: has the full checklist (desktop + mobile) been **set up** for a market ("Onboarded"), and has it actually been **run clean with no real problems found** ("Confirmed Passing")? A market can be onboarded without yet being confirmed passing.
+
+- **SpinGenie (SNG)** — Onboarded: UK, Ireland, Canada, Ontario, French Canada, Alberta, Spain, Germany, Sweden, Rest-of-World (all 10 markets). Confirmed Passing: all 10 markets. **Status: fully complete, nothing outstanding.**
+- **Slingo (SC)** — Onboarded: UK, Spain, Germany, Sweden, Ireland, Rest-of-World (all 6 markets). Confirmed Passing: UK, Spain, Germany, Sweden, Ireland (5 of 6). **Status: Rest-of-World is onboarded but NOT yet confirmed passing** — it has a repeatable pop-up/overlay problem, open item below, scheduled to be fixed next session before Genting Casino starts.
+- **Mega Casino (MC)** — Onboarded: UK, .com (international), Canada (3 markets). Confirmed Passing: Canada only. **Status: UK is blocked by a security service occasionally stopping our automated checks (not a real site problem, and not something fixable from our end — needs the dev/security team to allow it through); a working test login for MC UK is also still needed. .com's status needs re-confirming next time it's touched.** Ireland has not been started yet (flagged as the likely next market).
+- **Genting Casino (GC)** — Not yet started. Planned as the next new brand to onboard, after SC's Rest-of-World fix.
+
 ### Added
 
 - **Mega Casino (MC) is now onboarded for three markets: UK, the main international site (.com), and Canada.** This is a brand-new brand for our checklist, on a site design that's different enough from our other brands that several checks needed real updates, not just new market details.
