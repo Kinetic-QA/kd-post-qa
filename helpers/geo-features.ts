@@ -54,6 +54,8 @@ export interface GeoFeatureConfig {
   hasPaymentMethodsPage: boolean; // false = confirmed live /payment-methods/ 404s for this GEO — skip PM-01 entirely
   hasBlogDesktopSearch: boolean; // false = confirmed live the blog's ONLY search entry point (data-tk-value="blogSearch") lives inside the mobile-only footer nav (display:none at desktop widths) — there is no separate desktop header search icon at all, unlike Slingo's BlogHeader_search-demi. Desktop blog-page-header.spec.ts's search-icon step should skip gracefully rather than fail on a real UX gap it can't work around
   hasBlogSearch: boolean; // false = confirmed live the blog's search feature doesn't actually work at all for this brand — the page has an empty placeholder reserved for a Google Custom Search widget that never renders anything into it (confirmed via console errors, checked both SNG UK and CA, not just one GEO). This is distinct from hasBlogDesktopSearch (which icon exists where) — this flag means the underlying feature itself is non-functional, so blog-search.spec.ts should skip entirely rather than fail on a real product gap it can't work around
+  contactPath?: string;  // baseURL-relative, no leading slash — defaults to 'contact/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "contacto/", unlike every other GEO onboarded so far which kept the English "contact/" regardless of uiLocalized
+  aboutUsPath?: string;  // baseURL-relative, no leading slash — defaults to 'about-us/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "sobre-nosotros/"
 }
 
 export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
@@ -241,6 +243,126 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPaymentMethodsPage: true, // confirmed live 2026-07-21: PM-01 3/3, /payment-methods/ 200
       hasBlogDesktopSearch: true, // confirmed live 2026-07-21 (BS-01 searchIconVisible diagnostic, from a real Toronto/Canada IP): a real, clickable desktop search icon exists (not just inferred from a passing test — the diagnostic distinguishes "clicked a real icon" from "fell back to a direct URL", and this was the former). UK re-confirmed the same way same day — the earlier brand-wide "no desktop icon" claim was wrong, re-check CA too rather than assuming it still holds
       hasBlogSearch: true, // confirmed live 2026-07-21 (both desktop AND mobile, real Toronto/Canada IP): typing "casino" returns REAL results (article/post elements visible, URL shows gsc.q=casino with actual content, not the empty-placeholder state). UK re-confirmed the same way same day — the earlier brand-wide "widget never renders" claim was wrong, re-check CA too rather than assuming it still holds
+    },
+
+    // ES (Spain) — onboarded 2026-07-22 against www.spingenie.es. Shares the
+    // same test account as SC's ES (confirmed by Reeve — ES credentials are
+    // cross-brand, unlike every other GEO/brand pair in this file). Started
+    // from SC's ES config as a baseline but several paths turned out to be
+    // brand-specific translations, NOT shared with SC — confirmed via live
+    // DOM inspection of the header/hamburger menu (see TEMP-inspect-sng-es
+    // throwaway spec, deleted after use, same pattern as FR-CA onboarding).
+    ES: {
+      locale: 'es', uiLocalized: true,
+      hasBlog: true, blogPath: 'blog/', // confirmed live: hamburger menu link resolves to /blog/
+      hasPromotionsPage: true, promotionsPath: 'promociones-casino/', // confirmed live via hamburger menu — NOT SC ES's "promociones/"
+      featuresPath: 'funciones-casino/', // confirmed live via hamburger menu — NOT SC ES's "funciones/"
+      mobileAppPath: 'app-casino-movil/', // unconfirmed — cloned from SC ES, no footer link seen yet to verify against
+      bingoCardGeneratorPath: 'generador-cartones-bingo/', // unconfirmed — cloned from SC ES
+      currencySymbol: '€', // unconfirmed — cloned from SC ES
+      contactEmail: 'soporte@spingenie.es', // confirmed live on /contacto/ — the "contact@spingenie.com" guess (shared by SNG's other GEOs) was wrong; ES genuinely uses its own domain + "soporte" (support), matching the pattern SC ES already uses (soporte@slingocasino.es) rather than the SNG UK/IE/CA pattern
+      contactPath: 'contacto/', // confirmed live via hamburger menu — genuinely translated, unlike every other SNG GEO which keeps English "contact/"
+      aboutUsPath: 'sobre-nosotros/', // confirmed live via hamburger menu — genuinely translated, unlike every other SNG GEO which keeps English "about-us/"
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // unconfirmed — NOT cloned from SC ES (different brand's handles would be wrong); verify live
+      hasSocialMedia: true, // unconfirmed — cloned from SC ES, verify live
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/casino/', '/slots/'], // unconfirmed — cloned from other SNG GEOs' pattern rather than SC ES's (different brand's URL structure)
+      hasGameFilterCarousel: true, // unconfirmed — cloned from SC ES
+      hasFeedbackForm: true, // unconfirmed — cloned from SC ES
+      hasGameCategoryNav: true, // confirmed live category nav exists, but SNG ES's taxonomy is genuinely different from SC ES and other SNG GEOs — hamburger menu shows Promociones/Funciones/Slots (Todo/Nuevas Slots/Jackpots)/Juegos Rápidos (Todo/Slingo/Video Bingo)/Casino (Todo/Ruleta/BlackJack), no "Live Casino" — game-category-navigation.spec.ts's hardcoded category list may not apply as-is, verify when that spec runs
+      hasLoginRegistration: true, // confirmed live: "Iniciar sesión"/"Unirse" buttons present in header and hamburger menu
+      hasTestAccount: true, // shared SC/SNG ES account confirmed working by Reeve 2026-07-22
+      hasAccountModal: true, // unconfirmed — cloned from SC ES
+      hasPaymentMethodsPage: true, // unconfirmed — cloned from SC ES
+      hasBlogDesktopSearch: true, // unconfirmed — cloned from SC ES
+      hasBlogSearch: true, // unconfirmed — cloned from SC ES
+    },
+
+    // DE (Germany) — onboarded 2026-07-22 against www.spingenie.de. Live
+    // inspection (header/menu/footer/contact page/homepage) done BEFORE
+    // writing this config, not after — same lesson from FR-CA/ES onboarding.
+    // Unlike ES, DE keeps every slug in plain English (same platform gap as
+    // SC's DE) — nothing here needed translating.
+    DE: {
+      locale: 'de', uiLocalized: true,
+      hasBlog: false, blogPath: null, // confirmed live: no Blog link anywhere in menu or footer
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via menu + footer
+      featuresPath: null, // confirmed live: no Features/Funktionen link anywhere in menu or footer
+      mobileAppPath: 'mobile-app/', // unconfirmed — no footer link found (same as SC DE), carried over as a placeholder that skips cleanly if 404
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — same as above
+      currencySymbol: '€',
+      contactEmail: 'support@spingenie.de', // confirmed live: /contact/ page's mailto link
+      contactPath: 'contact/', // confirmed live — kept English, unlike SNG ES's translated "contacto/"
+      aboutUsPath: 'about-us/', // confirmed live — kept English
+      socialMedia: { twitter: null, facebook: null, instagram: null },
+      hasSocialMedia: false, // confirmed live: zero facebook/twitter/instagram/x.com links found homepage-wide
+      searchTerm: 'Slots', searchResultHrefSubstrings: ['/slots/'], // confirmed live: no Casino category exists (same platform gap as SC DE), "Slots" search returns 20 real /slots/ results
+      hasGameFilterCarousel: false, // confirmed live: zero GamesSlider_wrapper elements on homepage
+      hasFeedbackForm: false, // confirmed live: /contact/ has a LOGIN link but no #account/feedback link anywhere
+      hasGameCategoryNav: false, // confirmed live: header/menu nav has no Slots/Casino/Live Casino category links at all, only Home/Aktionen/Verantwortungsvolles Spielen/Hilfe/Kontakt/Über uns
+      hasLoginRegistration: true, // confirmed live: EINLOGGEN/ANMELDEN buttons in header and hamburger menu
+      hasTestAccount: true, // real test account provided by Reeve 2026-07-22
+      hasAccountModal: true, // confirmed live: /contact/ page's LOGIN link present (a[href*="#account/login"])
+      hasPaymentMethodsPage: true, // confirmed live footer link to /payment-methods/
+      hasBlogDesktopSearch: false, // no blog exists at all (see hasBlog) — consistent by necessity
+      hasBlogSearch: false, // no blog exists at all — consistent by necessity
+    },
+
+    // SE (Sweden) — onboarded 2026-07-22 against se.spingenie.com. Live
+    // inspection done BEFORE writing this config (header/menu/footer/contact
+    // page/homepage play-click/payment-methods), same as DE/ES/FR-CA. Same
+    // Pay N Play/Trustly deposit model as SC's SE — no traditional
+    // username/password login exists here at all.
+    SE: {
+      locale: 'sv', uiLocalized: true,
+      hasBlog: false, blogPath: null, // confirmed live: no Blog link anywhere in menu or footer
+      hasPromotionsPage: false, promotionsPath: null, // confirmed live: no Promotions/Aktioner link anywhere in menu or footer
+      featuresPath: null, // confirmed live: no Features/Funktioner link anywhere
+      mobileAppPath: 'mobile-app/', // unconfirmed — no footer link found, carried over as a placeholder that skips cleanly if 404
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — same as above
+      currencySymbol: 'kr', // Swedish Krona — not independently re-verified (no bonus/promo banner exists to check copy against), carried over from SC SE
+      contactEmail: 'contact@spingenie.com', // confirmed live: /contact/ page's mailto link — the shared UK/IE/CA/FR-CA address, NOT its own domain like DE/ES
+      contactPath: 'contact/', // confirmed live — kept English
+      aboutUsPath: 'about-us/', // confirmed live — kept English
+      socialMedia: { twitter: null, facebook: null, instagram: null },
+      hasSocialMedia: false, // confirmed live: zero facebook/twitter/instagram/x.com links found homepage-wide
+      searchTerm: 'Slots', searchResultHrefSubstrings: ['/slots/'], // confirmed live: only a Slots category exists (Alla/Jackpottar) — no Casino category link anywhere, unlike SC SE which does have one
+      hasGameFilterCarousel: true, // confirmed live: 2 GamesSlider_wrapper elements found on homepage
+      hasFeedbackForm: false, // confirmed live: /contact/ has a LOGIN link but no #account/feedback link
+      hasGameCategoryNav: true, // confirmed live: menu/footer have a real "Slots" category nav link (Alla/Jackpottar) plus a Pay N Play link — no Slingo/Bingo/Casino/Live Casino though, game-category-navigation.spec.ts's per-link check-and-skip already handles a partial subset
+      hasLoginRegistration: false, // confirmed live: header/menu show "Fortsätt spela" (Continue playing) / "Insättning" (Deposit) instead of Login/Join — Pay N Play/Trustly instant-deposit model, no username/password account, same as SC SE
+      hasAccountModal: false, // confirmed live: hovering a game tile and clicking "Spela" does NOT open an #account modal — URL stays on the homepage, no navigation, no modal — same as SC SE
+      hasPaymentMethodsPage: false, // confirmed live: /payment-methods/ returns a real 404
+      hasBlogDesktopSearch: false, // no blog exists at all (see hasBlog) — consistent by necessity
+      hasBlogSearch: false, // no blog exists at all — consistent by necessity
+    },
+
+    // ROW (Rest of World) — onboarded 2026-07-22 against www.spingenie.com/en-ROW/,
+    // tested from a real Cyprus VPN/IP (per Reeve). Live inspection done
+    // BEFORE writing this config (header/menu/footer/contact page/blog/
+    // payment-methods/features/search/currency), same as every other GEO
+    // onboarded this project. English UI, same platform as UK/IE/CA/ON —
+    // nearly identical to SNG UK's config, just no Blog and no Features page.
+    ROW: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live: /en-ROW/blog/ 404s, no Blog link in menu or footer (unlike UK/CA)
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via menu + footer
+      featuresPath: null, // confirmed live: /en-ROW/features/ 404s, no Features link anywhere (unlike UK/IE/CA)
+      mobileAppPath: 'mobile-app/', // unconfirmed — no footer link found, carried over as a placeholder that skips cleanly if 404
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — same as above
+      currencySymbol: '€', // confirmed live via bonus copy ("€308"/"€45"/"€418"/"€10")
+      contactEmail: 'contact@spingenie.com', // confirmed live on /contact/ — same shared address as UK/IE/CA/ON
+      socialMedia: { twitter: null, facebook: 'SpinGenieUK', instagram: null }, // confirmed live: one facebook.com/SpinGenieUK/ link found homepage-wide — shared UK handle, not ROW-specific
+      hasSocialMedia: true, // confirmed live: 1 social link found (not 3 like UK, but still present)
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/casino/', '/slots/'], // confirmed live: searching "Casino" returns 77 real results
+      hasGameFilterCarousel: true, // confirmed live: 3 GamesSlider_wrapper elements found on homepage
+      hasFeedbackForm: true, // confirmed live: /contact/ has a real #account/feedback link
+      hasGameCategoryNav: true, // confirmed live: menu/footer show Online Slots (All/Jackpots/Daily Jackpots), Instant Win (All/Slingo/Scratch Cards), Casino (All/Roulette/BlackJack/Other) — a DIFFERENT sub-taxonomy than UK (no Megaways/Bingo, has Instant Win/Scratch Cards instead) — game-category-navigation.spec.ts's per-link check-and-skip already handles this
+      hasLoginRegistration: true, // confirmed live: Log in/Join buttons present in header and hamburger menu
+      hasTestAccount: true, // real test account provided by Reeve 2026-07-22
+      hasAccountModal: true, // confirmed live: /contact/ page has a real LOGIN link (a[href*="#account/login"])
+      hasPaymentMethodsPage: true, // confirmed live 200
+      hasBlogDesktopSearch: false, // no blog exists at all (see hasBlog) — consistent by necessity
+      hasBlogSearch: false, // no blog exists at all — consistent by necessity
     },
   },
 };

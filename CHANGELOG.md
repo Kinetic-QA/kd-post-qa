@@ -24,6 +24,20 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-22
+
+### Added
+
+- **Onboarded SpinGenie's Spain (ES), Germany (DE), Sweden (SE), and Rest-of-World (ROW) markets — all four now pass the full checklist cleanly.** Spain and Germany share a login with our other brand's Spanish/German sites, so no new test accounts were needed there. Sweden uses the same "deposit first, no separate login" model already confirmed for our other brand, and Rest-of-World was tested from a Cyprus connection.
+- Added a Cyprus phone-number generator for the Rest-of-World sign-up test, since that market's form checks the phone number against whatever country the tester is actually connecting from.
+
+### Fixed
+
+- **Finished confirming French Canada (FR-CA) is fully working** — the "Play Now" button check on the Promotions page was accidentally clicking a random sentence of marketing text instead of a real button (the word "play" happened to appear inside it), sending the test to the wrong page. Now it only clicks real, clickable buttons.
+- **Spain's sign-up/login checklist was failing across the board** — turned out several page addresses and the "Join" button's expected wording were copied from our other brand's Spanish site instead of being checked on SpinGenie's own Spanish site directly. Corrected the Promotions and Features page addresses, the Contact and About Us page addresses (Spain translates these, unlike every other market so far), the support email, and widened the "Join" button check to recognize SpinGenie's own wording.
+- **Sweden's Contact page checklist was failing** — the page has a leftover "LOG IN" link that opens an empty pop-up with no actual sign-in form inside it (expected for this deposit-only market, confirmed intentional). The checklist now skips trying to close a pop-up that was never really there.
+- **Rest-of-World's sign-up test kept failing with "phone number not accepted."** The test was still using a South African-format phone number left over from when this market was last checked from a South Africa connection. Since the sign-up form checks the phone number against the tester's real location, this session's Cyprus connection rejected it every time. Now generates a Cyprus-format number to match.
+
 ## [Unreleased] - 2026-07-21
 
 ### Added

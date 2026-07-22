@@ -1,6 +1,6 @@
 import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateSouthAfricanMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateOntarioAddress, generateAbRegistrationData, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateOntarioAddress, generateAbRegistrationData, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -340,15 +340,18 @@ test.describe('Registration Flow', () => {
       });
     } else if (isRowFormat && isMobile) {
       // ROW mobile — same 5-step shape as UK mobile, with ROW's confirmed
-      // desktop differences carried over: South African mobile format
-      // (generateSouthAfricanMobile), no house-number field on the address
-      // step (fillMobileStep2GenderEmailROW / fillMobileStep3AddressROW),
-      // country select left alone (reflects the tester's real IP rather
-      // than a fixed GEO), and only 3 consent checkboxes instead of UK's 4.
+      // desktop differences carried over: mobile format matching the
+      // tester's real VPN/IP (generateCyprusMobile — confirmed live
+      // 2026-07-22 testing from Cyprus; was generateSouthAfricanMobile when
+      // last onboarded from a South Africa VPN, see that generator's
+      // comment), no house-number field on the address step
+      // (fillMobileStep2GenderEmailROW / fillMobileStep3AddressROW), country
+      // select left alone (reflects the tester's real IP rather than a fixed
+      // GEO), and only 3 consent checkboxes instead of UK's 4.
       const data = generateROWRegistrationData();
 
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        await fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile);
+        await fillStep0WithRetry(page, scope, data, generateCyprusMobile);
       });
 
       await runStep('Step 1 of 5: First/Last name → Continue', async () => {
@@ -379,16 +382,19 @@ test.describe('Registration Flow', () => {
     } else if (isRowFormat && !isMobile) {
       // ROW desktop — confirmed live: both the mobile country-code selector
       // and the address step's country select auto-detect from the
-      // tester's real IP (showed "+27"/"South Africa" [selected] on this
-      // session's South Africa VPN) rather than being fixed, so a
-      // UK-format mobile number gets rejected, and — like IE — the address
-      // step has no house-number field. Country is only verified, never
-      // forced, since "correct" depends on wherever the tester is actually
-      // connecting from, not a single fixed GEO.
+      // tester's real IP (showed "CY"/"Cyprus (+ 357)" [selected] on this
+      // session's Cyprus VPN — was "+27"/"South Africa" when last onboarded
+      // from a South Africa VPN) rather than being fixed, so a mismatched
+      // mobile format gets rejected, and — like IE — the address step has
+      // no house-number field. Country is only verified, never forced,
+      // since "correct" depends on wherever the tester is actually
+      // connecting from, not a single fixed GEO — swap the mobile generator
+      // to match whatever VPN is in use for the session, don't assume
+      // Cyprus carries forward either.
       const data = generateROWRegistrationData();
 
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        await fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile);
+        await fillStep0WithRetry(page, scope, data, generateCyprusMobile);
       });
 
       await runStep('Step 1: Name + Email + Gender → Continue', async () => {
