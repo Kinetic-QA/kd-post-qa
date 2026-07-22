@@ -134,13 +134,13 @@ test.describe('P3 - Blog Page Header', () => {
       // is CSS-hidden at mobile breakpoints (confirmed live, same pattern as
       // the main site) — mobile's visible one lives in the blog's own
       // MobileFooter bottom nav instead.
-      // SNG's blog (confirmed live 2026-07-20, UK/CA) has NO separate desktop
-      // search icon at all — its only [data-tk-value="blogSearch"] link lives
-      // inside the mobile-only footer nav (display:none at desktop widths).
-      // A real desktop user of SNG's blog has no way to reach search — a
-      // genuine product gap, not something this check can work around —
-      // skip cleanly on desktop for brands confirmed to lack it rather than
-      // failing on an unreachable element.
+      // This is NOT a brand-wide SNG gap — it's per-GEO (see geo-features.ts's
+      // hasBlogDesktopSearch comments). CA genuinely has no desktop icon
+      // (confirmed live 2026-07-21), but UK and ON both DO have a real
+      // working one — an earlier 2026-07-20 finding wrongly generalized CA's
+      // gap onto UK too; re-check live rather than trusting that write-up.
+      // Skip cleanly on desktop only for GEOs confirmed (via the flag) to
+      // genuinely lack it, rather than failing on an unreachable element.
       if (!isMobile && !geoFeatures.hasBlogDesktopSearch) {
         test.info().annotations.push({ type: 'skip-reason', description: 'No desktop blog search icon exists for this brand (confirmed live) — mobile-only entry point' });
         return;

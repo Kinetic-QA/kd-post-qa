@@ -80,7 +80,7 @@ const STRINGS: Record<string, LocaleStrings> = {
     loginButton: /iniciar sesión/i,
     loginSubmitButton: /iniciar sesión/i,
     usernameOrEmailLabel: /nombre de usuario o correo electrónico/i,
-    joinButton: /únete/i,
+    joinButton: /únete|unirse/i, // "Únete" confirmed live on SC (slingocasino.es); "Unirse" confirmed live on SNG (spingenie.es) — same language, different brand copy, so this shared-by-locale string needs to match both
     loginErrorText: /datos de inicio de sesión.*incorrectos/i,
     reportProblemText: /reportar un problema/i,
     membersLoginText: /inicio de sesión/i,
@@ -140,6 +140,43 @@ const STRINGS: Record<string, LocaleStrings> = {
     footerContactUsText: /^kontakt$/i,
     footerMobileAppText: /^mobile app$/i, // not exercised — DE has no Mobile App footer link
     footerBingoCardGeneratorText: /^bingo card generator$/i, // not exercised — DE has no Bingo Card Generator footer link
+  },
+  // FR-CA — onboarding started 2026-07-21 against www.spingenie.com/fr-CA/.
+  // loginButton/joinButton/playCta/searchPlaceholder/backButtonText confirmed
+  // live via direct inspection (header buttons + search panel). Everything
+  // else below is a BEST-GUESS placeholder, not yet confirmed — expect to
+  // correct these from real failure snapshots once specs actually run
+  // against them, same pattern as every other locale here.
+  'fr': {
+    loginButton: /connecter/i, // confirmed live: header button reads "SE CONNECTER"
+    loginSubmitButton: /^se connecter$/i, // confirmed live 2026-07-21 (real browser screenshot, Reeve): login modal's submit button reads "SE CONNECTER" (same text as the header button, scoped separately by the modal container in login.spec.ts)
+    usernameOrEmailLabel: /identifiant ou email/i, // confirmed live 2026-07-21 (real browser screenshot): field label reads "Identifiant ou Email"
+    joinButton: /inscrire/i, // confirmed live: header button reads "S'INSCRIRE"
+    loginErrorText: /identifiants.*incorrects|erreur/i, // NOT yet confirmed — guessed
+    reportProblemText: /signaler un problème/i, // NOT yet confirmed — guessed
+    membersLoginText: /connexion des membres/i, // confirmed live 2026-07-21 (real browser screenshot): registration widget's tab-switch link reads "Connexion des membres"
+    backButtonText: /^retour$/i, // confirmed live: search panel's back control reads "Retour"
+    playCta: /jouer|jouer maintenant/i, // confirmed live: hover/homepage CTA reads "JOUER"/"JOUER MAINTENANT"
+    bonusPolicyText: /politique de bonus|termes et conditions/i, // confirmed live 2026-07-21 via DOM snapshot: FR-CA's homepage banner disclaimer actually reads "Sous réserve des Termes et Conditions", NOT the "Politique de bonus" pattern other GEOs use — my earlier "confirmed" comment here was wrong, never actually verified against FR-CA specifically
+    readMoreText: /lire la suite|continuer/i, // NOT yet confirmed — guessed
+    feedbackNext: /^suivant$/i, // NOT yet confirmed — guessed
+    feedbackOther: /^autre$/i, // NOT yet confirmed — guessed
+    feedbackSubmit: /^soumettre$/i, // NOT yet confirmed — guessed
+    forgotPasswordText: /mot de passe oublié/i, // confirmed live 2026-07-21 (real browser screenshot): login modal's link reads "Mot de passe oublié?"
+    noAccountText: /pas encore de compte/i, // confirmed live 2026-07-21 (real browser screenshot): login modal's link reads "Vous n'avez pas encore de compte?"
+    searchPlaceholder: /^recherchez un jeu$/i, // confirmed live: search input placeholder reads "Recherchez un jeu"
+    feedbackTextareaPlaceholder: /tapez votre réponse ici/i, // NOT yet confirmed — guessed
+    homeLinkText: /^accueil$/i, // confirmed live: header nav link reads "ACCUEIL"
+    footerResponsibleGamingText: /^jeu responsable$/i, // confirmed live: footer link reads "Jeu responsable"
+    footerBonusPolicyText: /^politique de bonus$/i, // confirmed live: footer link reads "Politique de bonus"
+    footerTermsText: /^conditions générales$/i, // confirmed live: footer link reads "Conditions générales"
+    footerPrivacyPolicyText: /^politique de confidentialité$/i, // confirmed live: footer link reads "Politique de confidentialité"
+    footerAboutUsText: /^à propos de nous$/i, // confirmed live: footer link reads "À propos de nous"
+    footerPaymentOptionsText: /^options de paiement$/i, // confirmed live: footer link reads "Options de paiement"
+    footerAffiliatesText: /^affiliés$/i, // confirmed live: footer link reads "Affiliés"
+    footerContactUsText: /^contactez-nous$/i, // confirmed live: footer link reads "Contactez-nous"
+    footerMobileAppText: /^application mobile$/i, // NOT yet confirmed — guessed, footer link text not captured this session
+    footerBingoCardGeneratorText: /^générateur de cartes de bingo$/i, // NOT yet confirmed — guessed
   },
   // Confirmed live 2026-07-13 against se.slingo.com. SE has no traditional
   // login/registration (Pay N Play/Trustly deposit model, hasLoginRegistration:

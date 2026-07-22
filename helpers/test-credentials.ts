@@ -19,18 +19,23 @@ import { test } from '@playwright/test';
  */
 const KNOWN_GEOS_BY_BRAND: Record<string, string[]> = {
   SC: ['UK', 'ES', 'IE', 'ROW', 'DE'],
+  SNG: ['UK', 'IE', 'CA', 'ON', 'FR-CA', 'ES', 'DE', 'ROW'],
 };
 
 function credentialsFor(brand: string, geo: string): { username: string; password: string } {
-  let username = process.env[`TEST_CREDENTIALS_${brand}_${geo}_USERNAME`];
-  let password = process.env[`TEST_CREDENTIALS_${brand}_${geo}_PASSWORD`];
+  // Env var names can't contain a hyphen (invalid in a real shell export and
+  // not a supported process.env key shape) — GEOs like FR-CA need this
+  // sanitized to FR_CA before building the var name.
+  const envGeo = geo.replace(/-/g, '_');
+  let username = process.env[`TEST_CREDENTIALS_${brand}_${envGeo}_USERNAME`];
+  let password = process.env[`TEST_CREDENTIALS_${brand}_${envGeo}_PASSWORD`];
   if ((!username || !password) && brand === 'SC') {
-    username = process.env[`TEST_CREDENTIALS_${geo}_USERNAME`];
-    password = process.env[`TEST_CREDENTIALS_${geo}_PASSWORD`];
+    username = process.env[`TEST_CREDENTIALS_${envGeo}_USERNAME`];
+    password = process.env[`TEST_CREDENTIALS_${envGeo}_PASSWORD`];
   }
   if (!username || !password) {
     throw new Error(
-      `Missing TEST_CREDENTIALS_${brand}_${geo}_USERNAME / TEST_CREDENTIALS_${brand}_${geo}_PASSWORD in .env — ` +
+      `Missing TEST_CREDENTIALS_${brand}_${envGeo}_USERNAME / TEST_CREDENTIALS_${brand}_${envGeo}_PASSWORD in .env — ` +
       `see .env.example or ask the team for the current test account for this brand/GEO. Note: hasTestAccount: false ` +
       `in helpers/geo-features.ts should be set instead of adding credentials for a GEO with no real test account yet.`
     );

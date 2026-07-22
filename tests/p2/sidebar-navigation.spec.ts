@@ -308,10 +308,12 @@ test.describe('P2 - Sidebar Navigation', () => {
     await navStep('Help -> /help/', '/help/', '/help/');
 
     // -- Steps 39-41: Contact us -------------------------------------------
-    await navStep('Contact us -> /contact/', '/contact/', '/contact/');
+    const contactPath = geoFeatures.contactPath ?? 'contact/';
+    await navStep(`Contact us -> /${contactPath}`, `/${contactPath}`, `/${contactPath}`);
 
     // -- Steps 42-44: About us --------------------------------------------
-    await navStep('About us -> /about-us/', '/about-us/', '/about-us/');
+    const aboutUsPath = geoFeatures.aboutUsPath ?? 'about-us/';
+    await navStep(`About us -> /${aboutUsPath}`, `/${aboutUsPath}`, `/${aboutUsPath}`);
 
     // -- Step 45: Blog -> /blog/ -------------------------------------------
     if (geoFeatures.hasBlog && geoFeatures.blogPath) {

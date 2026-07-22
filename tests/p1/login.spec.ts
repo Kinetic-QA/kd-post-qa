@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissPopups, dismissCampaignPopup, setupCampaignPopupWatcher, expectedPlaysecureUrlPattern } from '../../helpers/common';
+import { dismissPopups, dismissCampaignPopup, setupCampaignPopupWatcher, expectedPlaysecureUrlPattern, waitForExtraPageSettle } from '../../helpers/common';
 import { currentTestCredentials } from '../../helpers/test-credentials';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
@@ -27,6 +27,7 @@ test.describe('P1 - Login', () => {
     await page.waitForTimeout(3_000);
     await dismissPopups(page);
     await page.waitForTimeout(500);
+    await waitForExtraPageSettle(page);
   });
 
   test('LW-01: Login flow - successful login', async ({ page }) => {
@@ -101,6 +102,12 @@ test.describe('P1 - Login', () => {
       await loginBtn.click();
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
       await page.waitForTimeout(1_500);
+      // SNG FR-CA (confirmed live 2026-07-21): the URL updates to #account
+      // and the modal backdrop dims the page well before the modal's actual
+      // content mounts — the same slow-hydration symptom as the login
+      // button itself, just on the content this click reveals rather than
+      // the click target. Same extra settle wait applies here too.
+      await waitForExtraPageSettle(page);
     });
 
     // ── Step 2: Login modal visible ──────────────────────────────────────

@@ -183,6 +183,18 @@ const AB_ADDRESSES: UKAddress[] = [
 ];
 
 /**
+ * SNG ON's real registration address step (confirmed live 2026-07-21) has
+ * the same house-number-bearing shape as AB_ADDRESSES above — unsurprising
+ * in hindsight, since AB's pre-live QA environment was already confirmed to
+ * silently route through Ontario's real backend. Reuses the exact same
+ * fixture data as AB rather than duplicating it; see fillStep2AB/
+ * fillMobileStep3AddressAB in registration.spec.ts for the fill logic.
+ */
+export function generateOntarioAddress(): UKAddress {
+  return randomFrom(AB_ADDRESSES);
+}
+
+/**
  * CA (live market) addresses — confirmed live 2026-07-20: unlike AB, CA's
  * address step has NO house-number field at all (address/zipCode/city plus
  * separate country + state/province selects). Country already defaults
@@ -328,6 +340,22 @@ export function generateMalteseMobile(): string {
 }
 
 /**
+ * Generates a random valid Cyprus mobile number WITHOUT the leading 0.
+ * Confirmed live 2026-07-22: testing SNG ROW from a real Cyprus VPN/IP, the
+ * country-code dropdown auto-detected to "CY"/"Cyprus (+ 357)" — NOT South
+ * Africa, which is what generateSouthAfricanMobile assumed when ROW was
+ * first onboarded from a South Africa VPN. Same "verified, never forced"
+ * auto-detect behavior documented on generateSouthAfricanMobile — swap to
+ * whichever generator matches the real VPN/IP in use, don't assume this one
+ * carries forward either. Cyprus mobiles are 8 digits nationally, starting
+ * with 9.
+ */
+export function generateCyprusMobile(): string {
+  const rest = Array.from({ length: 7 }, () => Math.floor(Math.random() * 10)).join('');
+  return `9${rest}`;
+}
+
+/**
  * Generates a random valid German mobile number WITHOUT the leading 0. The
  * form defaults its country-code selector to "+49" (confirmed live), so we
  * supply the national number — German mobiles start 15/16/17 nationally.
@@ -398,6 +426,26 @@ export function generateCanadianDOB(): string {
     String(month).padStart(2, '0'),
     String(day).padStart(2, '0'),
   ].join('.');
+}
+
+/**
+ * SNG FR-CA's registration DOB field — confirmed live 2026-07-21 via a real
+ * browser screenshot (Reeve): the registration widget's date field shows a
+ * placeholder of "Année-Mois-Jour" (Year-Month-Day), DASH-separated — NOT
+ * CA's dot-separated YYYY.MM.DD. Don't reuse generateCanadianDOB() for
+ * FR-CA on the assumption the two share a format; they don't.
+ */
+export function generateFrCaDOB(): string {
+  const currentYear = new Date().getFullYear();
+  const year  = currentYear - 25 - Math.floor(Math.random() * 26); // 25–50 years old
+  const month = 1 + Math.floor(Math.random() * 12);
+  const maxDay = new Date(year, month, 0).getDate();
+  const day   = 1 + Math.floor(Math.random() * maxDay);
+  return [
+    String(year),
+    String(month).padStart(2, '0'),
+    String(day).padStart(2, '0'),
+  ].join('-');
 }
 
 /**

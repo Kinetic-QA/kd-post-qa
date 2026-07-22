@@ -128,6 +128,9 @@ test.describe('P3 - Footer Navigation', () => {
 
     // ── Steps 10-11: Responsible Gaming ──────────────────────────────────
     const strings = currentLocaleStrings();
+    const geoFeatures = currentGeoFeatures();
+    const aboutUsPath = geoFeatures.aboutUsPath ?? 'about-us/';
+    const contactPath = geoFeatures.contactPath ?? 'contact/';
     await footerStep('Responsible Gaming -> /responsible-gaming/', strings.footerResponsibleGamingText, '/responsible-gaming/');
 
     // ── Steps 12-13: Bonus Policy ─────────────────────────────────────────
@@ -140,10 +143,9 @@ test.describe('P3 - Footer Navigation', () => {
     await footerStep('Privacy Policy -> /privacy/', strings.footerPrivacyPolicyText, '/privacy/');
 
     // ── Steps 18-19: About us ─────────────────────────────────────────────
-    await footerStep('About us -> /about-us/', strings.footerAboutUsText, '/about-us/');
+    await footerStep(`About us -> /${aboutUsPath}`, strings.footerAboutUsText, `/${aboutUsPath}`);
 
     // ── Steps 20-21: Promotions ───────────────────────────────────────────
-    const geoFeatures = currentGeoFeatures();
     if (geoFeatures.promotionsPath) {
       await footerStep(`Promotions -> /${geoFeatures.promotionsPath}`, 'Promotions', `/${geoFeatures.promotionsPath}`);
     } else {
@@ -161,7 +163,7 @@ test.describe('P3 - Footer Navigation', () => {
     await footerStep('Help -> /help/', 'Help', '/help/');
 
     // ── Steps 28-29: Contact us ───────────────────────────────────────────
-    await footerStep('Contact us -> /contact/', strings.footerContactUsText, '/contact/');
+    await footerStep(`Contact us -> /${contactPath}`, strings.footerContactUsText, `/${contactPath}`);
 
     // ── Steps 30-31: Mobile App ───────────────────────────────────────────
     await footerStep(`Mobile App -> /${geoFeatures.mobileAppPath}`, strings.footerMobileAppText, `/${geoFeatures.mobileAppPath}`);

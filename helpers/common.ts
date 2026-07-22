@@ -1,4 +1,28 @@
 import { Page, expect, test } from '@playwright/test';
+import { currentGeoFeatures } from './geo-features';
+
+/**
+ * Extra settle wait for GEOs where the header login/join buttons (and other
+ * early interactive elements) render clickable before their click handlers
+ * are actually wired up (confirmed live 2026-07-21 on SNG FR-CA — see
+ * geo-features.ts's extraPageSettleMs). Call after the standard post-load
+ * wait, right before clicking login/join/search in a spec's beforeEach or
+ * first interaction step.
+ *
+ * Idempotent per page — dismissCampaignPopup() calls this on every
+ * invocation (it runs many times per test), but the actual wait only
+ * happens once per page instance so repeated calls don't compound into a
+ * multi-minute test.
+ */
+const settledPages = new WeakSet<Page>();
+export async function waitForExtraPageSettle(page: Page): Promise<void> {
+  if (settledPages.has(page)) return;
+  const ms = currentGeoFeatures().extraPageSettleMs ?? 0;
+  if (ms > 0) {
+    settledPages.add(page);
+    await page.waitForTimeout(ms);
+  }
+}
 
 /**
  * Returns the current Playwright project's configured baseURL (no trailing
@@ -50,14 +74,20 @@ async function tryClickCookieConsent(page: Page): Promise<boolean> {
 
 /**
  * After a successful login, every brand/GEO redirects to a "playsecure."
- * subdomain of its own root domain — e.g. www.slingo.com -> playsecure.slingo.com,
- * www.slingocasino.es -> playsecure.slingocasino.es. Deriving it from the
- * current project's baseURL means login.spec.ts doesn't need a hardcoded
- * domain per GEO.
+ * subdomain of its own ROOT domain — e.g. www.slingo.com -> playsecure.slingo.com,
+ * www.slingocasino.es -> playsecure.slingocasino.es. Confirmed live 2026-07-21
+ * (SNG ON onboarding): this holds even when the baseURL itself carries a
+ * province/market subdomain — on.spingenie.ca's real post-login redirect is
+ * playsecure.spingenie.ca, NOT playsecure.on.spingenie.ca. So this always
+ * collapses the hostname down to its last two labels (domain.tld) rather
+ * than only stripping a literal "www." prefix, before prepending
+ * "playsecure.". Deriving it from the current project's baseURL means
+ * login.spec.ts doesn't need a hardcoded domain per GEO.
  */
 export function expectedPlaysecureUrlPattern(): RegExp {
-  const hostname = new URL(getBaseUrl()).hostname.replace(/^www\./, '');
-  return new RegExp(`playsecure\\.${hostname.replace(/\./g, '\\.')}`);
+  const labels = new URL(getBaseUrl()).hostname.split('.');
+  const rootDomain = labels.slice(-2).join('.');
+  return new RegExp(`playsecure\\.${rootDomain.replace(/\./g, '\\.')}`);
 }
 
 /**
@@ -142,7 +172,6 @@ export async function dismissCampaignPopup(page: Page): Promise<void> {
   if (hasOfferPopup) {
     await offerClose.click({ force: true });
     await page.waitForTimeout(600);
-    return;
   }
 
   // 2. Old popup: img[alt="close"] inside a[href="#account"] — use Escape
@@ -154,6 +183,8 @@ export async function dismissCampaignPopup(page: Page): Promise<void> {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(800);
   }
+
+  await waitForExtraPageSettle(page);
 }
 
 export async function setupCampaignPopupWatcher(page: Page): Promise<void> {
