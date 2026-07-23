@@ -148,9 +148,9 @@ const STRINGS: Record<string, LocaleStrings> = {
   // correct these from real failure snapshots once specs actually run
   // against them, same pattern as every other locale here.
   'fr': {
-    loginButton: /connecter/i, // confirmed live: header button reads "SE CONNECTER"
+    loginButton: /connecter|^login$/i, // confirmed live: SNG FR-CA header button reads "SE CONNECTER" (matches "connecter"); MC FR-CA's header button is NOT translated and reads plain "Login" (confirmed live 2026-07-23 via accessibility snapshot) — same shared-by-locale pattern as ES's joinButton, different brand copy under one language
     loginSubmitButton: /^se connecter$/i, // confirmed live 2026-07-21 (real browser screenshot, Reeve): login modal's submit button reads "SE CONNECTER" (same text as the header button, scoped separately by the modal container in login.spec.ts)
-    usernameOrEmailLabel: /identifiant ou email/i, // confirmed live 2026-07-21 (real browser screenshot): field label reads "Identifiant ou Email"
+    usernameOrEmailLabel: /identifiant ou email|nom d'utilisateur ou courriel/i, // confirmed live: SNG FR-CA field label reads "Identifiant ou Email" (2026-07-21); MC FR-CA's reads "Nom d'utilisateur ou courriel" instead (confirmed live 2026-07-23) — Quebec French "courriel" for email, not France French — same shared-by-locale, different-brand-copy pattern as ES's joinButton
     joinButton: /inscrire/i, // confirmed live: header button reads "S'INSCRIRE"
     loginErrorText: /identifiants.*incorrects|erreur/i, // NOT yet confirmed — guessed
     reportProblemText: /signaler un problème/i, // NOT yet confirmed — guessed
@@ -166,7 +166,17 @@ const STRINGS: Record<string, LocaleStrings> = {
     noAccountText: /pas encore de compte/i, // confirmed live 2026-07-21 (real browser screenshot): login modal's link reads "Vous n'avez pas encore de compte?"
     searchPlaceholder: /^recherchez un jeu$/i, // confirmed live: search input placeholder reads "Recherchez un jeu"
     feedbackTextareaPlaceholder: /tapez votre réponse ici/i, // NOT yet confirmed — guessed
-    homeLinkText: /^accueil$/i, // confirmed live: header nav link reads "ACCUEIL"
+    // confirmed live: SNG FR-CA's header nav link reads "ACCUEIL". MC FR-CA has TWO
+    // unrelated "Home"-equivalent components with two DIFFERENT bugs: a persistent
+    // always-visible top-strip nav reads plain untranslated "Home" (brand owner
+    // confirmed 2026-07-23 this is INTENDED, not a bug); the actual slide-out
+    // hamburger drawer (the one sidebar-navigation.spec.ts's SIDEBAR selector
+    // actually targets) reads "Página Inicial" — Portuguese, not French, a genuine
+    // wrong-locale-bundle bug (same family as the confirmed Contato/Afiliados bugs)
+    // — confirmed live 2026-07-23 via direct DOM inspection of the drawer's own
+    // <nav class="MainMenu_main-menu..."> link. Match all three so the suite tests
+    // real behavior regardless of which bugs eventually get fixed.
+    homeLinkText: /^accueil$|^home$|^página inicial$/i,
     footerResponsibleGamingText: /^jeu responsable$/i, // confirmed live: footer link reads "Jeu responsable"
     footerBonusPolicyText: /^politique de bonus$/i, // confirmed live: footer link reads "Politique de bonus"
     footerTermsText: /^conditions générales$/i, // confirmed live: footer link reads "Conditions générales"

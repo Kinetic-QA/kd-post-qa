@@ -227,6 +227,22 @@ export function generateCanadianAddress(): UKAddress {
 }
 
 /**
+ * MC FR-CA's registration address field performs REAL geocoding validation
+ * (confirmed live 2026-07-23) — unlike SNG/MC's other Canadian markets,
+ * which accept any of CA_ADDRESSES's three entries as free text. Random
+ * selection here is unsafe: "Bank Street" (Ottawa) reliably resolves to a
+ * single confident match and turns the field's status icon green, while
+ * "Queen Street West" and "King Street West" are genuinely ambiguous
+ * (both names are shared by multiple Canadian cities) and consistently
+ * leave the field stuck on a persistent "Adresse invalide" error that
+ * blocks registration from completing. Always return the one confirmed-
+ * working address rather than picking randomly from CA_ADDRESSES.
+ */
+export function generateMcFrCaAddress(): UKAddress {
+  return CA_ADDRESSES[1];
+}
+
+/**
  * Hardcoded valid Irish addresses — Eircodes (not UK-style postcodes)
  * confirmed live: IE's address step has no separate house-number field
  * (unlike UK's), so houseNumber here is unused by fillIEAddress but kept

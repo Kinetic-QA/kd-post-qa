@@ -491,6 +491,75 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: false, // no blog for CA anyway — set false for consistency
       hasPromotionsIconInHeader: false, // confirmed live: header/banner only contains the logo and search links — no Promotions icon
     },
+
+    // FR-CA (French Canada) — onboarding started 2026-07-23, tested from a
+    // confirmed Montreal/Quebec VPN (verified via ipinfo.io before testing,
+    // per the CA-correction lesson above). Same underlying platform as
+    // UK/COM/CA, at /fr-CA/ instead of /en-CA/ (see brand-urls.ts). Most
+    // fields below are CLONED from CA as a starting baseline — NOT yet
+    // independently confirmed for FR-CA — run the full suite and correct via
+    // real failures, same pattern as every other GEO onboarded this project.
+    'FR-CA': {
+      locale: 'fr', uiLocalized: true, // confirmed live: nav (Accueil/Casino/Machines à sous/Jeux), search placeholder, JOUER MAINTENANT tiles, footer, banner disclaimer all genuinely French — EXCEPT the header's own Login button, which is untranslated plain "Login" (confirmed live 2026-07-23 via accessibility snapshot; Join button IS translated, "S'inscrire") — see locale-strings.ts's 'fr' loginButton entry for the fix, a real brand-copy inconsistency, not a test bug
+      hasBlog: false, blogPath: null, // unconfirmed — cloned from CA
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-07-23: sidebar-navigation.spec.ts's Promotions check passed against this exact slug (unlike SNG FR-CA, MC does not translate this slug)
+      featuresPath: null, // unconfirmed — cloned from CA
+      mobileAppPath: 'mobile-app/', // unconfirmed — cloned from CA
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — cloned from CA
+      currencySymbol: '$', // unconfirmed — cloned from CA, verify live bonus copy
+      contactEmail: 'support@megacasino.com', // confirmed live 2026-07-23 via contact-us-page.spec.ts — same address as UK/COM/CA, not a French-specific address
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // unconfirmed — cloned from CA
+      hasSocialMedia: false, // unconfirmed — cloned from CA
+      searchTerm: 'Casino', // unconfirmed — cloned from CA, may need a French search term
+      searchResultHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // same taxonomy as UK/COM/CA, unconfirmed for FR-CA specifically
+      gameTileHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // confirmed live 2026-07-23 via accessibility snapshot (Casino/Machines à sous/Jeux nav hrefs all use this taxonomy) and game-category-navigation.spec.ts's Live Casino redirect passing
+      paymentMethodsPath: 'payment-options/', // confirmed live 2026-07-23 via accessibility snapshot: Visa/Mastercard/Paysafecard links all point to /fr-CA/payment-options/...
+      hasGameFilterCarousel: true, // unconfirmed — cloned from CA
+      hasFeedbackForm: false, // confirmed live 2026-07-23: NO "Report a problem"/"Signaler un problème" link exists anywhere on /fr-CA/contact/ (full DOM snapshot searched) — a real gap, not a translation issue, same as SNG FR-CA's separately-confirmed absence
+      hasGameCategoryNav: true, // unconfirmed — cloned from CA
+      hasLoginRegistration: true, // confirmed live 2026-07-23: login.spec.ts/registration.spec.ts widgets both open correctly
+      hasTestAccount: true, // real test account provided 2026-07-23 (Lemwel@test.com)
+      hasAccountModal: true, // confirmed live 2026-07-23: LOGIN/JOIN correctly open the #account modal
+      hasPaymentMethodsPage: true, // unconfirmed — cloned from CA
+      hasBlogDesktopSearch: false, // no blog for FR-CA anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for FR-CA anyway — set false for consistency
+      hasPromotionsIconInHeader: false, // unconfirmed — cloned from COM/CA (WH-01 skips this check rather than independently verifying it)
+    },
+
+    // IE — onboarding started 2026-07-23, tested from a confirmed Dublin
+    // VPN (verified via ipinfo.io before testing). Same underlying platform
+    // as UK/COM/CA, path-prefixed at /en-IE/ like MC/CA's /en-CA/ (see
+    // brand-urls.ts — both qaUrl and liveUrl already used consistent 'en-IE'
+    // casing, no typo to fix here unlike FR-CA's). Most fields below are
+    // CLONED from CA as a starting baseline — NOT yet independently
+    // confirmed for IE — run the full suite and correct via real failures,
+    // same pattern as every other GEO onboarded this project.
+    IE: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // unconfirmed — cloned from CA
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // unconfirmed — cloned from CA
+      featuresPath: null, // unconfirmed — cloned from CA
+      mobileAppPath: 'mobile-app/', // unconfirmed — cloned from CA
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — cloned from CA
+      currencySymbol: '€', // unconfirmed — Ireland uses Euro, verify live bonus copy
+      contactEmail: 'support@megacasino.com', // unconfirmed — cloned from UK/COM/CA
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // unconfirmed — cloned from CA
+      hasSocialMedia: false, // unconfirmed — cloned from CA
+      searchTerm: 'Casino', // unconfirmed — cloned from CA
+      searchResultHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // same taxonomy as UK/COM/CA, unconfirmed for IE specifically
+      gameTileHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // same taxonomy as UK/COM/CA, unconfirmed for IE specifically
+      paymentMethodsPath: 'payment-options/', // unconfirmed — cloned from COM/CA
+      hasGameFilterCarousel: true, // unconfirmed — cloned from CA
+      hasFeedbackForm: true, // unconfirmed — cloned from CA
+      hasGameCategoryNav: true, // unconfirmed — cloned from CA
+      hasLoginRegistration: true, // unconfirmed — cloned from CA
+      hasTestAccount: true, // real test account provided 2026-07-23 (sha@test.com)
+      hasAccountModal: true, // unconfirmed — cloned from CA
+      hasPaymentMethodsPage: true, // unconfirmed — cloned from CA
+      hasBlogDesktopSearch: false, // no blog for IE anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for IE anyway — set false for consistency
+      hasPromotionsIconInHeader: false, // unconfirmed — cloned from COM/CA
+    },
   },
 
   // ── Genting Casino (GC) ───────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -163,6 +163,19 @@ test.describe('Registration Flow', () => {
     // generator for the same number format.
     const isMcCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
       && test.info().project.name.replace(/-mobile$/, '') === 'CA';
+    // MC/FR-CA — onboarding started 2026-07-23, tested from a confirmed
+    // Montreal VPN. Same underlying platform as MC/CA but genuinely
+    // translated field labels — confirmed live via DOM snapshot: mobile
+    // field reads "Numéro de téléphone cellulaire" (NOT SNG FR-CA's
+    // "Numéro de mobile" — different brand copy, same language) and the
+    // DOB field placeholder is "Année-Mois-Jour" (dash-separated
+    // YYYY-MM-DD), same format as SNG FR-CA, so generateFrCaDOB() is reused
+    // unchanged. Continue button reads "Continuer" (lowercase, NOT SNG
+    // FR-CA's all-caps "CONTINUER") — a real, confirmed brand-copy
+    // difference, not a typo.
+    const isMcFrCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
+      && test.info().project.name.replace(/-mobile$/, '') === 'FR-CA';
+    const mcFrCaStep0Labels = { mobile: 'Numéro de téléphone cellulaire', dob: 'Quelle est votre date de naissance?', continue: 'Continuer' };
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
 
@@ -561,7 +574,9 @@ test.describe('Registration Flow', () => {
         // scope to the actual popup container (confirmed live 2026-07-21
         // this widget is NOT in an iframe, "scope" === the main page here,
         // same as login.spec.ts's Step 4 fix for the identical ambiguity).
-        const goPlayBtn = (isFrCaFormat
+        // MC FR-CA's own game tiles read "JOUER MAINTENANT" (confirmed live
+        // 2026-07-23) — the unanchored /jouer/i regex already matches both.
+        const goPlayBtn = ((isFrCaFormat || isMcFrCaFormat)
           ? page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first().getByRole('button', { name: /jouer/i })
           : scope.getByRole('button', { name: /go play/i })).first();
         await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
@@ -589,6 +604,22 @@ test.describe('Registration Flow', () => {
       if (isMcCaFormat) {
         data.dob = generateCanadianDOB();
       }
+      // MC/FR-CA: same dash-separated YYYY-MM-DD format as SNG FR-CA
+      // (confirmed live via the field's "Année-Mois-Jour" placeholder) —
+      // reuses generateFrCaDOB() unchanged rather than adding a near-
+      // duplicate generator for the same date format. Address ALSO needs
+      // overriding here (unlike MC/CA/COM, which accept the default
+      // UK-shaped address without complaint) — confirmed live 2026-07-23:
+      // MC FR-CA's address field performs REAL geocoding validation, not
+      // free-text acceptance. generateMcFrCaAddress() (not the random
+      // generateCanadianAddress()) always returns the one CA_ADDRESSES
+      // entry ("Bank Street", Ottawa) confirmed to reliably resolve —
+      // see its docstring in helpers/testData.ts for why the other two
+      // entries are unsafe here specifically.
+      if (isMcFrCaFormat) {
+        data.dob = generateFrCaDOB();
+        data.address = generateMcFrCaAddress();
+      }
 
       // ── Step 2: Step 0 — Mobile + DOB ─────────────────────────────────
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
@@ -599,8 +630,12 @@ test.describe('Registration Flow', () => {
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
           : isMcComFormat
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
-          // MC/CA: country already auto-detects correctly (no 'Canada' label
-          // needed, unlike SNG AB/CA) — just needs a NANP-format number.
+          // MC/CA and MC/FR-CA: country already auto-detects correctly (no
+          // 'Canada' label needed, unlike SNG AB/CA) — just needs a
+          // NANP-format number; MC/FR-CA additionally needs its own
+          // (genuinely translated, brand-specific) field labels.
+          : isMcFrCaFormat
+          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, undefined, mcFrCaStep0Labels)
           : isMcCaFormat
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile)
           : fillStep0WithRetry(page, scope, data));
@@ -615,10 +650,15 @@ test.describe('Registration Flow', () => {
         // shape) so it uses the default readyLocator like AB does. MC/COM
         // and MC/CA confirmed live 2026-07-22: same no-house-number shape —
         // address step is a "Start typing your address" autocomplete field.
-        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isMcCaFormat)
-          ? (isFrCaFormat ? scope.getByLabel('Adresse').first() : scope.getByPlaceholder('Start typing your address').first())
-          : undefined, isFrCaFormat ? frCaStep1Labels : undefined,
-          isFrCaFormat ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined);
+        // MC/FR-CA: same no-house-number shape, but the field is a real
+        // "Adresse" label like SNG FR-CA's, not an English placeholder —
+        // firstName/lastName/email/gender labels NOT yet independently
+        // confirmed for MC FR-CA, reusing SNG FR-CA's frCaStep1Labels as a
+        // starting guess (same language, correct via real failures if wrong).
+        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isMcCaFormat || isMcFrCaFormat)
+          ? ((isFrCaFormat || isMcFrCaFormat) ? scope.getByLabel('Adresse').first() : scope.getByPlaceholder('Start typing your address').first())
+          : undefined, (isFrCaFormat || isMcFrCaFormat) ? frCaStep1Labels : undefined,
+          (isFrCaFormat || isMcFrCaFormat) ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined);
       });
 
       // ── Step 4: Step 2 — Address ───────────────────────────────────────
@@ -631,11 +671,26 @@ test.describe('Registration Flow', () => {
         // see fillComAddress's docstring. MC/CA: same underlying platform as
         // MC/COM — assumed same shape, not independently re-verified field-
         // by-field this session; re-check live if this step starts failing.
+        // MC/FR-CA: same shape as MC/CA (street label, not SNG's separate
+        // fillStep2CA function/CSS-id postcode+city shape) — postcode
+        // ("Code postal") and city ("Ville") labels confirmed live
+        // 2026-07-23 and fill/validate correctly. KNOWN OPEN ISSUE (same
+        // class as MC/UK's documented Cloudflare gap — a real environment
+        // blocker, not a selector bug): the "Adresse" field is a genuine
+        // Google-style autocomplete that never returns any suggestion to
+        // this automated session regardless of input method tried (plain
+        // fill, real per-keystroke typing, keyboard ArrowDown+Enter) — it
+        // always resets to empty with a persistent "Adresse invalide" error
+        // on blur, which blocks Continue from ever advancing past this step.
+        // Needs a real (non-automated) browser check or a suggestions-API
+        // allowlist fix from whoever owns MC's address-autocomplete
+        // integration; not something further test-code changes can solve.
         await (usesAbAddressShape ? fillStep2AB(page, scope, data)
           : isCanadianMobileFormat ? fillStep2CA(page, scope, data,
               isFrCaFormat ? 'Adresse' : 'Start typing your address',
               isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue',
               isFrCaFormat ? /nom d'utilisateur/i : /username/i)
+          : isMcFrCaFormat ? fillComAddress(page, scope, data, 'Adresse', true, 'Code postal', 'Ville', 'Continuer', /nom d.utilisateur/i, /saisir l.adresse manuellement/i)
           : (isMcComFormat || isMcCaFormat) ? fillComAddress(page, scope, data)
           : fillStep2(page, scope, data));
       });
@@ -651,7 +706,10 @@ test.describe('Registration Flow', () => {
         // MC/COM confirmed live 2026-07-22 — same reasoning: MC has no Bingo
         // vertical at all (Home/Live Casino/Online Slots/Casino Games), so no
         // gdprBingo checkbox exists here either. MC/CA: same brand-wide
-        // reasoning applies (no Bingo vertical on MC at all).
+        // reasoning applies (no Bingo vertical on MC at all). MC/FR-CA: same
+        // brand-wide no-Bingo reasoning; username/password labels NOT yet
+        // confirmed live — best-guess French translations via frCaStep1Labels-
+        // style regexes, correct via real failures.
         await (usesAbAddressShape
           ? fillStep3(page, scope, data, ['isPepConsent', 'gdpr', 'terms_accept', 'playerDeclaration'])
           : isCanadianMobileFormat
@@ -659,6 +717,8 @@ test.describe('Registration Flow', () => {
               isFrCaFormat ? /nom d'utilisateur/i : /username/i,
               isFrCaFormat ? /mot de passe/i : 'Minimum 10 characters',
               isFrCaFormat)
+          : isMcFrCaFormat
+          ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'], /nom d.utilisateur/i, /mot de passe/i, true)
           : (isMcComFormat || isMcCaFormat)
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
@@ -670,7 +730,9 @@ test.describe('Registration Flow', () => {
         // scope to the actual popup container (confirmed live 2026-07-21
         // this widget is NOT in an iframe, "scope" === the main page here,
         // same as login.spec.ts's Step 4 fix for the identical ambiguity).
-        const goPlayBtn = (isFrCaFormat
+        // MC FR-CA's own game tiles read "JOUER MAINTENANT" (confirmed live
+        // 2026-07-23) — the unanchored /jouer/i regex already matches both.
+        const goPlayBtn = ((isFrCaFormat || isMcFrCaFormat)
           ? page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first().getByRole('button', { name: /jouer/i })
           : scope.getByRole('button', { name: /go play/i })).first();
         await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
@@ -2175,37 +2237,94 @@ async function fillStep2CA(
  * fillIEAddress does would be unnecessary and risks fighting the already-
  * correct value.
  */
-async function fillComAddress(page: Page, scope: Scope, data: RegistrationData): Promise<void> {
+async function fillComAddress(
+  page: Page, scope: Scope, data: RegistrationData,
+  // MC FR-CA: same no-house-number shape as COM/CA, but genuinely
+  // translated field labels — confirmed live 2026-07-23: street is a real
+  // "Adresse" label (not a placeholder, same as SNG FR-CA's fillStep2CA),
+  // postcode is "Code postal", city is "Ville".
+  streetLabel: string | RegExp = 'Start typing your address',
+  useLabelNotPlaceholder: boolean = false,
+  postcodeLabel: string | RegExp = 'Postcode',
+  cityLabel: string | RegExp = 'City',
+  continueLabel: string = 'Continue',
+  usernameLabel: RegExp = /username/i,
+  // MC FR-CA (root-caused and fixed 2026-07-23): the "Adresse" field is a
+  // real address-validation widget whose Postcode/Ville/Country/Province
+  // fields only appear in the DOM once the address is confirmed EITHER via
+  // a successful autocomplete match OR by clicking this widget's own
+  // "Saisir l'adresse manuellement" ("Enter address manually") escape
+  // hatch — random real street names (from generateCanadianAddress())
+  // don't reliably autocomplete-match on their own, so click the manual
+  // link first for a deterministic reveal rather than depending on luck.
+  manualEntryLinkText?: string | RegExp,
+): Promise<void> {
   console.log('REG-01 (COM) Step 2/3 address');
 
   const addr = data.address;
 
-  const streetInput = scope.getByPlaceholder('Start typing your address').first();
+  const streetInput = (useLabelNotPlaceholder
+    ? scope.getByLabel(streetLabel)
+    : scope.getByPlaceholder(streetLabel)).first();
   await expect(streetInput).toBeVisible({ timeout: 10_000 });
   await streetInput.click();
-  await streetInput.fill(addr.street);
+  // A plain .fill() left this field permanently invalid on MC FR-CA — its
+  // own client-side validation apparently needs real per-keystroke input
+  // events (not a batch value-set) to mark the field valid; confirmed live
+  // via direct DOM inspection that real per-character typing turns the
+  // field's status icon green (valid). pressSequentially is strictly more
+  // realistic user input than fill() for every other GEO using this
+  // function too, so this isn't scoped to MC FR-CA specifically.
+  await streetInput.pressSequentially(addr.street, { delay: 100 });
+  await page.waitForTimeout(500);
   await streetInput.press('Tab');
   await page.waitForTimeout(800);
 
-  const postcodeInput = scope.getByRole('textbox', { name: 'Postcode' }).first();
-  await expect(postcodeInput).toBeVisible({ timeout: 5_000 });
+  const postcodeInput = scope.getByRole('textbox', { name: postcodeLabel }).first();
+  // MC FR-CA: confirmed live 2026-07-23 — this widget is INCONSISTENT about
+  // whether typing alone reveals Postcode/Ville/Country/Province, or
+  // whether the "Saisir l'adresse manuellement" ("Enter address manually")
+  // link needs an explicit click first — order matters: clicking the link
+  // BEFORE typing doesn't reliably work either. Try the straightforward
+  // path first (short wait), and only fall back to the manual link if
+  // Postcode still hasn't appeared. IMPORTANT: clicking the manual-entry
+  // link swaps in a genuinely different (non-autocomplete) Adresse input
+  // and clears whatever was typed into the old one — re-fill it as plain
+  // text afterward (no geocoding validation applies in this mode, so a
+  // simple .fill() is fine here, unlike the autocomplete field above).
+  const postcodeAppearedFromTyping = await postcodeInput.isVisible({ timeout: 3_000 }).catch(() => false);
+  if (!postcodeAppearedFromTyping && manualEntryLinkText) {
+    const manualLink = scope.getByText(manualEntryLinkText).first();
+    if (await manualLink.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await manualLink.click();
+      await page.waitForTimeout(500);
+      const manualStreetInput = (useLabelNotPlaceholder
+        ? scope.getByLabel(streetLabel)
+        : scope.getByPlaceholder(streetLabel)).first();
+      await expect(manualStreetInput).toBeVisible({ timeout: 5_000 });
+      await manualStreetInput.fill(addr.street);
+      await manualStreetInput.press('Tab');
+      await page.waitForTimeout(500);
+    }
+  }
+  await expect(postcodeInput).toBeVisible({ timeout: 10_000 });
   await postcodeInput.click();
   await postcodeInput.fill(addr.postcode);
   await postcodeInput.press('Tab');
   await page.waitForTimeout(300);
 
-  const cityInput = scope.getByRole('textbox', { name: 'City' }).first();
+  const cityInput = scope.getByRole('textbox', { name: cityLabel }).first();
   await expect(cityInput).toBeVisible({ timeout: 5_000 });
   await cityInput.click();
   await cityInput.fill(addr.city);
   await cityInput.press('Tab');
   await page.waitForTimeout(300);
 
-  const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
+  const continueBtn = scope.getByRole('button', { name: continueLabel }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
   await continueBtn.click();
 
-  await scope.getByRole('textbox', { name: /username/i })
+  await scope.getByRole('textbox', { name: usernameLabel })
     .first().waitFor({ state: 'visible', timeout: 15_000 });
   console.log('REG-01 (COM) Step 2/3 complete');
 }

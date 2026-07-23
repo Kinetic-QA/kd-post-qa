@@ -143,11 +143,18 @@ test.describe('P2 - Login Widget', () => {
       // ES's registration format asks for a DNI/NIE field first (no mobile
       // step at all — see p1/registration.spec.ts) — UK/IE/ROW ask for
       // mobile with an English-labeled field; DE's is labeled "Handynummer"
-      // (confirmed live — see p1/registration.spec.ts's DE branch).
+      // (confirmed live — see p1/registration.spec.ts's DE branch); FR-CA's
+      // is French-labeled — confirmed live 2026-07-23 on MC FR-CA ("Numéro
+      // de téléphone cellulaire") and previously on SNG FR-CA ("Numéro de
+      // mobile") — neither contains the English word "mobile" as a whole
+      // match, so widen to also catch "téléphone"/"numéro" rather than
+      // adding a third brand-specific field-name branch for one sanity check.
       const firstFieldLocator = geoFeatures.locale === 'es'
         ? page.locator('input[name="personalID"]').first()
         : geoFeatures.locale === 'de'
         ? page.locator('input[name="mobile"]').first()
+        : geoFeatures.locale === 'fr'
+        ? page.getByRole('textbox', { name: /mobile|téléphone|numéro/i }).first()
         : page.getByRole('textbox', { name: /mobile/i }).first();
       await expect(firstFieldLocator).toBeVisible({ timeout: 10_000 });
     });

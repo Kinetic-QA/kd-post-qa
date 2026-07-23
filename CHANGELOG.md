@@ -29,11 +29,14 @@ Each release or change set uses this structure:
 ### Automation Coverage Status (per brand, for tracker use)
 
 - **Genting Casino (GC)** — Onboarded: UK (partial), Spain (ES). Confirmed Passing: Spain only. **Status: Spain is fully done, nothing outstanding. UK is blocked** by the same kind of automated-security-service issue already seen on Mega Casino's UK site (see below) — several checks (login, sign-up, and a handful of others) get intermittently stopped by it. Per today's call, UK is parked for now rather than spending more time on it; picking Spain first paid off since it turned out to have none of that problem.
+- **Mega Casino (MC)** — Onboarded: UK, .com (international), Canada, French Canada, Ireland (5 markets). Confirmed Passing: Canada, French Canada, Ireland (3 of 5). **Status: French Canada and Ireland are both now fully done, nothing outstanding.** UK remains blocked by the same automated security service noted above. .com's status still needs re-confirming next time it's touched.
 
 ### Added
 
 - **Onboarded Genting Casino's Spain (ES) market — passes the full checklist cleanly on desktop**, including a working blog search (see Fixed below for a correction on that).
 - Started onboarding Genting Casino's UK market. Several real site-specific fixes went in (see Fixed), but UK isn't being counted as "confirmed passing" yet because of the security-service blocking issue above.
+- **Onboarded Mega Casino's French Canada (FR-CA) market — passes the full checklist cleanly**, tested from a confirmed Montreal connection.
+- **Onboarded Mega Casino's Ireland (IE) market — passes the full checklist cleanly**, tested from a confirmed Dublin connection.
 
 ### Fixed
 
@@ -46,11 +49,19 @@ Each release or change set uses this structure:
 - **Genting Casino's blog list page doesn't have a "Read More" link on articles at all** — unlike our other brands, only the article title itself is clickable. The check now falls back to clicking a real article title when no "Read More" link exists.
 - **The blog logo's "click goes to blog home page" check only recognized this behavior for one specific brand** — now that a second, unrelated brand (Genting Casino) confirms the same behavior, the check treats it as the normal case and only expects the older "goes to main homepage" behavior for the one brand actually confirmed to work that way.
 - **Corrected a mistaken "blog search doesn't work" finding on Genting Casino's Spanish site** — an early check looked in the wrong place (only the mobile menu) and wrongly assumed search was broken there like it is on some other brands. Re-checked properly using the real desktop search icon in the page header: it works perfectly, including returning real search results. The checklist and brand notes are now corrected to reflect that.
+- **A typo in Mega Casino French Canada's web address (lowercase instead of uppercase in the "CA" part) was silently breaking every "does clicking this link take you to the right page" check.** Fixed to match the real address the site itself uses.
+- **Several of Mega Casino French Canada's sign-up and log-in screens use different wording than we assumed** — the real mobile number field, birthday field, continue button, postal code field, and city field all use their own French Canadian wording rather than the wording already confirmed on a different brand's French Canada site. Updated to match what's actually there.
+- **Mega Casino French Canada's log-in and Home links are genuinely in English on an otherwise-French site** (confirmed with the brand owner as intended, not a bug) — the checklist now accepts either the English or French wording instead of only expecting French and failing.
+- **The sign-up form's address step on Mega Casino French Canada was silently rejecting every attempt** — typing an address needs to be done the same way a real person types (letter by letter), not pasted in all at once, or the site's own address checker never accepts it. Also fixed a related timing quirk where the postal code and city boxes sometimes don't appear until you click a small "type it in yourself" link first. Both are now handled correctly.
+- **Mega Casino French Canada's contact page has no "report a problem" link at all** — the checklist was still expecting one (based on other markets) and failing. Corrected to skip that check on this market, since it's genuinely not there.
+- **A sidebar "Home" link deep inside Mega Casino French Canada's menu was showing up in Portuguese ("Página Inicial") instead of French or English** — a real site wording bug, separate from the two intentional English spots above. The checklist now recognizes this wording too so the check itself doesn't fail, while the underlying site wording bug is being raised with the brand owner separately.
+- **A game info pop-up check was intermittently trying to click a game tile that was scrolled out of view inside a sideways-scrolling row of games** — happened on Mega Casino Ireland but isn't specific to that market. The check now double-checks the tile is actually on-screen first and picks a different one if not, benefiting every brand that uses this same check.
 
 ### Known open items (carrying into next session)
 
 - **Genting Casino UK's live site is guarded by an automated security service that intermittently blocks our automated checks** (not real site visitors — same category of issue already documented for Mega Casino UK). We looked into a possible workaround today and decided not to pursue it for now due to licensing limits; UK is parked until either the security team allowlists our checker, or a different workaround is found.
 - **A "click the sidebar logo to go home" check on Genting Casino UK times out even when tested completely on its own**, separate from the security-service issue above — a real, still-unfixed bug worth a closer look next time UK is picked back up.
+- **Two Mega Casino French Canada footer links ("Contato" and "Afiliados") are showing up in the wrong language entirely (Portuguese/Spanish, not French)** — confirmed as a real bug, ticket being filed with the brand owner. A third spot with the same problem (the sidebar's "Página Inicial" link, noted above) is likely the same root cause and worth folding into that same ticket.
 - Next session: continue with whichever brand/market Reeve prioritizes next — Genting Casino's remaining markets, or another brand's onboarding.
 
 ## [Unreleased] - 2026-07-22

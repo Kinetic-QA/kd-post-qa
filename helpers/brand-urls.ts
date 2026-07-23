@@ -38,7 +38,7 @@ export const BRAND_URLS: BrandEnvironment[] = [
   { brand: 'MC',  geo: 'CA',    qaUrl: 'https://qa.megacasino.com/en-CA/', liveUrl: 'https://www.megacasino.com/en-CA/' },
   { brand: 'MC',  geo: 'IE',    qaUrl: 'https://qa.megacasino.com/en-IE/', liveUrl: 'https://www.megacasino.com/en-IE/' },
   { brand: 'MC',  geo: 'DE',    qaUrl: 'https://qa.megaspielhalle.de/',   liveUrl: 'https://www.megaspielhalle.de/' },
-  { brand: 'MC',  geo: 'FR-CA', qaUrl: 'https://qa.megacasino.com/fr-CA/', liveUrl: 'https://www.megacasino.com/fr-ca/' },
+  { brand: 'MC',  geo: 'FR-CA', qaUrl: 'https://qa.megacasino.com/fr-CA/', liveUrl: 'https://www.megacasino.com/fr-CA/' }, // liveUrl casing fixed 2026-07-23: was 'fr-ca' (lowercase), but the live site's own internal nav links consistently use 'fr-CA' (confirmed via accessibility snapshot) — the mismatch caused every in-app redirect assertion to soft-fail on a case-only URL diff
   { brand: 'MC',  geo: 'DK',    qaUrl: 'https://qa.megacasino.dk/',       liveUrl: 'https://www.megacasino.dk/' },
   { brand: 'MC',  geo: 'SE',    qaUrl: 'https://qa-se.megacasino.com/',   liveUrl: 'https://se.megacasino.com/' },
   { brand: 'MC',  geo: 'ES',    qaUrl: 'https://qa.megacasinos.es/',      liveUrl: 'https://www.megacasinos.es/' },
