@@ -272,6 +272,14 @@ test.describe('P2 - Sidebar Navigation', () => {
     // -- Steps 21-23: Home -------------------------------------------------
     await test.step('Steps 21-23: Home link -> homepage (no slug)', async () => {
       await openSidebar();
+      // MC FR-CA (root-caused and fixed 2026-07-23): this step used to time
+      // out clicking the Home link. Root cause was a text mismatch, not a
+      // DOM-order/selector issue — the actual drawer's Home link reads
+      // "Página Inicial" (a genuine wrong-locale-bundle bug, unrelated to
+      // MC's separate, brand-owner-confirmed-intentional English "Home" in
+      // the always-visible top-strip nav), which strings.homeLinkText now
+      // matches (see locale-strings.ts). `.first()` is correct once the text
+      // itself matches — no DOM-order workaround needed.
       const homeLink = page.locator(SIDEBAR + ` a[href="${siteUrl('')}"]`).filter({ hasText: strings.homeLinkText }).first();
       await homeLink.click();
       await page.waitForLoadState('domcontentloaded');

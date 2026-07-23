@@ -274,13 +274,39 @@ test.describe('P1 - Game Information Modal', () => {
 
     await runStep('Step 10: Click game title again -> info modal reopens', async () => {
       await dismissCampaignPopup(page);
-      const link = await findGameLink();
-      await link.scrollIntoViewIfNeeded();
-      await page.evaluate(() => window.scrollBy(0, -120));
-      await page.waitForTimeout(200);
-      await hoverRevealAncestor(link);
-      await page.waitForTimeout(300);
-      await link.click({ force: true });
+      // MC/IE (confirmed live 2026-07-23): findGameLink() can pick a tile
+      // sitting inside a horizontally-scrolling carousel row — page-level
+      // scrollIntoViewIfNeeded() only handles real vertical/overflow scroll
+      // containers, not a transform-based horizontal carousel, so the tile
+      // can remain genuinely outside the viewport (force:true doesn't
+      // bypass Playwright's hard viewport check either). Re-pick a fresh
+      // candidate up to twice if the chosen one isn't actually reachable —
+      // findGameLink() returns a different tile each call as page state
+      // shifts, and another candidate is very likely to be a plain,
+      // non-carousel tile that scrolls into view normally.
+      let clicked = false;
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= 3 && !clicked; attempt++) {
+        const link = await findGameLink();
+        await link.scrollIntoViewIfNeeded();
+        await page.evaluate(() => window.scrollBy(0, -120));
+        await page.waitForTimeout(200);
+        const box = await link.boundingBox().catch(() => null);
+        const vh = page.viewportSize()?.height ?? 720;
+        if (!box || box.y < 0 || box.y > vh) {
+          console.log(`GIM-01 Step 10 attempt ${attempt}: candidate outside viewport (y=${box?.y}), retrying with a different tile`);
+          continue;
+        }
+        await hoverRevealAncestor(link);
+        await page.waitForTimeout(300);
+        try {
+          await link.click({ force: true, timeout: 5_000 });
+          clicked = true;
+        } catch (e) {
+          lastError = e;
+        }
+      }
+      if (!clicked) throw lastError ?? new Error('GIM-01 Step 10: no reachable game tile found after 3 attempts');
       await page.waitForTimeout(2_000);
       await expect(page).toHaveURL(/#gamepage\//, { timeout: 10_000 });
     });
