@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError, dismissCloudflareChallenge } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 
@@ -95,6 +95,7 @@ test.describe('P3 - Contact Us Page', () => {
       await contactLink.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
+      await dismissCloudflareChallenge(page);
       await expect(page).toHaveURL(new RegExp(`/${contactPath}`), { timeout: 8_000 });
       console.log('CU-01 navigated to: ' + page.url());
     });
@@ -115,7 +116,13 @@ test.describe('P3 - Contact Us Page', () => {
     });
 
     // ── Step 4: Email link present under "Email Us" ──────────────────────
+    // Confirmed live on GC UK: this brand's /contact/ page has NO mailto:
+    // link at all — it uses 2 big clickable CTA cards instead (see Step 3b
+    // below) — skip both mailto steps rather than fail on a real design
+    // difference, same pattern as the LOGIN-link skip above.
+    const hasContactMailto = geoFeatures.hasContactMailto ?? true;
     await runStep('Step 4: Email link (' + GEO_EMAIL + ') present', async () => {
+      if (!hasContactMailto) { console.log('CU-01 Step 4 skipped — this brand has no mailto link on /contact/'); return; }
       const emailLink = page.locator('a[href*="mailto:"]').first();
       await expect(emailLink).toBeVisible({ timeout: 8_000 });
       const href = await emailLink.getAttribute('href') ?? '';
@@ -125,10 +132,27 @@ test.describe('P3 - Contact Us Page', () => {
 
     // ── Step 5: Email matches correct geo ────────────────────────────────
     await runStep('Step 5: Email matches geo (' + GEO_EMAIL + ')', async () => {
+      if (!hasContactMailto) { console.log('CU-01 Step 5 skipped — this brand has no mailto link on /contact/'); return; }
       const emailLink = page.locator('a[href*="mailto:' + GEO_EMAIL + '"]').first();
       const isVisible = await emailLink.isVisible({ timeout: 5_000 }).catch(() => false);
       expect(isVisible).toBe(true);
       console.log('CU-01 geo email present: ' + isVisible);
+    });
+
+    // ── Step 3b: CTA-card design (GC-specific) ───────────────────────────
+    // Confirmed live on GC UK: instead of a mailto link, /contact/ shows big
+    // clickable CTA cards under "How Can We Help?" (e.g. "Genting Casino
+    // Online" / "Genting Casino Venues"), each routing to its own /contact/
+    // sub-page. Other brands leave contactCtaLabels unset and this step
+    // no-ops for them.
+    await runStep('Step 3b: Contact CTA cards present and clickable', async () => {
+      const ctaLabels = geoFeatures.contactCtaLabels;
+      if (!ctaLabels || ctaLabels.length === 0) { console.log('CU-01 Step 3b skipped — this brand has no CTA-card contact design'); return; }
+      for (const label of ctaLabels) {
+        const cta = page.getByText(label, { exact: true }).first();
+        await expect(cta).toBeVisible({ timeout: 8_000 });
+      }
+      console.log('CU-01 all contact CTA cards visible: ' + ctaLabels.join(', '));
     });
 
     // ── Step 6: "Report a problem" link present ───────────────────────────
@@ -178,6 +202,7 @@ test.describe('P3 - Contact Us Page', () => {
     // ── Steps 10-11: Click email link -> verify mailto href ───────────────
     // Playwright cannot open native mail apps — verify href is correct instead
     await runStep('Steps 10-11: Email link has correct mailto: for geo', async () => {
+      if (!hasContactMailto) { console.log('CU-01 Steps 10-11 skipped — this brand has no mailto link on /contact/'); return; }
       const emailLink = page.locator('a[href="mailto:' + GEO_EMAIL + '"]').first();
       await expect(emailLink).toBeVisible({ timeout: 5_000 });
       const href = await emailLink.getAttribute('href') ?? '';

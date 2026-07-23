@@ -302,10 +302,12 @@ test.describe('P2 - Sidebar Navigation', () => {
     }
 
     // -- Steps 33-35: Responsible Gaming ----------------------------------
-    await navStep('Responsible Gaming -> /responsible-gaming/', '/responsible-gaming/', '/responsible-gaming/');
+    const responsibleGamingPath = geoFeatures.responsibleGamingPath ?? 'responsible-gaming/';
+    await navStep('Responsible Gaming -> /' + responsibleGamingPath, '/' + responsibleGamingPath, '/' + responsibleGamingPath);
 
     // -- Steps 36-38: Help ------------------------------------------------
-    await navStep('Help -> /help/', '/help/', '/help/');
+    const helpPath = geoFeatures.helpPath ?? 'help/';
+    await navStep('Help -> /' + helpPath, '/' + helpPath, '/' + helpPath);
 
     // -- Steps 39-41: Contact us -------------------------------------------
     const contactPath = geoFeatures.contactPath ?? 'contact/';

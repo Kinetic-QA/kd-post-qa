@@ -158,14 +158,14 @@ test.describe('P3 - Blog Page Header', () => {
       // Slingo (SC): CONFIRMED via live DOM inspection the blog header logo
       // links to the main site root, NOT /blog/ — confirmed intentional by
       // the dev team, consistent across Slingo's markets.
-      // SNG: CONFIRMED via live DOM inspection 2026-07-20 (CA) the blog
-      // header logo (data-tk-value="blog-home") genuinely links to the
-      // blog's OWN homepage (/blog/), not the main site root — a real,
-      // confirmed difference from Slingo's behavior, matching this step's
-      // literal name. Brand-aware expectation rather than assuming Slingo's
-      // behavior applies everywhere.
-      const isSNG = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SNG';
-      const expectedUrl = isSNG ? siteUrl(geoFeatures.blogPath!) : siteUrl('');
+      // SNG (confirmed 2026-07-20, CA) and GC (confirmed 2026-07-23, ES):
+      // the blog header logo genuinely links to the blog's OWN homepage
+      // (/blog/), not the main site root — a real, confirmed difference
+      // from Slingo's behavior, matching this step's literal name. Two
+      // independent brands now confirm the /blog/ behavior vs. only SC
+      // confirming root, so SC is the special case here, not the default.
+      const isSC = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SC';
+      const expectedUrl = isSC ? siteUrl('') : siteUrl(geoFeatures.blogPath!);
 
       await page.goto(`${geoFeatures.blogPath}search/`, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');

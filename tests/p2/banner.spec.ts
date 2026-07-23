@@ -143,7 +143,7 @@ test.describe('P2 - Banner', () => {
         await page.goto(href, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await expect(page).toHaveURL(/\/bonus-policy\//, { timeout: 10_000 });
-        await page.goBack();
+        await page.goBack({ waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
         await dismissCampaignPopup(page);
       } else {

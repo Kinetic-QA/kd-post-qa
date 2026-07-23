@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, playCtaLocator } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 
@@ -216,7 +216,7 @@ test.describe('P1 - Game Information Modal', () => {
       // elsewhere on the page (confirmed live: a "Content_block-center"
       // promo tile also says "A JUGAR" on ES).
       const modal = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
-      const playItBtn = modal.locator('a, button').filter({ hasText: strings.playCta }).first();
+      const playItBtn = playCtaLocator(modal, strings.playCta).first();
       // Confirmed count 1 in the modal, so it's the right element — but on
       // SNG AB mobile it has a genuine 0×0 bounding box (a desktop-only
       // hover-reveal element, class GameTile_tile-hover, that never gets a
@@ -357,8 +357,7 @@ test.describe('P1 - Game Information Modal', () => {
       // falling through to the tile-click branch and never reaching
       // registration. Check existence by count, not visibility, and use a
       // native click either way so a zero-size element still works.
-      const tileCta = gameLink.locator('xpath=..').locator('a, button')
-        .filter({ hasText: strings.playCta }).first();
+      const tileCta = playCtaLocator(gameLink.locator('xpath=..'), strings.playCta).first();
       const ctaExists = await tileCta.count() > 0;
       if (ctaExists) {
         await tileCta.evaluate((el: HTMLElement) => el.click());
@@ -370,7 +369,7 @@ test.describe('P1 - Game Information Modal', () => {
 
       if (page.url().includes('#gamepage/')) {
         const modal = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
-        const modalPlayCta = modal.locator('a, button').filter({ hasText: strings.playCta }).first();
+        const modalPlayCta = playCtaLocator(modal, strings.playCta).first();
         if (await modalPlayCta.count() > 0) {
           await modalPlayCta.evaluate((el: HTMLElement) => el.click());
           await page.waitForTimeout(2_000);
