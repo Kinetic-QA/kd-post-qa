@@ -24,6 +24,35 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-23
+
+### Automation Coverage Status (per brand, for tracker use)
+
+- **Genting Casino (GC)** — Onboarded: UK (partial), Spain (ES). Confirmed Passing: Spain only. **Status: Spain is fully done, nothing outstanding. UK is blocked** by the same kind of automated-security-service issue already seen on Mega Casino's UK site (see below) — several checks (login, sign-up, and a handful of others) get intermittently stopped by it. Per today's call, UK is parked for now rather than spending more time on it; picking Spain first paid off since it turned out to have none of that problem.
+
+### Added
+
+- **Onboarded Genting Casino's Spain (ES) market — passes the full checklist cleanly on desktop**, including a working blog search (see Fixed below for a correction on that).
+- Started onboarding Genting Casino's UK market. Several real site-specific fixes went in (see Fixed), but UK isn't being counted as "confirmed passing" yet because of the security-service blocking issue above.
+
+### Fixed
+
+- **The website header's "logo goes home" check was still trying to visit Slingo's own game category page first, which Genting Casino doesn't have at all** — a leftover assumption from when only Slingo existed. Now picks any real page the current brand actually has instead.
+- **Genting Casino's "hover to play" button on game tiles has no text at all, just a play icon** — every other brand we've onboarded has real text like "PLAY IT" there, so several checks (feedback form, search results, game info pop-up) that looked for that text came up empty on Genting Casino. They now also recognize the icon-only button.
+- **The game filter carousel check assumed the very first row of games could always be scrolled** — on Genting Casino, the first row can genuinely be too short to need scrolling (e.g. only 3 games), which is normal, not a bug. The check now picks the first row that's actually scrollable instead of assuming row one always is.
+- **A "go back" step used across several checks was timing out under normal conditions** — it was waiting for the full page (including every image) to finish loading before moving on, when the checks right after it only ever needed the page's basic content to be ready. Sped up and fixed across six different checks.
+- **Several footer and sidebar links on Genting Casino's Spanish site go to genuinely translated Spanish web addresses** (e.g. "Casino" goes to a Spanish-named address, not the English one used elsewhere) — the checklist was still expecting the English addresses and failing. Now reads the correct address per market instead of assuming one fixed set for every brand.
+- **Genting Casino's Contact Us page has a totally different design between UK and Spain** — UK shows two big clickable option cards with no direct email address; Spain shows a completely different layout with a real support email and a "report a problem" button. The checklist now handles both designs correctly instead of assuming they're the same.
+- **Genting Casino's blog list page doesn't have a "Read More" link on articles at all** — unlike our other brands, only the article title itself is clickable. The check now falls back to clicking a real article title when no "Read More" link exists.
+- **The blog logo's "click goes to blog home page" check only recognized this behavior for one specific brand** — now that a second, unrelated brand (Genting Casino) confirms the same behavior, the check treats it as the normal case and only expects the older "goes to main homepage" behavior for the one brand actually confirmed to work that way.
+- **Corrected a mistaken "blog search doesn't work" finding on Genting Casino's Spanish site** — an early check looked in the wrong place (only the mobile menu) and wrongly assumed search was broken there like it is on some other brands. Re-checked properly using the real desktop search icon in the page header: it works perfectly, including returning real search results. The checklist and brand notes are now corrected to reflect that.
+
+### Known open items (carrying into next session)
+
+- **Genting Casino UK's live site is guarded by an automated security service that intermittently blocks our automated checks** (not real site visitors — same category of issue already documented for Mega Casino UK). We looked into a possible workaround today and decided not to pursue it for now due to licensing limits; UK is parked until either the security team allowlists our checker, or a different workaround is found.
+- **A "click the sidebar logo to go home" check on Genting Casino UK times out even when tested completely on its own**, separate from the security-service issue above — a real, still-unfixed bug worth a closer look next time UK is picked back up.
+- Next session: continue with whichever brand/market Reeve prioritizes next — Genting Casino's remaining markets, or another brand's onboarding.
+
 ## [Unreleased] - 2026-07-22
 
 ### Automation Coverage Status (per brand, for tracker use)

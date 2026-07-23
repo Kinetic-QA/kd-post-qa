@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, playCtaLocator } from '../../helpers/common';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -203,7 +203,7 @@ test.describe('P1 - Search', () => {
       // CTA text can match unrelated content-block buttons elsewhere on the
       // page (confirmed live: a promo tile also says "A JUGAR" on ES).
       const searchPopup = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
-      const playItBtn = searchPopup.locator('a, button').filter({ hasText: strings.playCta }).filter({ visible: true }).first();
+      const playItBtn = playCtaLocator(searchPopup, strings.playCta).filter({ visible: true }).first();
 
       // Confirmed live on ROW: a single hover-then-check can miss if the
       // CSS hover-reveal animation is still mid-play when the assertion
@@ -250,7 +250,7 @@ test.describe('P1 - Search', () => {
       // CTA text can match unrelated content-block buttons elsewhere on the
       // page (confirmed live: a promo tile also says "A JUGAR" on ES).
       const searchPopup = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
-      const playItBtn = searchPopup.locator('a, button').filter({ hasText: strings.playCta }).filter({ visible: true }).first();
+      const playItBtn = playCtaLocator(searchPopup, strings.playCta).filter({ visible: true }).first();
       await playItBtn.click({ force: true });
       await page.waitForTimeout(3_000);
     });

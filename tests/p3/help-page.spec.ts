@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * HP: Help Page
@@ -33,7 +34,8 @@ test.describe('P3 - Help Page', () => {
       (el as HTMLElement | null)?.click();
     }, HAMBURGER);
     await page.waitForTimeout(800);
-    const helpLink = page.locator(SIDEBAR + ' a[href*="/help/"]').first();
+    const helpPath = currentGeoFeatures().helpPath ?? 'help/';
+    const helpLink = page.locator(SIDEBAR + ` a[href*="/${helpPath}"]`).first();
     await helpLink.click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1_000);

@@ -85,7 +85,21 @@ test.describe('P1 - Game Filter', () => {
         console.log('GF-01 Step 2 skipped on mobile — carets are desktop-only, row scrolls via touch swipe');
         return;
       }
-      const row = page.locator('[class*="GamesSlider_wrapper"]').first();
+      // Confirmed live on GC UK: the FIRST slider row can genuinely have too
+      // few tiles to scroll at all (its next caret is already class
+      // "Slider_disabled" on page load, e.g. a 3-tile "Live Casino" row) —
+      // that's real product behavior, not a bug. Use the first row whose
+      // next caret isn't already disabled, rather than assuming row 0 is
+      // always scrollable.
+      const rows = page.locator('[class*="GamesSlider_wrapper"]');
+      const rowCount = await rows.count();
+      let row = rows.first();
+      for (let i = 0; i < rowCount; i++) {
+        const candidate = rows.nth(i);
+        const candidateNextDisabled = await candidate.locator('[class*="Slider_next"]').first()
+          .getAttribute('class').then(c => c?.includes('disabled') ?? true);
+        if (!candidateNextDisabled) { row = candidate; break; }
+      }
       const nextCaret = row.locator('[class*="Slider_next"]').first();
       const prevCaret = row.locator('[class*="Slider_prev"]').first();
       await expect(nextCaret).toBeVisible({ timeout: 5_000 });
@@ -113,7 +127,7 @@ test.describe('P1 - Game Filter', () => {
         await page.waitForTimeout(1_500);
         if (page.url() !== urlBefore) {
           record('Load more/See all expands visible games (navigates to category page)', true);
-          await page.goBack();
+          await page.goBack({ waitUntil: 'domcontentloaded' });
           await page.waitForLoadState('domcontentloaded');
           await page.waitForTimeout(500);
         } else {

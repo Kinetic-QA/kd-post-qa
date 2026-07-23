@@ -1,4 +1,4 @@
-import { Page, expect, test } from '@playwright/test';
+import { Page, Locator, expect, test } from '@playwright/test';
 import { currentGeoFeatures } from './geo-features';
 
 /**
@@ -158,6 +158,45 @@ export async function dismissCookieConsent(page: Page): Promise<void> {
     }
     await page.waitForTimeout(800);
   }
+}
+
+/**
+ * Some brands' platform (confirmed on GC UK, same underlying gap already
+ * documented for MC UK in PLAN.md) sit behind Cloudflare bot-detection that
+ * INTERMITTENTLY shows a "Performing security verification" interstitial
+ * with a real Turnstile "Verify you are human" checkbox, instead of the real
+ * page — confirmed live to be genuinely random per-request, not tied to
+ * request speed/rate (the same path loaded clean on one run and got
+ * challenged on the very next). A real user occasionally sees this too and
+ * just ticks the box, so do the same here rather than treating every
+ * challenge as an unrecoverable site bug. No-ops almost immediately when no
+ * challenge is showing, so it's safe to call after every navigation.
+ */
+export async function dismissCloudflareChallenge(page: Page): Promise<void> {
+  const cfFrame = page.frameLocator('iframe[src*="challenges.cloudflare.com"]');
+  const checkbox = cfFrame.locator('input[type="checkbox"]');
+  const present = await checkbox.isVisible({ timeout: 3_000 }).catch(() => false);
+  if (!present) return;
+  await checkbox.click().catch(() => {});
+  // Cloudflare's own verification round-trip after ticking the box —
+  // confirmed live this needs several seconds, not the usual ~1s UI settle.
+  await page.waitForTimeout(5_000);
+}
+
+/**
+ * Game tile / game-info-modal "Play" CTA, scoped to a given container.
+ * Every brand onboarded before GC has this as a real text button (playCta
+ * string from locale-strings.ts, e.g. "PLAY IT"/"JUGAR"). Confirmed live on
+ * GC UK: its hover-reveal Play CTA is ICON-ONLY (a bare <img src="play.png">
+ * inside a button with no text at all, class "play" inside a
+ * GameTile_tile-hover container) — a hasText match against it can never
+ * succeed. Combine both so existing text-based brands are unaffected and
+ * icon-only brands like GC still resolve to the real button.
+ */
+export function playCtaLocator(container: Locator, playCtaText: string | RegExp): Locator {
+  const textBased = container.locator('a, button').filter({ hasText: playCtaText });
+  const iconBased = container.locator('[class*="tile-hover"] button.play, [class*="tile-hover"] a.play, button.play, a.play');
+  return textBased.or(iconBased);
 }
 
 export async function dismissCampaignPopup(page: Page): Promise<void> {

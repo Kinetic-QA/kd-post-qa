@@ -220,7 +220,7 @@ test.describe('P1 - Website Header', () => {
       await promoLink.click();
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(new RegExp(geoFeatures.promotionsPath.replace(/\/$/, '')), { timeout: 10_000 });
-      await page.goBack();
+      await page.goBack({ waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
     });
@@ -248,7 +248,15 @@ test.describe('P1 - Website Header', () => {
     });
 
     await runStep('Step 6: Brand logo click sends to homepage', async () => {
-      await page.goto('slingo/', { waitUntil: 'domcontentloaded' });
+      // Any real non-homepage path works here — this step only needs "not
+      // already on the homepage" so the logo click is a meaningful nav, not
+      // specifically the Slingo category. The old hardcoded 'slingo/' 404s
+      // (or worse, trips Cloudflare bot-detection on GC UK, confirmed live)
+      // on any brand without a Slingo category — fall back through paths
+      // this brand is actually confirmed to have.
+      const otherPagePath = geoFeatures.promotionsPath ?? geoFeatures.blogPath ?? geoFeatures.featuresPath
+        ?? geoFeatures.gameTileHrefSubstrings?.[0]?.replace(/^\//, '') ?? 'slingo/';
+      await page.goto(otherPagePath, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
       const logo = page.getByRole('banner').locator(`a[href="${siteUrl('')}"]`).first();

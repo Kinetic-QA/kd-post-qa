@@ -83,7 +83,7 @@ test.describe('P3 - Payment Method Strip', () => {
       await paypalLink.click();
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(/\/payment-methods\/paypal\//, { timeout: 10_000 });
-      await page.goBack();
+      await page.goBack({ waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
     });
 

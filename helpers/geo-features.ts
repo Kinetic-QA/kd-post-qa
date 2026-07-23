@@ -59,6 +59,11 @@ export interface GeoFeatureConfig {
   hasPromotionsIconInHeader?: boolean; // optional — false means the header/banner has no dedicated Promotions icon linking to the promotions page, even though the page itself exists (hasPromotionsPage/promotionsPath). Distinct from those: this is specifically about a header entry point. Defaults to true when omitted, so existing GEOs need no change.
   contactPath?: string;  // baseURL-relative, no leading slash — defaults to 'contact/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "contacto/", unlike every other GEO onboarded so far which kept the English "contact/" regardless of uiLocalized
   aboutUsPath?: string;  // baseURL-relative, no leading slash — defaults to 'about-us/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "sobre-nosotros/"
+  hasContactMailto?: boolean; // optional — false means this brand's /contact/ page has NO mailto: link at all, so contactEmail is not a real assertable value for it. Defaults to true when omitted (every brand onboarded before GC has a real mailto link). Set false + leave contactEmail as '' when a brand uses a different contact-page design (see contactCtaLabels).
+  contactCtaLabels?: string[] | null; // optional — confirmed live on GC UK: /contact/ has no mailto link OR plain LOGIN link; instead it shows big clickable CTA cards ("Genting Casino Online", "Genting Casino Venues") that route to /contact/<slug>/. Set the exact visible label text for each card that should be tested. null/omitted means the brand doesn't use this card-based contact design.
+  casinoPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'casino/' when omitted. Confirmed live: GC ES genuinely translates this slug to "juegos-casino/"
+  responsibleGamingPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'responsible-gaming/' when omitted. Confirmed live: GC ES genuinely translates this slug to "juego-mas-seguro/"
+  helpPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'help/' when omitted. Confirmed live: GC ES genuinely translates this slug to "ayuda/"
 }
 
 export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
@@ -487,7 +492,109 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPromotionsIconInHeader: false, // confirmed live: header/banner only contains the logo and search links — no Promotions icon
     },
   },
+
+  // ── Genting Casino (GC) ───────────────────────────────────────────────────
+  GC: {
+    // UK — onboarded 2026-07-23 against www.gentingcasino.com. Same
+    // SkillOnNet/SON platform family as SC/SNG/MC (Header_/Button_/MainMenu_/
+    // AccountWidget_ CSS conventions, same #account modal routing), but its
+    // OWN game taxonomy (Online Casino/Live Casino, not Slingo's or MC's) and
+    // a genuinely different /contact/ page design — see contactCtaLabels.
+    // Cloudflare bot-detection intermittently challenges automated requests
+    // here (confirmed: same "Performing security verification" interstitial
+    // seen on MC UK — see that block's note and PLAN.md) — /about-us/ and
+    // /payment-options/ hit it consistently even via real link clicks (not
+    // just direct goto), so expect occasional false-fails on those pages
+    // until QA automation is allowlisted; this is a known automation-
+    // detection gap, not a product bug.
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed live 200 — nav/footer label this "Insights", but the real link target is /blog/
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200
+      featuresPath: 'features/', // confirmed live 200
+      mobileAppPath: 'mobile-app/', // unconfirmed — no footer/nav link found at all for this brand; kept as the common placeholder, skips cleanly if 404
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link exists for this brand (not a Slingo-family feature), skips cleanly same as MC
+      currencySymbol: '£', // confirmed via homepage bonus copy ("£25")
+      contactEmail: '', // confirmed live: /contact/ has NO mailto: link anywhere — see hasContactMailto/contactCtaLabels
+      hasContactMailto: false, // confirmed live: contact-us-page.spec.ts's mailto-dependent steps must skip for this brand
+      contactCtaLabels: ['Genting Casino Online', 'Genting Casino Venues'], // confirmed live: /contact/ shows 2 big clickable CTA cards ("How Can We Help?" section) instead of a mailto link or plain LOGIN link — routes to /contact/online/ and (presumed) /contact/venues/; clicking "Genting Casino Online" hit the Cloudflare challenge interstitial rather than real content this session, so the destination page's content is NOT yet independently confirmed
+      socialMedia: { twitter: 'GentingCasinoUK', facebook: 'GentingCasinoUK', instagram: 'gentingcasinouk' }, // confirmed live: all 3 handles found homepage-wide
+      hasSocialMedia: true, // confirmed live: 3 social links found
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/casino/', '/live-casino/'], // not independently re-verified via in-app search this session — inferred from gameTileHrefSubstrings' taxonomy
+      gameTileHrefSubstrings: ['/casino/slots/', '/casino/jackpot-slots/', '/casino/online-roulette/', '/casino/online-blackjack/', '/casino/online-baccarat/', '/casino/table-games/', '/live-casino/'], // confirmed live via homepage crawl + full nav dump — GC's own taxonomy, not Slingo's or MC's
+      hasGameFilterCarousel: true, // confirmed live: homepage has GamesSlider_wrapper rows ("Popular in Casino", "Streaming Live from Genting Casinos")
+      hasFeedbackForm: true, // confirmed live: "Report a problem" button present on /contact/ (AccountWidget_feedback class)
+      hasGameCategoryNav: true, // confirmed live: header + mobile sidebar show Online Casino (Slots/Jackpots/Roulette/Blackjack/Baccarat/Table Games/Providers/Themes) and Live Casino (Live Roulette/Live Blackjack/Genting Live/Live Baccarat/Table & Cards/Game Shows) as TWO expandable accordion categories on mobile (see next note) plus a separate flat Venues link — a completely different taxonomy from SC/SNG/MC, no Slots/Bingo/Casino Games naming
+      hasLoginRegistration: true, // confirmed live: LOGIN/JOIN buttons in header; clicking LOGIN correctly advances URL to /#account
+      hasTestAccount: true, // real test account confirmed working by Reeve 2026-07-23 (kn@test.com — same account as SC/SNG UK)
+      hasAccountModal: true, // confirmed live: header LOGIN click advances to /#account
+      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ 404s, but /payment-options/ returns 200 (footer's real "Secure Banking" link) — same paymentMethodsPath override pattern as MC COM/CA
+      paymentMethodsPath: 'payment-options/', // confirmed live: real footer slug, common 'payment-methods/' default 404s here
+      hasBlogDesktopSearch: false, // NOT independently confirmed — the header's #Header_search-demi__ICbtG search icon wasn't found rendered on the /blog/ page specifically this session; may be a Cloudflare-interference false negative rather than a real gap, re-check before trusting this fully
+      hasBlogSearch: false, // unconfirmed — cloned from the desktop-search finding above pending a clean re-check
+    },
+
+    // ES — onboarded 2026-07-23 against www.gentingcasino.es. Live inspection
+    // (header/nav/footer/contact/payment/blog/promotions/features/about-us,
+    // all before writing this config) found ZERO Cloudflare interference
+    // across two full inspection passes — unlike UK, which hit the
+    // "Performing security verification" challenge intermittently on nearly
+    // every page. Confirms the automation-detection wall is UK-specific
+    // (or IP/domain-specific), not brand-wide — same pattern already seen
+    // with MC (UK has Cloudflare interference, COM/CA don't). Shares the
+    // same SkillOnNet/SON platform conventions as UK (Header_/Button_/
+    // MainMenu_/AccountWidget_ CSS, #account modal routing, <son-cookie-
+    // consent> shadow-DOM banner — already handled by dismissCookieConsent's
+    // Spanish accept-text, confirmed working since SC/SNG ES).
+    ES: {
+      locale: 'es', uiLocalized: true,
+      hasBlog: true, blogPath: 'blog/', // confirmed live 200, real nav link
+      hasPromotionsPage: true, promotionsPath: 'promociones/', // confirmed live 200 via real nav link — genuinely translated slug (unlike UK's English 'promotions/', though that same English path also happens to 200 here, 'promociones/' is the one the real nav uses)
+      featuresPath: 'funciones-especiales/', // confirmed live 200 via real nav link "Funciones" — NOT the guessed 'funciones/' (404s) or UK's 'features/' (also 200 but not the real nav slug)
+      mobileAppPath: 'mobile-app/', // unconfirmed — no footer link found, carried over as placeholder that skips cleanly if 404 (same as UK)
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link exists for this brand, skips cleanly same as UK
+      currencySymbol: '€', // confirmed via homepage bonus copy ("100 €", "10€")
+      contactEmail: 'soporte@gentingcasino.es', // confirmed live on /contacto/ — a REAL mailto link, unlike UK's card-based design (see note below)
+      // contactCtaLabels intentionally omitted — confirmed live 2026-07-23:
+      // GC ES's /contacto/ is a COMPLETELY DIFFERENT design from GC UK, not
+      // just a translation of the same layout. It has a real "AYUDA POR
+      // CORREO ELECTRÓNICO" mailto section (soporte@gentingcasino.es) and a
+      // real "Reportar un problema" feedback button — the CTA-card design
+      // (contactCtaLabels) is UK-specific, don't assume it applies brand-wide.
+      contactPath: 'contacto/', // confirmed live 200 via real nav link — genuinely translated, unlike UK's English 'contact/' (404s here)
+      aboutUsPath: 'quienes-somos/', // confirmed live 200 via real nav link "Sobre nosotros" — genuinely translated, unlike UK's English 'about-us/' (404s here)
+      socialMedia: { twitter: 'GentingCasinoES', facebook: 'GentingCasinoES', instagram: 'gentingcasinoespana' }, // confirmed live: all 3 handles found homepage-wide
+      hasSocialMedia: true, // confirmed live: 3 social links found
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/juegos-casino/', '/slots/'], // unconfirmed via actual in-app search — inferred from the real taxonomy found live
+      gameTileHrefSubstrings: ['/slots/', '/juegos-casino/', '/ruleta-en-vivo/'], // confirmed live via homepage crawl — ES's own Spanish-slug taxonomy, distinct from UK's /casino/slots/ etc.
+      hasGameFilterCarousel: true, // confirmed live: 3 GamesSlider_wrapper rows found on homepage ("Juegos exclusivos", "Juegos Nuevos", etc.)
+      hasFeedbackForm: true, // confirmed live: "Reportar un problema" button present on /contacto/
+      hasGameCategoryNav: true, // confirmed live: header shows Slots (Populares/Novedades/Botes/Megaways/Todos), Ruleta en Vivo (standalone, no submenu shown), Casino (Blackjack/Ruleta/Video Bingo/Todos los juegos) — a DIFFERENT taxonomy than UK's Online Casino/Live Casino split; ES has no separate "Live Casino" top-level category, "Ruleta en Vivo" stands alone instead
+      hasLoginRegistration: true, // confirmed live: INICIAR SESIÓN/UNIRSE buttons present in header
+      hasTestAccount: true, // shared SC/SNG/GC ES account confirmed working pattern (noemsisters@hotmail.com) — not independently re-tested against GC specifically this session, verify on first real login.spec.ts run
+      hasAccountModal: true, // unconfirmed — cloned from UK, verify live (UK's LOGIN click reliably advanced to #account; assumed same widget here)
+      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ 404s, but /payment-options/ returns 200 (same paymentMethodsPath override as UK) — real footer link text "Métodos de pago"
+      paymentMethodsPath: 'payment-options/', // confirmed live: real footer slug, kept English same as UK — NOT translated despite the rest of the site being fully localized
+      hasBlogDesktopSearch: true, // confirmed live 2026-07-23: a real, visible, clickable desktop search icon exists (a.BlogHeader_search-demi__AjFud, same pattern already confirmed on SNG UK) — the earlier "cloned false from UK" guess was wrong, don't clone an unconfirmed sibling GEO's flag without checking live first
+      hasBlogSearch: true, // confirmed live 2026-07-23: typing "casino" into the real search input (input[name="search"][aria-label="buscar"], a lazy-loading Google Custom Search widget — needs a few extra seconds to render) returns REAL results ("Aproximadamente 24 resultados", real article links like /blog/academia-de-casino/claves-elegir-casino-online-fiable/) — this is NOT the empty-placeholder gap seen on other brands
+      casinoPath: 'juegos-casino/', // confirmed live: footer "Casino" link genuinely translates to this slug, not the English 'casino/'
+      responsibleGamingPath: 'juego-mas-seguro/', // confirmed live: footer's Responsible Gaming link genuinely translates to this slug
+      helpPath: 'ayuda/', // confirmed live: sidebar "Ayuda" link genuinely translates to this slug, not the English 'help/'
+    },
+  },
 };
+
+// Mobile sidebar accordion note (GC UK, confirmed live 2026-07-23): the
+// hamburger menu's "Online Casino" and "Live Casino" rows are EXPANDABLE
+// accordion headers (arrow-chevron span, class MainMenu_main_1_slots__* /
+// MainMenu_main_2_live__* with no href) that reveal a <ul> of sub-category
+// links when clicked — a DUPLICATE-classed anchor with an href (the "All
+// Online Casino"/"All Live Casino" link) shares the same CSS class, so any
+// locator scoped only by that class hits a strict-mode "resolved to 2
+// elements" violation (same recurring locator-ambiguity pattern documented
+// elsewhere in this file). Scope with `:not([href])` to hit the expandable
+// header specifically, same fix pattern as sidebar-navigation.spec.ts should
+// use if/when it's extended to cover GC.
 
 const FALLBACK: GeoFeatureConfig = {
   locale: 'en',

@@ -124,14 +124,16 @@ test.describe('P3 - Footer Navigation', () => {
     await footerStep('Bingo -> /bingo/', 'Bingo', '/bingo/');
 
     // ── Steps 8-9: Casino → /casino/ ─────────────────────────────────────
-    await footerStep('Casino -> /casino/', 'Casino', '/casino/');
+    const geoFeatures = currentGeoFeatures();
+    const casinoPath = geoFeatures.casinoPath ?? 'casino/';
+    const responsibleGamingPath = geoFeatures.responsibleGamingPath ?? 'responsible-gaming/';
+    await footerStep('Casino -> /' + casinoPath, 'Casino', '/' + casinoPath);
 
     // ── Steps 10-11: Responsible Gaming ──────────────────────────────────
     const strings = currentLocaleStrings();
-    const geoFeatures = currentGeoFeatures();
     const aboutUsPath = geoFeatures.aboutUsPath ?? 'about-us/';
     const contactPath = geoFeatures.contactPath ?? 'contact/';
-    await footerStep('Responsible Gaming -> /responsible-gaming/', strings.footerResponsibleGamingText, '/responsible-gaming/');
+    await footerStep('Responsible Gaming -> /' + responsibleGamingPath, strings.footerResponsibleGamingText, '/' + responsibleGamingPath);
 
     // ── Steps 12-13: Bonus Policy ─────────────────────────────────────────
     await footerStep('Bonus Policy -> /bonus-policy/', strings.footerBonusPolicyText, '/bonus-policy/');

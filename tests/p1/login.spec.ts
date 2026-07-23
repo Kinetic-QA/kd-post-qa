@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissPopups, dismissCampaignPopup, setupCampaignPopupWatcher, expectedPlaysecureUrlPattern, waitForExtraPageSettle } from '../../helpers/common';
+import { dismissPopups, dismissCampaignPopup, setupCampaignPopupWatcher, expectedPlaysecureUrlPattern, waitForExtraPageSettle, dismissCloudflareChallenge } from '../../helpers/common';
 import { currentTestCredentials } from '../../helpers/test-credentials';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
@@ -26,6 +26,7 @@ test.describe('P1 - Login', () => {
     await page.waitForLoadState('domcontentloaded'); // faster than networkidle for initial load
     await page.waitForTimeout(3_000);
     await dismissPopups(page);
+    await dismissCloudflareChallenge(page);
     await page.waitForTimeout(500);
     await waitForExtraPageSettle(page);
   });
