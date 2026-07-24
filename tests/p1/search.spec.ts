@@ -72,12 +72,18 @@ test.describe('P1 - Search', () => {
 
     // ── Step 1: Click Search button in header ────────────────────────────
     await runStep('Step 1: Search button → search panel opens', async () => {
-      // Header's own #search link is CSS-hidden at mobile breakpoints
-      // (confirmed live in website-header.spec.ts) — mobile's visible one
-      // lives in the sticky bottom nav, so an unscoped .first() grabs the
-      // wrong, invisible one.
-      const searchLink = isMobile
-        ? page.locator('[class*="MobileFooter"] a[href="#search"]').first()
+      // On Slingo/SpinGenie, the header's own #search link is CSS-hidden at
+      // mobile breakpoints (confirmed live in website-header.spec.ts) —
+      // mobile's visible one lives in the sticky bottom nav instead, so an
+      // unscoped .first() grabs the wrong, invisible one. Genting Casino
+      // does NOT hide its header search on mobile (confirmed live on GC SE,
+      // 2026-07-24 — no [class*="MobileFooter"] search link exists at all,
+      // the header's #search link stays visible and clickable at mobile
+      // width), so fall back to the plain header link when the
+      // MobileFooter-scoped one genuinely doesn't exist for this brand.
+      const mobileFooterSearch = page.locator('[class*="MobileFooter"] a[href="#search"]').first();
+      const searchLink = isMobile && (await mobileFooterSearch.count()) > 0
+        ? mobileFooterSearch
         : page.locator('a[href="#search"]').first();
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
       await searchLink.click({ force: true });
@@ -292,8 +298,11 @@ test.describe('P1 - Search', () => {
     // ── Step 10: Click Search button again ───────────────────────────────
     await runStep('Step 10: Click Search button again → panel reopens', async () => {
       await dismissCampaignPopup(page);
-      const searchLink = isMobile
-        ? page.locator('[class*="MobileFooter"] a[href="#search"]').first()
+      // Same MobileFooter-vs-plain-header fallback as Step 1 — see that
+      // step's comment (GC doesn't hide its header search on mobile).
+      const mobileFooterSearch2 = page.locator('[class*="MobileFooter"] a[href="#search"]').first();
+      const searchLink = isMobile && (await mobileFooterSearch2.count()) > 0
+        ? mobileFooterSearch2
         : page.locator('a[href="#search"]').first();
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
       await searchLink.click({ force: true });

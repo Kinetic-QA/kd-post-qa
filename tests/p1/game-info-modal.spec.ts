@@ -34,7 +34,7 @@ test.describe('P1 - Game Information Modal', () => {
     test.setTimeout(120_000);
 
     const geoFeatures = currentGeoFeatures();
-    const EXPECTED_CURRENCY = geoFeatures.currencySymbol;
+    const EXPECTED_CURRENCY = geoFeatures.gameModalCurrencyText ?? geoFeatures.currencySymbol;
     const strings = currentLocaleStrings();
 
     const results: { label: string; status: string }[] = [];

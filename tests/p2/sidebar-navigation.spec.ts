@@ -231,7 +231,13 @@ test.describe('P2 - Sidebar Navigation', () => {
     // -- Steps 12-14: Promotions -------------------------------------------
     if (geoFeatures.promotionsPath) {
       const promoPath = geoFeatures.promotionsPath;
-      await navStep(`Promotions -> /${promoPath}`, `/${promoPath}`, `/${promoPath}`);
+      // navStepIfExists, not the hard navStep — confirmed live on GC DK: the
+      // Promotions PAGE exists (200), but it's genuinely not linked from the
+      // sidebar menu at all (nor the header, see hasPromotionsIconInHeader).
+      // A brand can have the page live without linking to it from every nav
+      // surface — don't assume promotionsPath alone means every entry point
+      // exists.
+      await navStepIfExists(`Promotions -> /${promoPath}`, `/${promoPath}`, `/${promoPath}`);
     } else {
       // A dynamic test.skip() here would abort the WHOLE test and discard
       // every step's result already recorded above it (confirmed live on
