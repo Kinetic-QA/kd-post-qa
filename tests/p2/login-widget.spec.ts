@@ -149,7 +149,12 @@ test.describe('P2 - Login Widget', () => {
       // mobile") — neither contains the English word "mobile" as a whole
       // match, so widen to also catch "téléphone"/"numéro" rather than
       // adding a third brand-specific field-name branch for one sanity check.
-      const firstFieldLocator = geoFeatures.locale === 'es'
+      // MC/DK confirmed live 2026-07-24: same personalID-named field as
+      // ES, but repurposed for a Danish CPR number (format XXXXXX-XXXX,
+      // placeholder "XXXXXX-XXXX") — not a DNI/NIE. Same underlying
+      // platform reusing one generic field name across whatever identity
+      // format the market actually needs, not a coincidence.
+      const firstFieldLocator = (geoFeatures.locale === 'es' || geoFeatures.locale === 'da')
         ? page.locator('input[name="personalID"]').first()
         : geoFeatures.locale === 'de'
         ? page.locator('input[name="mobile"]').first()

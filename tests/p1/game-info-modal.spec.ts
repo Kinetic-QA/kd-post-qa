@@ -62,7 +62,7 @@ test.describe('P1 - Game Information Modal', () => {
       });
     }
 
-    async function findGameLink() {
+    async function findGameLink(excludeHrefs?: Set<string>) {
       const vh = page.viewportSize()?.height ?? 720;
       // Exclude the bare category nav links themselves (e.g. href="/slingo/"
       // with no game slug after it) — on some GEOs (confirmed ES) the
@@ -103,6 +103,12 @@ test.describe('P1 - Game Information Modal', () => {
         const candidate = links.nth(i);
         const href = await candidate.getAttribute('href').catch(() => null);
         if (href && navHrefs.has(new URL(href, page.url()).href)) continue;
+        // Confirmed live on MC/DK: without this, a bounded caller-side retry
+        // loop calling findGameLink() again after a failed click just gets
+        // the SAME deterministic candidate back every time (nothing about
+        // page state changed), defeating the whole point of retrying with a
+        // different tile — a real, reproducible hang, not a one-off flake.
+        if (href && excludeHrefs?.has(href)) continue;
         const box = await candidate.boundingBox().catch(() => null);
         // Confirmed live on MC/UK: a tile's title link can sit inside a
         // hover-reveal overlay (e.g. GameTile_tile-hover__*, also holding a
@@ -286,19 +292,40 @@ test.describe('P1 - Game Information Modal', () => {
       // non-carousel tile that scrolls into view normally.
       let clicked = false;
       let lastError: unknown;
+      const triedHrefs = new Set<string>();
       for (let attempt = 1; attempt <= 3 && !clicked; attempt++) {
-        const link = await findGameLink();
+        const link = await findGameLink(triedHrefs);
+        const linkHref = await link.getAttribute('href').catch(() => null);
+        if (linkHref) triedHrefs.add(linkHref);
         await link.scrollIntoViewIfNeeded();
         await page.evaluate(() => window.scrollBy(0, -120));
         await page.waitForTimeout(200);
         const box = await link.boundingBox().catch(() => null);
         const vh = page.viewportSize()?.height ?? 720;
-        if (!box || box.y < 0 || box.y > vh) {
-          console.log(`GIM-01 Step 10 attempt ${attempt}: candidate outside viewport (y=${box?.y}), retrying with a different tile`);
+        const vw = page.viewportSize()?.width ?? 1280;
+        // Confirmed live on MC/DK: a candidate can pass a Y-only check yet
+        // still be genuinely outside the viewport HORIZONTALLY — its own
+        // row is a sideways-scrolling GamesSlider carousel (hasGameFilterCarousel:
+        // true), and scrollIntoViewIfNeeded() only scrolls the page
+        // vertically, never that carousel's own horizontal scroll position.
+        // Check both axes so this doesn't reach Playwright's own hard click-
+        // time viewport check, which force:true can't bypass either way.
+        if (!box || box.y < 0 || box.y > vh || box.x < 0 || box.x > vw) {
+          console.log(`GIM-01 Step 10 attempt ${attempt}: candidate outside viewport (x=${box?.x}, y=${box?.y}), retrying with a different tile`);
           continue;
         }
         await hoverRevealAncestor(link);
         await page.waitForTimeout(300);
+        // Confirmed live on MC/DK: the hover-reveal itself (e.g. a CSS
+        // zoom/scale transition on the tile) can shift the tile enough to
+        // land it back outside the viewport even though the PRE-hover box
+        // above was fine — re-check right before clicking rather than
+        // trusting a now-stale measurement.
+        const postHoverBox = await link.boundingBox().catch(() => null);
+        if (!postHoverBox || postHoverBox.y < 0 || postHoverBox.y > vh || postHoverBox.x < 0 || postHoverBox.x > vw) {
+          console.log(`GIM-01 Step 10 attempt ${attempt}: hover shifted candidate outside viewport (x=${postHoverBox?.x}, y=${postHoverBox?.y}), retrying with a different tile`);
+          continue;
+        }
         try {
           await link.click({ force: true, timeout: 5_000 });
           clicked = true;

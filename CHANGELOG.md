@@ -24,11 +24,34 @@ Each release or change set uses this structure:
 
 ---
 
-## [Unreleased] - 2026-07-24
+## [Unreleased] - 2026-07-24 (later same day)
 
 ### Automation Coverage Status (per brand, for tracker use)
 
-- **Genting Casino (GC)** — Onboarded: UK (partial), Spain (ES), Sweden (SE), Denmark (DK, partial). Confirmed Passing: Spain (desktop), Sweden (desktop + mobile). **Status: Sweden is now fully done, nothing outstanding.** Denmark is mostly done — the whole checklist passes except the registration/sign-up flow, which needs its own rebuild (see below) since this market's sign-up form works completely differently from every other market so far. Ireland was tried this session but skipped immediately: it shares the exact same website address as UK, which is the one still blocked by the automated security service. Rest-of-World hasn't been tried yet but is expected to hit the same block, since it also shares UK's address.
+- **Mega Casino (MC)** — Onboarded: UK, .com (international), Canada, French Canada, Ireland, Germany (DE), Denmark (DK) (7 markets). Confirmed Passing: Canada, French Canada, Ireland, Germany (6 of 7, desktop + mobile). **Status: Germany is now fully done, nothing outstanding.** Denmark's whole checklist passes except the sign-up flow — same "asks for a Danish personal ID number instead of mobile/DOB" situation independently found today on Genting Casino's Danish site (see the entry above) — no team test ID number exists yet for this market, so sign-up is parked rather than guessed at. UK remains blocked by the automated security service noted in earlier sessions.
+
+### Added
+
+- **Onboarded Mega Casino's Germany (DE) market — passes the full checklist cleanly on both desktop and phone screens.** This site runs on a completely different web address than every other Mega Casino market (megaspielhalle.de instead of megacasino.*), confirmed to still be the same brand before counting it.
+- **Started onboarding Mega Casino's Denmark (DK) market. Everything passes except sign-up** (see Known open items below) — no team test account/ID exists yet for this market.
+- Added Mega Casino's real market details (contact email, currency, what pages exist, category menu shape, everyday site wording) for Germany and Denmark, including this project's first-ever Danish wording support (shared with Genting Casino's own Danish market, since both brands run the same underlying site software).
+
+### Fixed
+
+- **A search box check assumed the word "Slots" would find real results on Mega Casino's German site, copying an assumption that held true for our other brands' German sites — it didn't.** This brand's search only matches actual game names, not category words, and no game is literally named "Slots". Now searches for "Book" instead, which reliably finds real results.
+- **A "scroll the page down to this game" step could freeze even when the game was already fully on screen** — happened on Mega Casino's German site. Now skips the freeze and moves on instead of getting stuck.
+- **A "Members Login" link inside the sign-up pop-up was timing out on Mega Casino's German site** because that pop-up genuinely takes 8-12 seconds to finish loading its contents — longer than the check was waiting. Given more time to appear before checking.
+- **The mobile "Play" button wasn't being found at all on Mega Casino's German site** — every other market has this as a normal button, but Germany's mobile menu uses a different kind of clickable item for it. The check now recognizes both, benefiting every brand/market that hits this same page shape.
+- **The Danish "allow all cookies" pop-up wasn't being recognized at all on Mega Casino's Danish site**, silently blocking nearly every other check for the rest of each test run. Same underlying fix as Genting Casino's Danish cookie pop-up fix above — both brands needed it independently today, now shared by both.
+- **The sign-up button on Mega Casino's Danish site would sometimes do nothing at all when clicked** — the button shows up and looks ready before it's actually able to respond yet. Given a longer pause before clicking, matching a fix already used on a different market with the same timing quirk.
+- **Two pieces of expected wording on Mega Casino's Danish site turned out to be guesses that didn't match the real site** — the "don't have an account" link and the search box's placeholder text both read differently than assumed. Corrected to the real wording after checking the live site directly.
+- **A currency check was comparing against the wrong currency on Mega Casino's Danish site** — the homepage shows "kr" but the game details pop-up genuinely shows "DKK" instead, the exact same real site inconsistency independently found on Genting Casino's Danish site today (see above). Now checks the right one for the right spot.
+- **A "click this game tile again" step could pick the exact same broken game tile over and over instead of trying a different one**, happened on Mega Casino's Danish site — the retry logic wasn't actually excluding a tile it already tried and failed on. Now remembers which tiles were already tried and picks a different one each time, benefiting every brand/market using this same check.
+
+### Known open items (carrying into next session)
+
+- **Mega Casino Denmark's sign-up form asks for a Danish personal ID number (CPR) as the very first field, instead of a mobile number** — the same real site design already found on Genting Casino's Danish site today, confirmed independently. Unlike Genting Casino's version, no realistic-but-made-up CPR number was tried against Mega Casino's form this session — parked rather than guessed at, since submitting a fake real-format ID number felt riskier to try without checking first. Next session: check with the team whether a safe way exists to test this, or coordinate with whoever builds Genting Casino Denmark's version so both markets' sign-up checks can be built the same way.
+- Next session: continue with whichever brand/market is prioritized next, or pick up Mega Casino Denmark's sign-up flow once a safe way to test it is confirmed.
 
 ### Added
 

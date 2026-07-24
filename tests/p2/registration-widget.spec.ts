@@ -92,7 +92,13 @@ test.describe('P2 - Registration Widget', () => {
     await runStep('Step 1: "Members Login" link opens the login form', async () => {
       await openRegistrationWidget();
       const membersLoginLink = page.getByText(strings.membersLoginText).first();
-      await expect(membersLoginLink).toBeVisible({ timeout: 10_000 });
+      // Confirmed live on MC/DE: the widget's own content (mobile number/DOB
+      // fields, Members Login link) can take 8-12s to actually render after
+      // the URL already shows #account — same "URL advances well before the
+      // widget content is ready" gap already documented for MC/CA's Altcha
+      // widget (see geo-features.ts). A 10s timeout was borderline/flaky;
+      // widened with margin rather than trimmed to exactly what was observed.
+      await expect(membersLoginLink).toBeVisible({ timeout: 20_000 });
       await membersLoginLink.click();
       await page.waitForTimeout(1_500);
       const usernameInput = page.getByLabel(strings.usernameOrEmailLabel).first();
