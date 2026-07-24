@@ -62,6 +62,7 @@ async function tryClickCookieConsent(page: Page): Promise<boolean> {
       'permitir todas las cookies', 'permitir todas', 'aceptar todas',
       'alle cookies zulassen',
       'tillåt alla cookies',
+      'tillad alle cookies', // Danish — confirmed live on GC DK 2026-07-24
     ];
     const target = allButtons.find(b => {
       const t = (b.textContent ?? '').trim().toLowerCase();

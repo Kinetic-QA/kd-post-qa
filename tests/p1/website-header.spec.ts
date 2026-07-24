@@ -162,12 +162,17 @@ test.describe('P1 - Website Header', () => {
 
     await runStep('Step 3: Search icon opens search panel (/#search)', async () => {
       await dismissCampaignPopup(page);
-      // Mobile's visible search icon lives in the sticky bottom nav — the
-      // header's own #search link is still in the DOM but CSS-hidden at
-      // mobile breakpoints (confirmed live), so an unscoped .first() would
-      // grab the wrong, invisible one.
-      const searchLink = isMobile
-        ? page.locator('[class*="MobileFooter"] a[href="#search"]').first()
+      // On Slingo/SpinGenie, mobile's visible search icon lives in the
+      // sticky bottom nav — the header's own #search link is still in the
+      // DOM but CSS-hidden at mobile breakpoints (confirmed live), so an
+      // unscoped .first() would grab the wrong, invisible one. Genting
+      // Casino does NOT hide its header search on mobile (confirmed live on
+      // GC SE, 2026-07-24 — no MobileFooter search link exists at all for
+      // this brand), so fall back to the plain header link when the
+      // MobileFooter-scoped one genuinely doesn't exist.
+      const mobileFooterSearch = page.locator('[class*="MobileFooter"] a[href="#search"]').first();
+      const searchLink = isMobile && (await mobileFooterSearch.count()) > 0
+        ? mobileFooterSearch
         : page.locator('a[href="#search"]').first();
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
       await searchLink.click({ force: true });

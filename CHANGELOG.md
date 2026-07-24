@@ -24,6 +24,34 @@ Each release or change set uses this structure:
 
 ---
 
+## [Unreleased] - 2026-07-24
+
+### Automation Coverage Status (per brand, for tracker use)
+
+- **Genting Casino (GC)** — Onboarded: UK (partial), Spain (ES), Sweden (SE), Denmark (DK, partial). Confirmed Passing: Spain (desktop), Sweden (desktop + mobile). **Status: Sweden is now fully done, nothing outstanding.** Denmark is mostly done — the whole checklist passes except the registration/sign-up flow, which needs its own rebuild (see below) since this market's sign-up form works completely differently from every other market so far. Ireland was tried this session but skipped immediately: it shares the exact same website address as UK, which is the one still blocked by the automated security service. Rest-of-World hasn't been tried yet but is expected to hit the same block, since it also shares UK's address.
+
+### Added
+
+- **Onboarded Genting Casino's Sweden (SE) market — passes the full checklist cleanly on both desktop and phone screens.** This market works like a "pay first, no separate login" site (same model already confirmed on our other brands' Swedish sites) rather than a traditional sign-up/log-in.
+- **Started onboarding Genting Casino's Denmark (DK) market.** Everything passes except sign-up (see Known open items below) — Denmark has real log-in/sign-up, unlike Sweden.
+- Added Genting Casino's real market details (contact email, currency, what pages exist, category menu shape, everyday site wording) for Sweden and Denmark.
+
+### Fixed
+
+- **A payment page check was quietly checking the wrong web address for any brand/market that uses a non-standard payment page name** — Genting Casino's markets all use a different address for this page than our other brands, and the check wasn't reading that setting at all, always trying the default address instead. This likely means Genting Casino UK and Spain's payment checks have been silently broken since they were first set up, not just Sweden. Now fixed for every brand and market that uses this setting.
+- **The mobile version of the "does the search icon actually open search" check assumed every brand hides its search icon in the mobile bottom bar the way our other brands do — Genting Casino doesn't.** Genting Casino's search icon stays visible in the same spot as desktop even on a phone screen; the check now recognizes both patterns instead of assuming one fixed brand's behavior applies to everyone.
+- **The cookie pop-up couldn't be closed at all on the Danish site** because the Danish "allow all cookies" wording wasn't recognized yet. Fixed by teaching the check the Danish phrase, the same way German, Spanish, and Swedish were already handled.
+- **A game details pop-up check was reporting Sweden's currency as wrong when it wasn't** — the main site shows prices as "100kr," but the pop-up itself genuinely shows "DKK" instead for Denmark specifically (a real, if minor, inconsistency on the site's own part, not a mistake in our check). The check now knows to expect the right one for each market.
+- **A footer link check was expecting Denmark's "Casino" page to be at the same web address as other markets — it isn't** (Denmark genuinely translates it to a different address). Fixed to use the correct address for Denmark.
+- **A sidebar menu check assumed every market that has a Promotions page also links to it from the sidebar menu — Denmark's site genuinely doesn't**, even though the page itself exists. The check now looks for the link first and skips gracefully if it's not really there, instead of assuming it must be.
+- **A footer "Bonus Policy" link check was accidentally matching the wrong link and failing** because Denmark doesn't have a separate Bonus Policy page at all — a mistake in our own market notes had it pointing at the Terms & Conditions link instead, which then failed for genuinely landing on the Terms page instead of a Bonus Policy page. Corrected so the check now recognizes this page genuinely isn't there for Denmark, instead of chasing the wrong link.
+
+### Known open items (carrying into next session)
+
+- **Genting Casino Denmark's sign-up form works completely differently from every other brand/market tested so far — it asks for a Danish personal ID number (CPR) as the very first field, before anything else.** Good news: tested with a realistic-but-made-up CPR number and it was accepted with no error, meaning the check only verifies the format looks right rather than checking it against a real government record — so this market's sign-up CAN still be tested automatically without a real person's ID number. The rebuild itself (matching this market's own field order) wasn't done yet this session — next session's priority.
+- **Genting Casino Ireland shares the exact same website address as the UK site**, which is still blocked by the automated security service documented previously — hit the identical block twice in a row, so it's parked alongside UK rather than re-investigating the same known issue. Rest-of-World likely has the same problem for the same reason (shares UK's address too) — worth confirming next time, but expect it to also be blocked.
+- Next session: build Denmark's sign-up check, then decide whether to try Rest-of-World or move straight to working on the shared UK/Ireland/Rest-of-World blocking issue as its own piece of work.
+
 ## [Unreleased] - 2026-07-23
 
 ### Automation Coverage Status (per brand, for tracker use)

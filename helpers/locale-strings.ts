@@ -225,6 +225,51 @@ const STRINGS: Record<string, LocaleStrings> = {
     footerMobileAppText: /^mobilapp$/i, // not exercised — SE has no Mobile App footer link
     footerBingoCardGeneratorText: /^bingokortsgenerator$/i, // not exercised — SE has no Bingo Card Generator footer link
   },
+  // DK — onboarded 2026-07-24 against www.gentingcasino.dk. loginButton/
+  // joinButton confirmed live via real header button text ("LOG IND"/"OPRET
+  // DIG"). hasFeedbackForm/hasBlog are both false for this GEO, so the
+  // feedback-widget and readMoreText strings below are never exercised —
+  // left as reasonable best-guess Danish translations, not yet confirmed
+  // live, same convention as the fr/sv entries above. searchPlaceholder,
+  // backButtonText, loginErrorText, forgotPasswordText, noAccountText,
+  // membersLoginText, usernameOrEmailLabel, loginSubmitButton, and
+  // homeLinkText are ALSO not yet confirmed live — this GEO has no working
+  // test account (hasTestAccount: false) so the full login flow was never
+  // exercised, and the search/sidebar flows weren't manually walked before
+  // writing this entry. Expect to correct these from real failure
+  // screenshots on the next run, same pattern as every other locale here.
+  da: {
+    loginButton: /log ind/i, // confirmed live: header button reads "LOG IND"
+    loginSubmitButton: /^log ind$/i, // confirmed live: login modal's submit button also reads "Log ind" (same text as the header trigger)
+    usernameOrEmailLabel: /brugernavn eller e-?mail/i, // confirmed live: login modal field label reads "Brugernavn Eller E-Mail"
+    joinButton: /opret dig/i, // confirmed live: header button reads "OPRET DIG"
+    loginErrorText: /de indtastede loginoplysninger er forkerte/i, // NOT yet confirmed — guessed (no working test account to trigger a real failed-login attempt against, see hasTestAccount: false)
+    reportProblemText: /rapporter et problem/i, // not exercised — DK has no feedback form (hasFeedbackForm: false)
+    membersLoginText: /login for medlemmer/i, // confirmed live: registration modal's tab-switch link reads "Login for medlemmer"
+    backButtonText: /^tilbage$/i, // NOT yet confirmed — guessed
+    playCta: /^spil$/i, // NOT exercised via text — DK's hover CTA is ICON_ONLY (confirmed live), handled by playCtaLocator's icon fallback regardless of this regex
+    bonusPolicyText: /bonuspolitik|regler og betingelser/i, // NOT yet confirmed — guessed
+    readMoreText: /læs mere/i, // not exercised — DK has no Blog (hasBlog: false)
+    feedbackNext: /^næste$/i, // not exercised — hasFeedbackForm: false
+    feedbackOther: /^andet$/i, // not exercised
+    feedbackSubmit: /^send$/i, // not exercised
+    forgotPasswordText: /glemt din adgangskode/i, // confirmed live: login modal's link reads "Glemt din Adgangskode?"
+    noAccountText: /ny på gentingcasino|opret konto/i, // confirmed live: login modal's link reads "Ny på GentingCasino! Opret konto"
+    searchPlaceholder: /^search game$/i, // confirmed live: the search input's placeholder is genuinely in English ("Search game"), not translated — a real site quirk, not a guess gone wrong
+    feedbackTextareaPlaceholder: /skriv dit svar her/i, // not exercised
+    homeLinkText: /^hjem$/i, // NOT yet confirmed — guessed (Danish for "Home")
+    // Footer link texts confirmed live via direct footer inspection.
+    footerResponsibleGamingText: /^ansvarligt spil$/i,
+    footerBonusPolicyText: /^bonuspolitik$/i, // NOT confirmed live — DK's footer has no separate "Bonus Policy" link at all (only "Regler & Betingelser", which IS the real Terms link — see footerTermsText). Deliberately left as a non-matching guess rather than aliased to the T&C link's real text: aliasing it caused a real bug this session (the check found the T&C link, clicked it, landed on /terms/, and failed because it expected /bonus-policy/ specifically) — a non-matching guess lets the spec's own "link not found -> skip" handling apply correctly instead of falsely matching the wrong page.
+    footerTermsText: /^regler & betingelser$/i,
+    footerPrivacyPolicyText: /^privatlivspolitik$/i,
+    footerAboutUsText: /^om os$/i,
+    footerPaymentOptionsText: /^sikker betaling$/i,
+    footerAffiliatesText: /^affiliates$/i, // confirmed live: kept English, not translated
+    footerContactUsText: /^kontakt$/i,
+    footerMobileAppText: /^mobile app$/i, // not exercised — DK has no Mobile App footer link
+    footerBingoCardGeneratorText: /^bingo card generator$/i, // not exercised — DK has no Bingo Card Generator footer link
+  },
 };
 
 /** Must be called from inside a running test/hook (currentGeoFeatures uses test.info()). */

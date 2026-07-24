@@ -39,6 +39,7 @@ export interface GeoFeatureConfig {
   mobileAppPath: string;         // baseURL-relative, no leading slash — slug differs per GEO (confirmed: ES uses "app-casino-movil/", not "mobile-app/")
   bingoCardGeneratorPath: string; // baseURL-relative, no leading slash — slug differs per GEO (confirmed: ES uses "generador-cartones-bingo/")
   currencySymbol: string;     // displayed currency symbol for this market (e.g. game prices, bonus copy)
+  gameModalCurrencyText?: string; // optional — overrides currencySymbol just for game-info-modal.spec.ts's Step 11 check. Defaults to currencySymbol when omitted. Confirmed live on GC DK: the homepage bonus banner shows the "kr" symbol, but the game info modal's bet range/jackpot figures use the 3-letter ISO code "DKK" instead — a real per-context formatting inconsistency on the site itself, not a test bug.
   contactEmail: string;       // support mailto: address shown on /contact/
   socialMedia: SocialMediaHandles;
   hasSocialMedia: boolean;    // false = confirmed live no social icon strip at all for this GEO (skip FS-01 entirely, not just per-icon)
@@ -650,6 +651,103 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       responsibleGamingPath: 'juego-mas-seguro/', // confirmed live: footer's Responsible Gaming link genuinely translates to this slug
       helpPath: 'ayuda/', // confirmed live: sidebar "Ayuda" link genuinely translates to this slug, not the English 'help/'
     },
+
+    // SE — onboarded 2026-07-24 against www.gentingcasino.se (own domain,
+    // same as ES) — ZERO Cloudflare interference across the whole session,
+    // confirming the block is UK-domain-specific (www.gentingcasino.com),
+    // not brand-wide. IE was tried first this session but SKIPPED: it lives
+    // on www.gentingcasino.com/en-IE/ (same domain as UK) and hit the
+    // identical "Performing security verification" Cloudflare wall twice in a
+    // row — see PLAN.md/[[project_next_session_genting]] for the UK write-up,
+    // same root cause applies. ROW is also on this domain and likely to hit
+    // the same wall when picked up next.
+    SE: {
+      locale: 'sv', uiLocalized: true,
+      hasBlog: false, blogPath: null, // confirmed live: no Blog link anywhere in nav or footer
+      hasPromotionsPage: false, promotionsPath: null, // confirmed live: promotions/, kampanjer/, erbjudanden/ all 404
+      featuresPath: null, // confirmed live: features/ and funktioner/ both 404
+      mobileAppPath: 'mobile-app/', // unconfirmed — no such link exists for this brand, kept as placeholder that skips cleanly if 404 (same as UK/ES)
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link exists for this brand, skips cleanly same as UK/ES
+      currencySymbol: 'kr', // Swedish Krona — NOT independently confirmed via visible price/bonus copy this session (none found on homepage); carried over from SC/SNG SE, verify on first real run
+      contactEmail: 'contact@gentingcasino.com', // confirmed live on /contact/ — a REAL mailto link (kept English path, not translated)
+      // hasContactMailto/contactCtaLabels intentionally left at defaults (true/omitted) —
+      // confirmed live: /contact/ has a real mailto section ("Mejla oss" ->
+      // contact@gentingcasino.com), NOT the UK card-design. It ALSO has a
+      // "Chatt" section whose copy says "LOGGA IN, klicka sedan på Live
+      // Chat..." — that login mention is boilerplate SON-platform contact-page
+      // copy, NOT a real feature here: clicking a game tile's Play CTA opens
+      // no #account modal at all (confirmed live), matching hasAccountModal
+      // below. Don't take contact-page prose as proof of a login feature —
+      // verify against real modal/click behavior, which is what settled this.
+      socialMedia: { twitter: null, facebook: null, instagram: null },
+      hasSocialMedia: false, // confirmed live: zero facebook/twitter/instagram/x.com links found homepage-wide
+      searchTerm: 'Kasino', searchResultHrefSubstrings: ['/kasino/', '/online-spelautomater/'], // NOT independently confirmed via actual in-app search interaction — inferred from the real taxonomy found live
+      gameTileHrefSubstrings: ['/online-spelautomater/', '/kasino/'], // confirmed live via homepage crawl: Slots taxonomy uses "online-spelautomater" (with English "jackpots"/"megaways" sub-slugs, e.g. /online-spelautomater/megaways/), Casino uses the Swedish "/kasino/" — distinct from UK's /casino/ and ES's /juegos-casino/
+      hasGameFilterCarousel: true, // confirmed live: 2 GamesSlider_wrapper rows found on homepage
+      hasFeedbackForm: false, // confirmed live: no "Report a problem"/"Rapportera ett problem" link found anywhere (contact page only has Live Chat + email)
+      hasGameCategoryNav: true, // confirmed live: nav/footer show Spelautomater (Slots)/Jackpottar/Megaways/Alla plus a separate Kasino (Casino) link — a taxonomy distinct from UK's Online Casino/Live Casino split and ES's Slots/Ruleta en Vivo/Casino split; no Live Casino category found for this market
+      hasLoginRegistration: false, // confirmed live: no LOGIN/JOIN buttons anywhere in nav; header instead shows "INSÄTTNING" (Deposit) / "SPELA" (Play) — Pay N Play/Trustly instant-deposit model, same pattern already confirmed for SC/SNG SE
+      hasAccountModal: false, // confirmed live: hovering a game tile and clicking its Play CTA opens NO #account modal at all — no navigation, no modal (see contactEmail note above re: the contact page's misleading "LOGGA IN" chat copy)
+      hasPaymentMethodsPage: false, // /payment-methods/ 404s AND /payment-options/, while technically 200, is NOT a real payment page — its <title> is a broken literal "{0} | Genting Casino" placeholder (unresolved i18n template, a real site bug worth flagging to the brand owner) and the body just repeats generic homepage/footer content with zero payment provider logos anywhere. Treating a broken-template 200 as "has a payment page" would be a false positive — matches the Pay N Play precedent already confirmed for SC/SNG SE (no real payment-methods page either)
+      hasBlogDesktopSearch: false, // no blog exists at all (see hasBlog) — consistent by necessity
+      hasBlogSearch: false, // no blog exists at all — consistent by necessity
+    },
+
+    // DK — onboarded 2026-07-24 against www.gentingcasino.dk (own domain,
+    // same as ES/SE) — ZERO Cloudflare interference, confirming the block
+    // stays www.gentingcasino.com-domain-specific. UNLIKE SE, this market
+    // has a REAL traditional login/registration widget (LOG IND/OPRET DIG),
+    // not Pay N Play — Danish cookie-consent accept text ("Tillad alle
+    // cookies") was missing from dismissCookieConsent's KNOWN_ACCEPT_TEXTS
+    // and has been added to helpers/common.ts (cross-brand fix, benefits any
+    // future Danish market).
+    DK: {
+      locale: 'da', uiLocalized: true,
+      hasBlog: false, blogPath: null, // confirmed live: blog/ 404s, no nav/footer link either
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200 — kept English, same as UK/SE
+      featuresPath: null, // confirmed live: features/ and funktioner/ both 404
+      mobileAppPath: 'mobile-app/', // unconfirmed — no such link exists for this brand, kept as placeholder that skips cleanly if 404
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link exists for this brand, skips cleanly
+      currencySymbol: 'kr', // Danish Krone — confirmed via homepage bonus copy ("100kr")
+      gameModalCurrencyText: 'DKK', // confirmed live: the game info modal's bet range/jackpot figures use "DKK" ("Min. indsats DKK 1.00", "DKK 2,500,000"), NOT the "kr" symbol used on the homepage banner — a real site inconsistency, not a test bug
+      casinoPath: 'kasino/', // confirmed live: footer "Casino" link genuinely translates to this slug, not the English 'casino/'
+      hasPromotionsIconInHeader: false, // confirmed live: the Promotions page exists (200) but is NOT linked from the header banner OR the sidebar/hamburger menu at all — checked both nav surfaces directly
+      contactEmail: 'contact@gentingcasino.com', // confirmed live on /contact/ — a REAL mailto link, kept English path
+      // hasFeedbackForm below is false — confirmed live: no "Report a
+      // problem"/"Rapporter et problem" link found anywhere. Contact page
+      // has the same generic SON-platform "LOG IND, tryk derefter på
+      // 'live chat'" copy already seen (misleadingly) on GC SE — but unlike
+      // SE, DK genuinely DOES have real login, so this copy may actually be
+      // accurate here (not independently re-tested this session since no
+      // working DK test account exists — see hasTestAccount below).
+      socialMedia: { twitter: null, facebook: null, instagram: null },
+      hasSocialMedia: false, // confirmed live: zero facebook/twitter/instagram/x.com links found homepage-wide
+      searchTerm: 'Kasino', searchResultHrefSubstrings: ['/kasino/', '/online-spillemaskiner/'], // NOT independently confirmed via actual in-app search interaction — inferred from the real taxonomy found live
+      gameTileHrefSubstrings: ['/online-spillemaskiner/', '/kasino/', '/live-kasino/'], // confirmed live via homepage crawl: Slots (Spillemaskiner) at /online-spillemaskiner/ (English jackpots/megaways/nye sub-slugs), Casino at /kasino/, Live Casino at /live-kasino/ — distinct from every other GC GEO's taxonomy
+      hasGameFilterCarousel: true, // confirmed live: 4 GamesSlider_wrapper rows found on homepage
+      hasFeedbackForm: false, // confirmed live: no feedback/report-a-problem link found anywhere
+      hasGameCategoryNav: true, // confirmed live: nav shows Spillemaskiner (Slots)/Live Casino/Casino — a taxonomy distinct from UK (Online Casino/Live Casino) and ES (Slots/Ruleta en Vivo/Casino), closer in shape to SE's Slots+Casino split but WITH its own separate Live Casino category (unlike SE, which has none)
+      hasLoginRegistration: true, // confirmed live: LOG IND (Log In)/OPRET DIG (Sign Up) buttons in header, real <son-auth-modals> widget opens on click
+      hasTestAccount: false, // per Reeve 2026-07-24: no working DK test account exists yet — skip only login.spec.ts's real successful-login test; registration.spec.ts (which never submits) is still safe to run, see the CPR note below
+      hasAccountModal: true, // confirmed live: OPRET DIG click reliably advances to /#account with a real <son-auth-modals> widget (not an empty shell)
+      hasPaymentMethodsPage: true, // confirmed live: /payment-options/ has a REAL page (proper title, real Visa/Mastercard/PayPal/Paysafecard/Trustly/Skrill logos with individual /payment-options/<provider>/ deep links) — unlike SE's same-URL page, which is a broken placeholder. Don't assume "200 status" alone means real content; this GEO is the confirmation that it can go either way even on the same brand/URL pattern.
+      paymentMethodsPath: 'payment-options/', // confirmed live: real footer slug ("Sikker Betaling"), payment-methods/ 404s same as every other GC GEO
+      hasBlogDesktopSearch: false, // no blog exists at all (see hasBlog) — consistent by necessity
+      hasBlogSearch: false, // no blog exists at all — consistent by necessity
+    },
+    // Registration CPR note (GC DK, confirmed live 2026-07-24): the
+    // registration widget's very first step asks for a Danish CPR number
+    // (personalID field, placeholder "XXXXXX-XXXX") + password before any
+    // other field. Tested with a plausible-format-but-fake CPR
+    // ("010199-1234", no real modulus-11 checksum) — it was ACCEPTED and the
+    // form advanced normally to Step 1 of 3 (first/last name, DOB, gender,
+    // email, mobile), no error shown. This confirms the field only does a
+    // client-side FORMAT check (10 digits, DDMMYY-XXXX), not a real backend
+    // registry/identity lookup at this stage — real KYC verification (if
+    // any) would only bite at actual final submission, which
+    // registration.spec.ts never does (project-wide convention). So
+    // registration IS safely testable end-to-end without a legitimate CPR,
+    // despite Reeve's initial concern that it might not be.
   },
 };
 
