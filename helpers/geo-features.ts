@@ -69,6 +69,7 @@ export interface GeoFeatureConfig {
   slotsPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'slots/' when omitted (the classic Slingo-family taxonomy). Confirmed live: MC ES's footer has a real link with the exact text "Slots" (footer-navigation.spec.ts's Slots step isn't skipped) but it points to "online-slots/", not the hardcoded default — set this whenever a GEO's real Slots footer link uses a different slug.
   responsibleGamingPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'responsible-gaming/' when omitted. Confirmed live: GC ES genuinely translates this slug to "juego-mas-seguro/"
   helpPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'help/' when omitted. Confirmed live: GC ES genuinely translates this slug to "ayuda/"
+  affiliatesPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'affiliates/' when omitted. Confirmed live: PC ES genuinely translates this slug to "afiliados/"
   needsStealthLaunch?: boolean; // optional — true means this GEO's site sits behind Cloudflare bot-detection that blocks/challenges a plain automated Chromium (confirmed on GC UK and MC UK — see helpers/stealth-fixtures.ts). When true, tests/p1|p2|p3 specs (which import `test`/`expect` from stealth-fixtures, not '@playwright/test' directly) launch via playwright-extra + puppeteer-extra-plugin-stealth instead of Playwright's default launcher. Defaults to false/undefined — every other GEO's launch is completely unchanged. Set this the moment a NEW GEO is confirmed to hit the same Cloudflare wall; no other wiring is needed, the fixture reads this flag automatically.
 }
 
@@ -976,6 +977,206 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
     // registration.spec.ts never does (project-wide convention). So
     // registration IS safely testable end-to-end without a legitimate CPR,
     // despite Reeve's initial concern that it might not be.
+  },
+
+  // ── Prime Casino (PC) ─────────────────────────────────────────────────────
+  PC: {
+    // UK — onboarding started 2026-07-27 against www.primecasino.co.uk. Same
+    // SkillOnNet/SON platform family as SC/SNG/MC/GC (Header_/Button_/
+    // MainMenu_/son-auth-modals/son-cookie-consent), same #account modal
+    // routing. Zero Cloudflare interference this session — real test account
+    // (rx@test.com) confirmed working, login AND registration widgets both
+    // rendered real content instantly (shadow root present, real form fields),
+    // no polling/retries needed. Own game taxonomy: Live Casino/Online Slots/
+    // Table Games/Instant Win — 4 top-level categories, distinct from every
+    // other brand onboarded so far (not Slingo's Slots/Bingo/Casino, not MC's
+    // Home/Live Casino/Online Slots/Casino Games, not GC's Online Casino/Live
+    // Casino).
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed live 200
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200 — footer link only, not in header nav (see hasPromotionsIconInHeader)
+      hasPromotionsIconInHeader: false, // confirmed live: header nav has Exclusive/New/Popular/game categories — no Promotions entry point; only reachable via footer
+      featuresPath: 'features/', // confirmed live 200, real footer link
+      mobileAppPath: 'mobile-app/', // confirmed live, real footer link
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link found in footer, kept as the common placeholder that skips cleanly if 404
+      currencySymbol: '£',
+      contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link
+      aboutUsPath: 'about/', // confirmed live: footer "About us" link is /about/, NOT the common '/about-us/' default — a genuine brand-specific slug difference
+      helpPath: 'faqs/', // confirmed live: footer "Help" link is /faqs/, NOT the common '/help/' default
+      socialMedia: { twitter: 'primecasinouk', facebook: 'primecasinouk', instagram: 'primecasinouk' }, // confirmed live homepage-wide (not scoped to <footer> — these live elsewhere in the page)
+      hasSocialMedia: true,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // NOT independently confirmed via a completed in-app search this session — the search icon click didn't reveal a working input in the time available; verify before trusting this fully on first real run
+      gameTileHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // confirmed live via header/footer nav crawl — this brand's own 4-category taxonomy
+      hasGameFilterCarousel: true, // confirmed live: homepage has GamesSlider-style carousel rows
+      hasFeedbackForm: true, // confirmed live: "Report a problem" link present inside the login/registration widget
+      hasGameCategoryNav: true, // confirmed live: header shows Live Casino/Online Slots/Table Games/Instant Win as expandable categories, each with real sub-links (see gameTileHrefSubstrings)
+      hasLoginRegistration: true, // confirmed live: Sign In/Join buttons in header, both open a real #account modal with real shadow-root content — Sign In: 2 real inputs; Join: 3 real inputs (Mobile number, DOB day/month/year)
+      hasTestAccount: true, // real test account confirmed working by Reeve 2026-07-27 (rx@test.com)
+      hasAccountModal: true, // confirmed live: both Sign In and Join advance the URL to /#account
+      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (the common default path — no override needed, unlike GC/MC's /payment-options/)
+      hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
+      hasBlogSearch: true, // unconfirmed — same as above
+    },
+
+    // ES — onboarding started 2026-07-27 against www.primecasino.es. Genuinely
+    // translated UI (uiLocalized: true), same shared ES test account used
+    // across brands. Own taxonomy, distinct from UK's: Exclusivos/Populares/
+    // Nuevos, Ruleta en Vivo (standalone — no broader "Live Casino" category
+    // like UK), Slots Online (Todas las Slots/Megaways/Jackpot/Slingo), Más
+    // Juegos (Todos los Juegos/Online Blackjack/Online Roulette/Video Bingo),
+    // Juegos Rápidos (Keno/Plinko/Crash). Registration widget confirmed live:
+    // asks for DNI/NIE (Spanish national ID) first, same Spanish-regulation
+    // pattern already built for SC/SNG ES (registration.spec.ts's
+    // isSpanishFormat branch is GEO-keyed, not brand-keyed, so it applies
+    // here automatically — no new branch needed unless a real run surfaces a
+    // brand-specific label mismatch).
+    ES: {
+      locale: 'es', uiLocalized: true,
+      hasBlog: true, blogPath: 'blog/', // confirmed live 200
+      hasPromotionsPage: true, promotionsPath: 'promociones/', // confirmed live 200
+      hasPromotionsIconInHeader: false, // confirmed live: header nav has no dedicated Promotions entry (Exclusivos/Populares/Nuevos/game categories only) — only reachable via footer, same gap as UK
+      featuresPath: null, // confirmed live: both /features/ and /funciones/ 404
+      mobileAppPath: 'app-movil/', // confirmed live: real translated footer link
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link found in footer, kept as the common placeholder that skips cleanly if 404
+      currencySymbol: '€',
+      contactEmail: 'soporte@primecasino.es', // confirmed live on /contacto/ — real mailto link
+      contactPath: 'contacto/', // confirmed live: genuinely translated, not the English default
+      aboutUsPath: 'sobre-nosotros/', // confirmed live: real translated footer link
+      helpPath: 'faqs/', // confirmed live: footer "Ayuda" link is /faqs/ — same untranslated slug as UK, not further translated
+      paymentMethodsPath: 'metodos-pago/', // confirmed live: real translated slug, common 'payment-methods/' default would 404 here
+      responsibleGamingPath: 'juego-mas-seguro/', // confirmed live: real translated footer link, same slug already confirmed for GC ES
+      affiliatesPath: 'afiliados/', // confirmed live: footer "Afiliados" link genuinely translates this slug, common 'affiliates/' default would 404 here
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // no social icons found homepage-wide this session — verify on first real run, may just need a different container scope
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots-online/', '/ruleta-en-vivo/', '/otros-juegos/', '/juegos-rapidos/'], // NOT independently confirmed via a completed in-app search this session — same caveat as UK, verify before trusting fully
+      gameTileHrefSubstrings: ['/slots-online/', '/ruleta-en-vivo/', '/otros-juegos/', '/juegos-rapidos/'], // confirmed live via header/footer nav crawl — this brand's own ES-specific taxonomy, distinct from UK's
+      hasGameFilterCarousel: true, // confirmed live: same GamesSlider-style carousel pattern as UK
+      hasFeedbackForm: true, // carried over from UK pending a dedicated live check of the login widget's "Report a problem" link — verify on first real run
+      hasGameCategoryNav: true, // confirmed live: header shows Exclusivos/Populares/Nuevos/Ruleta en Vivo/Slots Online/Más Juegos/Juegos Rápidos with real sub-links
+      hasLoginRegistration: true, // confirmed live: "Iniciar sesión"/"ÚNETE AHORA" buttons in header, both open a real #account modal with real shadow-root content
+      hasTestAccount: true, // shared ES test account (noemsisters@hotmail.com) already confirmed working across brands, reused here per Reeve 2026-07-27
+      hasAccountModal: true, // confirmed live: both buttons advance the URL to /#account
+      hasPaymentMethodsPage: true, // confirmed live: /metodos-pago/ returns 200 (see paymentMethodsPath)
+      hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
+      hasBlogSearch: true, // unconfirmed — same as above
+    },
+
+    // CA — onboarding started 2026-07-27 against www.primecasino.com/en-CA/,
+    // tested from a confirmed Canada VPN/IP. Same shape as UK: English
+    // (uiLocalized: false), same taxonomy (Live Casino/Online Slots/Table
+    // Games/Instant Win), same "Sign In"/"Join" header wording, same
+    // untranslated footer slugs (/about/, /contact/, /faqs/, /affiliates/,
+    // /payment-methods/, /features/) — this market is effectively UK's
+    // English-language shape on the shared .com/en-CA/ domain, not its own
+    // design like ES. Registration confirmed live: real Mobile number + DOB
+    // fields, DOB shows "Year-Month-Day" placeholder — same non-UK-format
+    // rejection already documented for SNG/MC CA, reuses generateCanadianDOB()
+    // (see registration.spec.ts's isPcCaFormat).
+    CA: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live: /blog/ 404s — genuinely different from UK, which has a real blog
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200
+      hasPromotionsIconInHeader: false, // confirmed live: header nav has no dedicated Promotions entry, same gap as UK — only reachable via footer
+      featuresPath: 'features/', // confirmed live 200
+      mobileAppPath: 'mobile-app/', // confirmed live 200
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link found in footer, kept as the common placeholder that skips cleanly if 404
+      currencySymbol: '$', // Canadian Dollar — NOT independently confirmed via visible price/bonus copy this session; verify on first real run
+      contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link, same shared address as UK
+      aboutUsPath: 'about/', // confirmed live: footer "About us" link is /about/, same as UK — NOT the common '/about-us/' default
+      helpPath: 'faqs/', // confirmed live: footer "Help" link is /faqs/, same as UK
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide (whole-page check, not just footer-scoped) — genuinely different from UK, which does have real icons
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // NOT independently confirmed via a completed in-app search this session — same caveat as UK, verify before trusting fully
+      gameTileHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // confirmed live via header/footer nav crawl — same taxonomy as UK
+      hasGameFilterCarousel: true, // unconfirmed — carried over from UK's confirmed pattern; verify on first real run
+      hasFeedbackForm: true, // carried over from UK pending a dedicated live check of the login widget's "Report a problem" link — verify on first real run
+      hasGameCategoryNav: true, // confirmed live: header shows Live Casino/Online Slots/Table Games/Instant Win as expandable categories, same as UK
+      hasLoginRegistration: true, // confirmed live: Sign In/Join buttons in header, both open a real #account modal with real shadow-root content — Sign In: 2 real inputs; Join: 3 real inputs (Mobile number, DOB Year-Month-Day)
+      hasTestAccount: true, // real test account confirmed working by Reeve 2026-07-27 (gowem54020@186site.com)
+      hasAccountModal: true, // confirmed live: both Sign In and Join advance the URL to /#account
+      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (the common default path, same as UK)
+      hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
+      hasBlogSearch: true, // unconfirmed — same as above
+    },
+
+    // IE — onboarding started 2026-07-27 against www.primecasino.com/en-IE/,
+    // tested from a confirmed Ireland VPN/IP. Same shape as UK/CA: English
+    // (uiLocalized: false), same taxonomy (Live Casino/Online Slots/Table
+    // Games/Instant Win), same "Sign In"/"Join" header wording, same
+    // untranslated footer slugs (/about/, /contact/, /faqs/, /affiliates/,
+    // /payment-methods/, /features/). No blog (confirmed 404, same gap as
+    // CA). Registration confirmed live: real Mobile number + DOB fields,
+    // country code auto-detects to +353, DOB shows "Day-Month-Year"
+    // placeholder — SAME format as UK's default (unlike CA's Year-Month-Day),
+    // so this market is expected to need no brand-specific registration
+    // branch — registration.spec.ts's existing isIrishFormat is already
+    // GEO-keyed (not brand-keyed), so it applies here automatically.
+    IE: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live: /blog/ 404s, same gap as CA
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200
+      hasPromotionsIconInHeader: false, // confirmed live: header nav has no dedicated Promotions entry, same gap as UK/CA — only reachable via footer
+      featuresPath: 'features/', // confirmed live 200
+      mobileAppPath: 'mobile-app/', // confirmed live: real footer link, same as UK/CA
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link found in footer, kept as the common placeholder that skips cleanly if 404
+      currencySymbol: '€', // Euro — NOT independently confirmed via visible price/bonus copy this session; verify on first real run
+      contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link, same shared address as UK/CA
+      aboutUsPath: 'about/', // confirmed live: footer "About us" link is /about/, same as UK/CA
+      helpPath: 'faqs/', // confirmed live: footer "Help" link is /faqs/, same as UK/CA
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide, same gap as CA
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // NOT independently confirmed via a completed in-app search this session — same caveat as UK/CA, verify before trusting fully
+      gameTileHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // confirmed live via footer nav crawl — same taxonomy as UK/CA
+      hasGameFilterCarousel: true, // unconfirmed — carried over from UK/CA's confirmed pattern; verify on first real run
+      hasFeedbackForm: true, // carried over from UK pending a dedicated live check of the login widget's "Report a problem" link — verify on first real run
+      hasGameCategoryNav: true, // unconfirmed — carried over from UK/CA's confirmed header pattern; verify on first real run
+      hasLoginRegistration: true, // confirmed live: Sign In/Join buttons in header, both open a real #account modal with real shadow-root content — Join: 3 real inputs (Mobile number, DOB Day-Month-Year, country auto-detects +353)
+      hasTestAccount: true, // real test account confirmed working by Reeve 2026-07-27 (ren@test.com)
+      hasAccountModal: true, // confirmed live: both Sign In and Join advance the URL to /#account
+      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (the common default path, same as UK/CA)
+      hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
+      hasBlogSearch: true, // unconfirmed — same as above
+    },
+
+    // COM — onboarding started 2026-07-27 against www.primecasino.com (no
+    // GEO path prefix, unlike CA/IE), tested from a confirmed UAE VPN/IP —
+    // same "international" pattern as MC/COM. Same shape as UK/CA/IE:
+    // English (uiLocalized: false), same taxonomy, same "Sign In"/"Join"
+    // header wording, same untranslated footer slugs — EXCEPT no Mobile App
+    // footer link at all (confirmed 404, unlike UK/CA/IE which all have
+    // one). Registration confirmed live: country code auto-detects to +971
+    // (same auto-detect-from-real-IP pattern as MC/COM's Malta case), DOB
+    // shows "Day/Month/Year" — same as the default UK-shaped format, no
+    // override needed there; only the mobile number format needed its own
+    // generator (see registration.spec.ts's isPcComFormat and
+    // generateUaeMobile in helpers/testData.ts).
+    COM: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live: /blog/ 404s, same gap as CA/IE
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200
+      hasPromotionsIconInHeader: false, // confirmed live: header nav has no dedicated Promotions entry, same gap as UK/CA/IE — only reachable via footer
+      featuresPath: 'features/', // confirmed live 200
+      mobileAppPath: 'mobile-app/', // confirmed live: 404s (no footer link at all) — genuinely different from UK/CA/IE, which all have a real one. Kept as the common placeholder since the field itself isn't nullable — the footer-nav check skips cleanly on a 404 like every other optional link
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link found in footer, kept as the common placeholder that skips cleanly if 404
+      currencySymbol: '€', // confirmed live via game info modal's bet range/jackpot figures — Euro, not USD, despite this being the "international" .com market
+      contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link, same shared address as UK/CA/IE
+      aboutUsPath: 'about/', // confirmed live: footer "About us" link is /about/, same as UK/CA/IE
+      helpPath: 'faqs/', // confirmed live: footer "Help" link is /faqs/, same as UK/CA/IE
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide, same gap as CA/IE
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // NOT independently confirmed via a completed in-app search this session — same caveat as UK/CA/IE, verify before trusting fully
+      gameTileHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // confirmed live via footer nav crawl — same taxonomy as UK/CA/IE
+      hasGameFilterCarousel: true, // unconfirmed — carried over from UK/CA/IE's confirmed pattern; verify on first real run
+      hasFeedbackForm: true, // carried over from UK pending a dedicated live check of the login widget's "Report a problem" link — verify on first real run
+      hasGameCategoryNav: true, // unconfirmed — carried over from UK/CA/IE's confirmed header pattern; verify on first real run
+      hasLoginRegistration: true, // confirmed live: Sign In/Join buttons in header, both open a real #account modal — Join: real Mobile number + DOB fields, country auto-detects +971
+      hasTestAccount: true, // real test account confirmed working by Reeve 2026-07-27 (zn@test.com)
+      hasAccountModal: true, // confirmed live: both Sign In and Join advance the URL to /#account
+      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (the common default path, same as UK/CA/IE)
+      hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
+      hasBlogSearch: true, // unconfirmed — same as above
+    },
   },
 };
 

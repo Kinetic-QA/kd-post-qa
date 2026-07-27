@@ -63,8 +63,13 @@ test.describe('P3 - Payment Method Strip', () => {
       // with per-provider alt text — a genuinely different implementation,
       // not a missing/broken feature. Accept either shape as evidence logos
       // are displayed.
+      // Confirmed live on PC UK: logos are plain <img> tags with NO alt
+      // attribute at all, served from a separate CDN domain
+      // (primeapi.com/cmscdn/...), and are NOT nested inside the provider
+      // deep-link <a> tags (those exist as separate elements elsewhere on
+      // the page — see Steps 2-3) — a third distinct implementation shape.
       const logos = page.locator(
-        'a[href*="/payment-methods/"] img, img[alt*="pay" i], img[src*="sectionCode=payments"]'
+        'a[href*="/payment-methods/"] img, img[alt*="pay" i], img[src*="sectionCode=payments"], img[src*="cmscdn"]'
       );
       const count = await logos.count();
       expect(count).toBeGreaterThan(0);
