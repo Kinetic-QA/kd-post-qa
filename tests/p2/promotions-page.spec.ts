@@ -71,24 +71,46 @@ test.describe('P2 - Promotions Page', () => {
       `a[href*="/${promoPath}"]:not([href$="/${promoPath}"]):not([href="${siteUrl(promoPath!)}"])`
     ).filter({ visible: true }).first();
 
-    await runStep('Step 1: Promotion CTA opens the expected campaign deeplink', async () => {
-      const ctaLink = campaignLink();
-      const hasCampaignLink = await ctaLink.isVisible({ timeout: 10_000 }).catch(() => false);
+    // Confirmed live on PC UK: some inline promo copy links (e.g. "Easter
+    // specials", a plain body-text anchor) use target="_blank" — they open a
+    // NEW tab rather than navigating the current page, so page.url() on the
+    // original page can never reflect the click. Shared by every step that
+    // clicks a campaignLink() so all three handle this shape the same way,
+    // not just whichever step happened to be checked first.
+    async function clickCampaignLinkAndVerify(link: ReturnType<typeof campaignLink>, stepLabel: string): Promise<boolean> {
+      const hasCampaignLink = await link.isVisible({ timeout: 10_000 }).catch(() => false);
       if (!hasCampaignLink) {
-        console.log('PP-01 Step 1 skipped — no individual campaign deeplink exists for this GEO, only self-links to the umbrella page');
-        return;
+        console.log(`PP-01 ${stepLabel} skipped — no individual campaign deeplink exists for this GEO, only self-links to the umbrella page`);
+        return false;
       }
-      const href = await ctaLink.getAttribute('href') ?? '';
-      console.log('PP-01 Step 1 clicking href: ' + href);
-      await ctaLink.click();
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2_000);
-      console.log('PP-01 Step 1 url after click+wait: ' + page.url());
-      expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto(promoPath!, { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(1_000);
-      await dismissCampaignPopup(page);
+      const href = await link.getAttribute('href') ?? '';
+      console.log(`PP-01 ${stepLabel} clicking href: ` + href);
+      const opensNewTab = (await link.getAttribute('target')) === '_blank';
+      if (opensNewTab) {
+        const [popup] = await Promise.all([
+          page.context().waitForEvent('page', { timeout: 10_000 }),
+          link.click(),
+        ]);
+        await popup.waitForLoadState('domcontentloaded');
+        console.log(`PP-01 ${stepLabel} new tab URL: ` + popup.url());
+        expect(popup.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
+        await popup.close();
+      } else {
+        await link.click();
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(2_000);
+        console.log(`PP-01 ${stepLabel} url after click+wait: ` + page.url());
+        expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
+        await page.goto(promoPath!, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(1_000);
+        await dismissCampaignPopup(page);
+      }
+      return true;
+    }
+
+    await runStep('Step 1: Promotion CTA opens the expected campaign deeplink', async () => {
+      await clickCampaignLinkAndVerify(campaignLink(), 'Step 1');
     });
 
     await runStep('Step 2: "CLAIM" CTA leads to expected inner page', async () => {
@@ -96,39 +118,11 @@ test.describe('P2 - Promotions Page', () => {
       // back to /casino-promotions/ without campaign query params attached —
       // confirmed live site behavior, not a selector issue. "CLAIM" CTAs link
       // directly to real campaign detail pages, so use those instead.
-      const claimCta = campaignLink();
-      const hasCampaignLink = await claimCta.isVisible({ timeout: 10_000 }).catch(() => false);
-      if (!hasCampaignLink) {
-        console.log('PP-01 Step 2 skipped — no individual campaign deeplink exists for this GEO');
-        return;
-      }
-      const href = await claimCta.getAttribute('href') ?? '';
-      await claimCta.click();
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2_000);
-      expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto(promoPath!, { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(1_000);
-      await dismissCampaignPopup(page);
+      await clickCampaignLinkAndVerify(campaignLink(), 'Step 2');
     });
 
     await runStep('Step 3: Umbrella page inlinks redirect to expected destination', async () => {
-      const inlink = campaignLink();
-      const hasCampaignLink = await inlink.isVisible({ timeout: 10_000 }).catch(() => false);
-      if (!hasCampaignLink) {
-        console.log('PP-01 Step 3 skipped — no individual campaign deeplink exists for this GEO');
-        return;
-      }
-      const href = await inlink.getAttribute('href') ?? '';
-      await inlink.click();
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2_000);
-      expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
-      await page.goto(promoPath!, { waitUntil: 'domcontentloaded' });
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(1_000);
-      await dismissCampaignPopup(page);
+      await clickCampaignLinkAndVerify(campaignLink(), 'Step 3');
     });
 
     await runStep('Step 4: Approved T&C text displayed in pop-up banner', async () => {

@@ -356,6 +356,25 @@ export function generateMalteseMobile(): string {
 }
 
 /**
+ * Generates a random valid UAE mobile number. PC/COM's registration form
+ * country-code selector auto-detects from the tester's real IP (confirmed
+ * live 2026-07-27: showed "+971" when tested from a UAE VPN — same
+ * auto-detect pattern as MC/COM's Malta case), so generateUKMobile's
+ * 10-digit UK-shaped number would be the wrong shape entirely. UAE mobiles
+ * are 9 digits total starting with 5 (real assigned ranges: 050/052/054/
+ * 055/056/058/059) — the form already shows "+971" as the prefix, so we
+ * supply just the 9-digit national number.
+ * NOTE: PC/COM's country-code field isn't fixed to the UAE — it reflects
+ * whichever country the tester's IP resolves to, so this generator is only
+ * correct while testing PC/COM from a UAE IP/VPN.
+ */
+export function generateUaeMobile(): string {
+  const secondDigit = randomFrom([0, 2, 4, 5, 6, 8, 9]);
+  const rest = Array.from({ length: 7 }, () => Math.floor(Math.random() * 10)).join('');
+  return `5${secondDigit}${rest}`;
+}
+
+/**
  * Generates a random valid Cyprus mobile number WITHOUT the leading 0.
  * Confirmed live 2026-07-22: testing SNG ROW from a real Cyprus VPN/IP, the
  * country-code dropdown auto-detected to "CY"/"Cyprus (+ 357)" — NOT South
