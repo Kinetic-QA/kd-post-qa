@@ -64,6 +64,7 @@ export interface GeoFeatureConfig {
   hasContactMailto?: boolean; // optional — false means this brand's /contact/ page has NO mailto: link at all, so contactEmail is not a real assertable value for it. Defaults to true when omitted (every brand onboarded before GC has a real mailto link). Set false + leave contactEmail as '' when a brand uses a different contact-page design (see contactCtaLabels).
   contactCtaLabels?: string[] | null; // optional — confirmed live on GC UK: /contact/ has no mailto link OR plain LOGIN link; instead it shows big clickable CTA cards ("Genting Casino Online", "Genting Casino Venues") that route to /contact/<slug>/. Set the exact visible label text for each card that should be tested. null/omitted means the brand doesn't use this card-based contact design.
   casinoPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'casino/' when omitted. Confirmed live: GC ES genuinely translates this slug to "juegos-casino/"
+  slotsPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'slots/' when omitted (the classic Slingo-family taxonomy). Confirmed live: MC ES's footer has a real link with the exact text "Slots" (footer-navigation.spec.ts's Slots step isn't skipped) but it points to "online-slots/", not the hardcoded default — set this whenever a GEO's real Slots footer link uses a different slug.
   responsibleGamingPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'responsible-gaming/' when omitted. Confirmed live: GC ES genuinely translates this slug to "juego-mas-seguro/"
   helpPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'help/' when omitted. Confirmed live: GC ES genuinely translates this slug to "ayuda/"
   needsStealthLaunch?: boolean; // optional — true means this GEO's site sits behind Cloudflare bot-detection that blocks/challenges a plain automated Chromium (confirmed on GC UK and MC UK — see helpers/stealth-fixtures.ts). When true, tests/p1|p2|p3 specs (which import `test`/`expect` from stealth-fixtures, not '@playwright/test' directly) launch via playwright-extra + puppeteer-extra-plugin-stealth instead of Playwright's default launcher. Defaults to false/undefined — every other GEO's launch is completely unchanged. Set this the moment a NEW GEO is confirmed to hit the same Cloudflare wall; no other wiring is needed, the fixture reads this flag automatically.
@@ -705,6 +706,45 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogDesktopSearch: false, // no blog for SE anyway (hasBlog: false) — set false for consistency
       hasBlogSearch: false, // no blog for SE anyway — set false for consistency
       hasPromotionsIconInHeader: false, // unconfirmed — no Promotions link found in the crawled nav despite the page itself existing (see hasPromotionsPage); verify on first real run
+    },
+
+    // ES — onboarding started 2026-07-27, tested from a confirmed Spain VPN.
+    // Own domain (megacasinos.es, not megacasino.com/es or similar) — fully
+    // localized, real Spanish content, NOT a Nordic BankID market like SE/DK
+    // (has traditional login/registration). Shares the "noemsisters@hotmail.com"
+    // test account already confirmed working across SC/SNG/GC ES (see GC ES's
+    // own hasTestAccount comment) — the same account is reused deliberately
+    // across brands for this GEO, not a credential mix-up.
+    ES: {
+      locale: 'es', uiLocalized: true, // confirmed live: <html lang="es">, real Spanish nav/header/footer copy
+      hasBlog: true, blogPath: 'blog/', // confirmed live via curl: 200
+      hasPromotionsPage: true, promotionsPath: 'promociones/', // confirmed live via curl: real nav link uses this translated slug (English 'promotions/' also 200s but isn't what the real nav links to)
+      featuresPath: null, // confirmed 404 pre-test via curl (both 'features/' and 'funciones/')
+      mobileAppPath: 'mobile-app/', // confirmed 404 pre-test via curl — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link exists for this brand family, skips cleanly if 404
+      currencySymbol: '€', // confirmed live via homepage bonus copy ("10€", "200€")
+      contactEmail: 'soporte@megacasinos.es', // confirmed live: /contacto/ page's own JSON config exposes "support_email":"soporte@megacasinos.es" — this GEO's own domain address, NOT the shared support@megacasino.com used by UK/COM/CA/IE/DE/DK/SE
+      contactPath: 'contacto/', // confirmed live via curl: real nav link uses this translated slug (English 'contact/' also 200s with identical content but isn't what the real nav links to)
+      helpPath: 'ayuda/', // confirmed live via curl: real nav link uses this translated slug (English 'help/' also 200s with identical content but isn't what the real nav links to)
+      responsibleGamingPath: 'juego-mas-seguro/', // confirmed live via curl: real nav link uses this translated slug — the English 'responsible-gaming/' slug 200s too but serves DIFFERENT (unrelated homepage-ish) content, not a real alias
+      casinoPath: 'juegos-de-casino/', // confirmed live via curl redirect: 'casino-games/' 301s here — own distinct Spanish slug, NOT the same 'juegos-casino/' slug GC ES uses
+      slotsPath: 'online-slots/', // confirmed live via real browser run 2026-07-27: footer-navigation.spec.ts's Slots step found a real footer link with the exact text "Slots" pointing here, not the hardcoded default 'slots/'
+      aboutUsPath: 'quienes-somos/', // confirmed live via real browser run 2026-07-27: sidebar-navigation.spec.ts's About Us step timed out against the default 'about-us/' — the real sidebar/footer nav link (data-tk-value="aboutUs", text "Nosotros") points to "quienes-somos/" instead. The English 'about-us/' slug does separately 200 with real (if different) Spanish content, same false-alias trap already seen with contact/help/responsible-gaming above — don't trust a 200 status alone without checking what the real nav link actually points to
+      socialMedia: { twitter: null, facebook: 'MegacasinoEs', instagram: 'megacasinoespana' }, // confirmed live: Facebook/Instagram found homepage-wide, no Twitter/X link found
+      hasSocialMedia: true, // see note above
+      searchTerm: 'Buffalo', searchResultHrefSubstrings: ['/online-slots/', '/juegos-de-casino/', '/ruleta-en-vivo/'], // NOT independently confirmed via actual in-app search interaction — inferred from a real homepage game title ("Buffalo Blitz Megaways Jackpot"); MC SE's search was confirmed live to index game titles only, not category names, so a category-name term was deliberately avoided here
+      gameTileHrefSubstrings: ['/online-slots/', '/juegos-de-casino/', '/ruleta-en-vivo/'], // confirmed live via curl: header nav categories are Slots (/online-slots/), Todos los juegos (/juegos-de-casino/), and Ruleta/Ruleta en Vivo (/ruleta/, /ruleta-en-vivo/) — a richer taxonomy than UK/COM/CA/DE/DK/SE, also including standalone Blackjack/Crash Games/Jackpots/Megaways/Slingo/Providers categories not modeled here
+      paymentMethodsPath: 'metodos-de-pago/', // confirmed live via real browser run 2026-07-27: footer-navigation.spec.ts's Payment Options step landed on this URL, not the guessed 'payment-options/' — the real footer link (data-tk-value="payments", text "Métodos de Pago") points here. 'payment-options/' does separately 200 with real content (same false-alias trap as contact/help/responsible-gaming/about-us above), but it's not what the real nav actually links to
+      hasGameFilterCarousel: true, // confirmed live via curl: homepage HTML contains 8 GamesSlider_wrapper rows
+      hasFeedbackForm: true, // confirmed live via curl: real "Reportar un problema" link -> #account/feedback found on /contacto/
+      hasGameCategoryNav: true, // confirmed live via curl: real Slots/Todos los juegos/Ruleta nav links found (see gameTileHrefSubstrings)
+      hasLoginRegistration: true, // confirmed live via curl: header shows real "Iniciar sesión"/"Únete" text — traditional login/registration, NOT a BankID/Pay N Play market like SE/DK
+      hasTestAccount: true, // shared SC/SNG/GC ES account (noemsisters@hotmail.com) — per explicit instruction this session; verify on first real login.spec.ts run
+      hasAccountModal: true, // unconfirmed via real click this session — cloned from the UK/COM/CA precedent (traditional LOGIN/JOIN widget), verify on first real run
+      hasPaymentMethodsPage: true, // confirmed live via curl: real content at the real slug (see paymentMethodsPath)
+      hasBlogDesktopSearch: true, // unconfirmed — cloned from GC/SNG ES precedent (a real desktop search icon confirmed on those), verify on first real run
+      hasBlogSearch: true, // unconfirmed — cloned from GC/SNG ES precedent, verify on first real run
+      hasPromotionsIconInHeader: false, // confirmed live via real browser run 2026-07-27: website-header.spec.ts's and promotions-page.spec.ts's "Promotion icon in header" checks both failed — no promociones link exists inside the actual <header role="banner"> element. The data-tk-value="promotions" links found via curl all live in the sidebar/hamburger menu (already confirmed working there in sidebar-navigation.spec.ts), not the header banner itself
     },
   },
 

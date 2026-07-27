@@ -118,7 +118,8 @@ test.describe('P3 - Footer Navigation', () => {
     await footerStep('Slingo -> /slingo/', 'Slingo', '/slingo/');
 
     // ── Steps 4-5: Slots → /slots/ ───────────────────────────────────────
-    await footerStep('Slots -> /slots/', 'Slots', '/slots/');
+    const slotsPath = currentGeoFeatures().slotsPath ?? 'slots/';
+    await footerStep(`Slots -> /${slotsPath}`, 'Slots', `/${slotsPath}`);
 
     // ── Steps 6-7: Bingo → /bingo/ ───────────────────────────────────────
     await footerStep('Bingo -> /bingo/', 'Bingo', '/bingo/');
