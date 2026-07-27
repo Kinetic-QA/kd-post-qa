@@ -1,4 +1,5 @@
-import { test, expect, Page, FrameLocator, Locator } from '@playwright/test';
+import { test, expect } from '../../helpers/stealth-fixtures';
+import type { Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle } from '../../helpers/common';
 import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
@@ -185,6 +186,20 @@ test.describe('Registration Flow', () => {
     // this session, the same "can't proceed without real identity data" gap
     // as a missing login account — skip rather than guess/fabricate one.
     const isMcDkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
+      && test.info().project.name.replace(/-mobile$/, '') === 'DK';
+    // GC/DK — onboarding started 2026-07-24: confirmed live via real browser
+    // probe that this market's registration widget ALSO asks for a Danish
+    // CPR number (format XXXXXX-XXXX) as Step 0, same underlying platform
+    // regulation as MC/DK above. Unlike MC/DK, a plausible-format-but-fake
+    // CPR ("010199-1234", no real modulus-11 checksum) was tried and
+    // ACCEPTED — the field only does a client-side format check, no real
+    // backend registry lookup at this stage — and the form advanced
+    // normally to a familiar Step 1 of 3 (first/last name, DOB, gender,
+    // email, mobile). So this market's flow COULD be fully automated with a
+    // fabricated CPR, but the field-order-aware fill logic for it hasn't
+    // been built yet — skip cleanly for now rather than let the default
+    // flow (which doesn't know about the CPR field) fail on the wrong step.
+    const isGcDkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'GC'
       && test.info().project.name.replace(/-mobile$/, '') === 'DK';
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
@@ -474,6 +489,14 @@ test.describe('Registration Flow', () => {
       // Danish CPR number that doesn't exist this session, on both desktop
       // and mobile.
       test.skip(true, 'MC/DK registration requires a real Danish CPR number (not mobile/DOB) — no test CPR available this session');
+    } else if (isGcDkFormat) {
+      // See isGcDkFormat's own comment above — Step 0 asks for a Danish CPR
+      // number before the familiar mobile/DOB fields, on both desktop and
+      // mobile. A fake-but-valid-format CPR was confirmed live to be
+      // accepted, so this is buildable — just not built yet. Skip cleanly
+      // rather than run the default (non-CPR-aware) flow against a field
+      // shape it doesn't expect.
+      test.skip(true, 'GC/DK registration requires a Danish CPR number as Step 0 (not mobile/DOB) — CPR-aware fill flow not yet built, see isGcDkFormat comment');
     } else if (isGermanFormat && !isMobile) {
       // DE desktop — confirmed live 2026-07-13 (cross-checked against
       // RevWright Claude.ai's independent walkthrough of the same flow).

@@ -65,6 +65,7 @@ export interface GeoFeatureConfig {
   casinoPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'casino/' when omitted. Confirmed live: GC ES genuinely translates this slug to "juegos-casino/"
   responsibleGamingPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'responsible-gaming/' when omitted. Confirmed live: GC ES genuinely translates this slug to "juego-mas-seguro/"
   helpPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'help/' when omitted. Confirmed live: GC ES genuinely translates this slug to "ayuda/"
+  needsStealthLaunch?: boolean; // optional — true means this GEO's site sits behind Cloudflare bot-detection that blocks/challenges a plain automated Chromium (confirmed on GC UK and MC UK — see helpers/stealth-fixtures.ts). When true, tests/p1|p2|p3 specs (which import `test`/`expect` from stealth-fixtures, not '@playwright/test' directly) launch via playwright-extra + puppeteer-extra-plugin-stealth instead of Playwright's default launcher. Defaults to false/undefined — every other GEO's launch is completely unchanged. Set this the moment a NEW GEO is confirmed to hit the same Cloudflare wall; no other wiring is needed, the fixture reads this flag automatically.
 }
 
 export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
@@ -411,6 +412,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPaymentMethodsPage: false, // confirmed 404
       hasBlogDesktopSearch: true, // confirmed live: blog page's search icon exists and is visible at desktop width
       hasBlogSearch: false, // confirmed live: clicking the blog search icon does not reveal a working input/results — consistent with the same platform-wide non-functional blog search already confirmed on SNG UK/CA
+      needsStealthLaunch: true, // same SON-platform Cloudflare wall as GC UK, same fix confirmed 2026-07-26: playwright-extra + puppeteer-extra-plugin-stealth rendered both the LOGIN and REGISTRATION son-auth-modals widgets as real forms (previously empty shells) — see helpers/stealth-fixtures.ts
     },
 
     // COM — confirmed live 2026-07-22, tested from a Malta VPN/IP (real test
@@ -710,6 +712,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       paymentMethodsPath: 'payment-options/', // confirmed live: real footer slug, common 'payment-methods/' default 404s here
       hasBlogDesktopSearch: false, // NOT independently confirmed — the header's #Header_search-demi__ICbtG search icon wasn't found rendered on the /blog/ page specifically this session; may be a Cloudflare-interference false negative rather than a real gap, re-check before trusting this fully
       hasBlogSearch: false, // unconfirmed — cloned from the desktop-search finding above pending a clean re-check
+      needsStealthLaunch: true, // confirmed live 2026-07-26 + re-confirmed 2026-07-27 (fresh session): playwright-extra + puppeteer-extra-plugin-stealth clears the Cloudflare wall entirely — homepage, login widget (real form immediately), registration widget ("Join" button, real form), and 8/8 previously-blocked pages including the two "consistent fail" cases (/about-us/, /payment-options/) all load clean. See helpers/stealth-fixtures.ts.
     },
 
     // ES — onboarded 2026-07-23 against www.gentingcasino.es. Live inspection

@@ -9,6 +9,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-07-27
+
+### Added
+
+- **Added an experimental way for our automated tests to try to get past the "please wait, verifying you're not a robot" screen that blocks Genting Casino UK and Mega Casino UK.** ⚠️ **Correction, same day:** this was first reported as "confirmed working" after two clean tests — further testing the same day showed it does NOT hold up reliably. On a later run, the exact same login box on Genting Casino UK went right back to showing up empty (no fillable fields at all), with no code changes in between. This only turns on for the specific markets that actually have this problem (currently Genting Casino UK and Mega Casino UK) — every other market's tests are completely unaffected either way. See "Known open items" below for what this means and what we think the real fix is.
+
+### Fixed
+
+- **Genting Casino Denmark's sign-up test would have failed for the wrong reason if run today** — it asks for a Danish personal ID number as its very first question, instead of the mobile number/birthday combo every other market uses, and our test wasn't expecting that yet. Now it skips cleanly with a clear explanation instead of erroring out confusingly. (Note for whoever picks this up next: a made-up but correctly-formatted ID number was accepted by the real site, so this market's sign-up CAN still be fully automated later — the groundwork just isn't built yet.)
+
+### Known open items (carrying into next session)
+
+- **The Genting Casino UK / Mega Casino UK "robot check" workaround is not reliable and should not be treated as solved.** It genuinely works some of the time (confirmed clean twice on two different days) but fails other times with zero changes to our code or setup in between — same page, same market, sometimes a real working form, sometimes a completely empty one. This points to the security service itself varying its response, not something wrong with our test. **We think the real, durable fix has to come from the dev/admin side — specifically, getting our testing traffic added to an allow-list so it stops being treated as a suspicious bot in the first place.** A plain-language report for that conversation is being prepared separately. Until that happens, treat any "pass" on these two markets' login/sign-up checks as good news for that specific run, not proof the problem is fixed for good.
+
+---
+
 ## Format
 
 Each release or change set uses this structure:
