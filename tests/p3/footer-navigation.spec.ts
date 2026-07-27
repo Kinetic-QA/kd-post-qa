@@ -134,6 +134,8 @@ test.describe('P3 - Footer Navigation', () => {
     const strings = currentLocaleStrings();
     const aboutUsPath = geoFeatures.aboutUsPath ?? 'about-us/';
     const contactPath = geoFeatures.contactPath ?? 'contact/';
+    const helpPath = geoFeatures.helpPath ?? 'help/';
+    const affiliatesPath = geoFeatures.affiliatesPath ?? 'affiliates/';
     await footerStep('Responsible Gaming -> /' + responsibleGamingPath, strings.footerResponsibleGamingText, '/' + responsibleGamingPath);
 
     // ── Steps 12-13: Bonus Policy ─────────────────────────────────────────
@@ -160,10 +162,10 @@ test.describe('P3 - Footer Navigation', () => {
     await footerStep(`Payment Options -> /${paymentMethodsPath}`, strings.footerPaymentOptionsText, `/${paymentMethodsPath}`);
 
     // ── Steps 24-25: Affiliates ───────────────────────────────────────────
-    await footerStep('Affiliates -> /affiliates/', strings.footerAffiliatesText, '/affiliates/');
+    await footerStep(`Affiliates -> /${affiliatesPath}`, strings.footerAffiliatesText, `/${affiliatesPath}`);
 
     // ── Steps 26-27: Help ─────────────────────────────────────────────────
-    await footerStep('Help -> /help/', 'Help', '/help/');
+    await footerStep(`Help -> /${helpPath}`, 'Help', `/${helpPath}`);
 
     // ── Steps 28-29: Contact us ───────────────────────────────────────────
     await footerStep(`Contact us -> /${contactPath}`, strings.footerContactUsText, `/${contactPath}`);

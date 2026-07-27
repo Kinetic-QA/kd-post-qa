@@ -320,8 +320,12 @@ test.describe('P2 - Sidebar Navigation', () => {
     await navStep('Responsible Gaming -> /' + responsibleGamingPath, '/' + responsibleGamingPath, '/' + responsibleGamingPath);
 
     // -- Steps 36-38: Help ------------------------------------------------
+    // Confirmed live on PC ES: the Help/"Ayuda" page exists and 200s, but
+    // has NO sidebar entry point at all (only reachable via footer) — a
+    // genuine site-structure gap, not a broken selector. Use the "if
+    // exists" variant like every other optional sidebar link.
     const helpPath = geoFeatures.helpPath ?? 'help/';
-    await navStep('Help -> /' + helpPath, '/' + helpPath, '/' + helpPath);
+    await navStepIfExists('Help -> /' + helpPath, '/' + helpPath, '/' + helpPath);
 
     // -- Steps 39-41: Contact us -------------------------------------------
     const contactPath = geoFeatures.contactPath ?? 'contact/';

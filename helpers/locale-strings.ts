@@ -42,7 +42,11 @@ const EN: LocaleStrings = {
   // \s* (not a literal space) — confirmed live: the header CTA reads "Log
   // in" but the contact page's own link reads "LOGIN" (no space); a bare
   // "log in" substring match silently never matched the latter.
-  loginButton: /log\s*in/i,
+  // "sign\s*in" added 2026-07-27 — confirmed live: Prime Casino (PC) UK's
+  // header button reads "Sign In", not "Log In"/"Login" like every other
+  // English-locale brand onboarded so far — same shared-regex-covers-
+  // multiple-brands pattern already used for FR-CA's loginButton.
+  loginButton: /log\s*in|sign\s*in/i,
   loginSubmitButton: /^login$/i,
   usernameOrEmailLabel: /username or email/i,
   joinButton: /join/i,
