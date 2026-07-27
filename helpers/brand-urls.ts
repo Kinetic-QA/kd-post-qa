@@ -42,7 +42,7 @@ export const BRAND_URLS: BrandEnvironment[] = [
   { brand: 'MC',  geo: 'DK',    qaUrl: 'https://qa.megacasino.dk/',       liveUrl: 'https://www.megacasino.dk/' },
   { brand: 'MC',  geo: 'SE',    qaUrl: 'https://qa-se.megacasino.com/',   liveUrl: 'https://se.megacasino.com/' },
   { brand: 'MC',  geo: 'ES',    qaUrl: 'https://qa.megacasinos.es/',      liveUrl: 'https://www.megacasinos.es/' },
-  { brand: 'MC',  geo: 'AB',    qaUrl: 'http://qa.megacasino.ca/ab',      liveUrl: null }, // AB market not live yet
+  { brand: 'MC',  geo: 'AB',    qaUrl: 'https://qa.megacasino.ca/ab/',    liveUrl: null }, // AB market not live yet. Two real fixes vs. the original 'http://qa.megacasino.ca/ab' this session: (1) added the trailing slash — without it, relative-path navigation (new URL('promotions/', baseURL)) drops the '/ab' segment entirely and resolves to the wrong domain path (confirmed via node -e), same class of bug SNG AB's own qaUrl already avoids by having a trailing slash; (2) switched http -> https — confirmed live the site force-redirects http to https, so every URL assertion built from the raw baseURL (still 'http://') mismatched real post-redirect URLs on scheme alone across nearly every navigation-based spec. https works directly with no redirect needed.
 
   // ── Slingo (SC) ───────────────────────────────────────────────────────
   { brand: 'SC',  geo: 'UK',    qaUrl: 'https://qa.slingo.com/',          liveUrl: 'https://www.slingo.com/' },
