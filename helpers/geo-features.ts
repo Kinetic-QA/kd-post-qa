@@ -58,6 +58,7 @@ export interface GeoFeatureConfig {
   gameTileHrefSubstrings?: string[]; // optional — substrings identifying a real game-tile link (as opposed to a bare category nav link) in game-filter.spec.ts and game-info-modal.spec.ts. Defaults to the classic Slingo-family taxonomy (/slingo/, /slots/, /casino/, /bingo/) when omitted, so existing GEOs need no change. Set this when a brand's game category taxonomy differs (e.g. MC's /online-slots/, /casino-games/, /live-casino/).
   paymentMethodsPath?: string; // optional — baseURL-relative path for the footer's Payment Options link. Defaults to 'payment-methods/' when omitted (the common case); set when a brand uses a different slug (e.g. MC's /payment-options/).
   hasPromotionsIconInHeader?: boolean; // optional — false means the header/banner has no dedicated Promotions icon linking to the promotions page, even though the page itself exists (hasPromotionsPage/promotionsPath). Distinct from those: this is specifically about a header entry point. Defaults to true when omitted, so existing GEOs need no change.
+  hasBonusPolicyBanner?: boolean; // optional — false means the Promotions page has no visible bonus T&C/policy banner text at all, even though the page itself exists (hasPromotionsPage/promotionsPath). Confirmed live on MC SE 2026-07-27: page loads fine (real campaign content, real Play CTA), but no text matching locale-strings.ts's bonusPolicyText pattern ever appears — consistent with the already-documented Nordic BankID pattern (SE's homepage banner has no visible T&C/bonus disclaimer either, see locale-strings.ts's 'sv' bonusPolicyText comment); this is the first SE GEO in the project with hasPromotionsPage: true, so promotions-page.spec.ts's Step 4 had never actually exercised this code path for a Nordic market before. Defaults to true when omitted, so existing GEOs need no change.
   contactPath?: string;  // baseURL-relative, no leading slash — defaults to 'contact/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "contacto/", unlike every other GEO onboarded so far which kept the English "contact/" regardless of uiLocalized
   aboutUsPath?: string;  // baseURL-relative, no leading slash — defaults to 'about-us/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "sobre-nosotros/"
   hasContactMailto?: boolean; // optional — false means this brand's /contact/ page has NO mailto: link at all, so contactEmail is not a real assertable value for it. Defaults to true when omitted (every brand onboarded before GC has a real mailto link). Set false + leave contactEmail as '' when a brand uses a different contact-page design (see contactCtaLabels).
@@ -671,6 +672,40 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogDesktopSearch: false, // no blog for DK anyway (hasBlog: false) — set false for consistency
       hasBlogSearch: false, // no blog for DK anyway — set false for consistency
       hasPromotionsIconInHeader: false, // no Promotions page exists at all for this GEO (see hasPromotionsPage) — consistent by necessity
+    },
+
+    // SE — onboarding started 2026-07-27, tested from a confirmed Sweden VPN.
+    // Same BankID-based Pay N Play model already confirmed for GC/SC/SNG SE
+    // (header shows a single "Registrera/Logga in" button with a bank-id.svg
+    // icon, and the homepage's own JSON config has a "pnp" key) — no
+    // traditional username/password login/registration widget, no test
+    // account. Verified live via curl/DOM crawl before the real suite run;
+    // fields marked unconfirmed are cloned from DK as a starting baseline.
+    SE: {
+      locale: 'sv', uiLocalized: true, // confirmed live: <html lang="sv">, real Swedish nav/header/footer copy
+      hasBlog: false, blogPath: null, // confirmed 404 pre-test via curl
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live: /promotions/ returns 200 (unlike GC SE, where the equivalent 404s) — kept English slug, not translated
+      hasBonusPolicyBanner: false, // confirmed live via real browser run 2026-07-27: promotions-page.spec.ts's Step 4 timed out — no text matching the 'sv' bonusPolicyText pattern (/bonusvillkor/i) appears anywhere on the page, a real gap not a selector bug (see the field's own doc comment above)
+      featuresPath: null, // confirmed 404 pre-test via curl
+      mobileAppPath: 'mobile-app/', // confirmed 404 pre-test via curl — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — cloned from DK, no such link exists for this brand family, skips cleanly if 404
+      currencySymbol: 'kr', // Swedish Krona — NOT independently confirmed via visible price/bonus copy this session (none found in the static homepage crawl); verify on first real run, same caveat as GC SE
+      contactEmail: 'support@megacasino.com', // confirmed live: /contact/ page's own JSON config exposes "support_email":"support@megacasino.com" — same shared address as UK/COM/CA/IE/DK, NOT its own domain's address
+      hasContactMailto: true, // confirmed live: /contact/ has a real (Cloudflare email-obfuscated) mailto link under "Mejla oss", not a card-based or missing design
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero facebook/twitter/instagram/x.com links found in the homepage or contact-page HTML
+      hasSocialMedia: false, // see note above
+      searchTerm: 'Gold', searchResultHrefSubstrings: ['/online-slots/', '/casino-games/'], // confirmed live via real browser run 2026-07-27: 'Casino' (the common taxonomy-name search term used elsewhere) returns ZERO in-app search results here — the search indexes game titles only, not category names, unlike UK/COM/CA where "Casino" happens to also match real game titles. 'Gold' reliably matches real homepage titles ("Golden Hook", "Gold Cash Free Spins")
+      gameTileHrefSubstrings: ['/online-slots/', '/casino-games/'], // confirmed live via curl: homepage nav/crawl shows only these two categories (Online Slotsspel/Casinospel) — no Live Casino category for this GEO, unlike UK/COM/CA/FR-CA/IE/DK
+      paymentMethodsPath: 'payment-options/', // confirmed live via curl: real slug is /payment-options/ (200) with a real Swedish title and genuine Visa/Mastercard/Paysafecard/TrustlyDirect provider logos — unlike GC SE's same-URL page, which is a broken i18n-placeholder title with no real content
+      hasGameFilterCarousel: true, // confirmed live via curl: homepage HTML contains 2 GamesSlider_wrapper rows
+      hasFeedbackForm: false, // confirmed live via curl: no "Report a problem"/"Rapportera ett problem" link found anywhere on /contact/ (only Chat + Mejla oss/email sections)
+      hasGameCategoryNav: true, // confirmed live via curl: real Online Slotsspel/Casinospel nav links found (see gameTileHrefSubstrings)
+      hasLoginRegistration: false, // confirmed live: header shows a single "Registrera/Logga in" button with a bank-id.svg icon, not separate LOGIN/JOIN buttons — BankID-based Pay N Play model, same pattern as GC/SC/SNG SE
+      hasAccountModal: false, // confirmed live via real browser run 2026-07-27: promotions-page.spec.ts's Play CTA resolves to the header's sticky BankID "Spela" button, which never reliably reaches a clickable/in-viewport state (repeated scroll/actionability retries all fail) — consistent with the GC/SC/SNG SE precedent that this button doesn't drive a real #account modal flow like traditional LOGIN/JOIN does
+      hasPaymentMethodsPage: true, // confirmed live via curl: /payment-options/ returns 200 with real content (see paymentMethodsPath)
+      hasBlogDesktopSearch: false, // no blog for SE anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for SE anyway — set false for consistency
+      hasPromotionsIconInHeader: false, // unconfirmed — no Promotions link found in the crawled nav despite the page itself existing (see hasPromotionsPage); verify on first real run
     },
   },
 
