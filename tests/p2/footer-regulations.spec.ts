@@ -1,5 +1,6 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
+import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
  * FR: Footer Regulations
@@ -59,6 +60,11 @@ test.describe('P2 - Footer Regulations', () => {
     try {
 
     await test.step('Step 1: Regulation logo row is visible in footer', async () => {
+      if (currentGeoFeatures().hasRegulationLogos === false) {
+        record('Regulation logos present in footer (skipped — no regulation logo row for this GEO)', true);
+        console.log('FR-01 Step 1 skipped — no <son-license-logos> element exists for this GEO');
+        return;
+      }
       // <son-license-logos>'s shadow DOM can mount a beat after scroll/load
       // settles — poll briefly instead of a single check to avoid a false
       // "0 found" on a slow render (confirmed live: this flaked once).

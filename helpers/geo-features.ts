@@ -58,6 +58,8 @@ export interface GeoFeatureConfig {
   gameTileHrefSubstrings?: string[]; // optional — substrings identifying a real game-tile link (as opposed to a bare category nav link) in game-filter.spec.ts and game-info-modal.spec.ts. Defaults to the classic Slingo-family taxonomy (/slingo/, /slots/, /casino/, /bingo/) when omitted, so existing GEOs need no change. Set this when a brand's game category taxonomy differs (e.g. MC's /online-slots/, /casino-games/, /live-casino/).
   paymentMethodsPath?: string; // optional — baseURL-relative path for the footer's Payment Options link. Defaults to 'payment-methods/' when omitted (the common case); set when a brand uses a different slug (e.g. MC's /payment-options/).
   hasPromotionsIconInHeader?: boolean; // optional — false means the header/banner has no dedicated Promotions icon linking to the promotions page, even though the page itself exists (hasPromotionsPage/promotionsPath). Distinct from those: this is specifically about a header entry point. Defaults to true when omitted, so existing GEOs need no change.
+  hasHelpFaqAccordion?: boolean; // optional — false means the Help page has no real FAQ accordion content at all (confirmed live on MC AB 2026-07-27: 'accordion-button' only appears inside a <style> block's CSS rule, no actual <button class="accordion-button"> element renders) — a real content gap on a not-yet-live QA-only market, not a selector issue. Defaults to true when omitted, so existing GEOs need no change.
+  hasRegulationLogos?: boolean; // optional — false means the footer has no <son-license-logos> regulation/compliance logo row at all (confirmed live: 0 occurrences in the homepage HTML). Confirmed on MC AB 2026-07-27 — a not-yet-live QA-only market missing this component entirely, a real environment gap not a shadow-DOM timing issue. Defaults to true when omitted, so existing GEOs need no change.
   hasBonusPolicyBanner?: boolean; // optional — false means the Promotions page has no visible bonus T&C/policy banner text at all, even though the page itself exists (hasPromotionsPage/promotionsPath). Confirmed live on MC SE 2026-07-27: page loads fine (real campaign content, real Play CTA), but no text matching locale-strings.ts's bonusPolicyText pattern ever appears — consistent with the already-documented Nordic BankID pattern (SE's homepage banner has no visible T&C/bonus disclaimer either, see locale-strings.ts's 'sv' bonusPolicyText comment); this is the first SE GEO in the project with hasPromotionsPage: true, so promotions-page.spec.ts's Step 4 had never actually exercised this code path for a Nordic market before. Defaults to true when omitted, so existing GEOs need no change.
   contactPath?: string;  // baseURL-relative, no leading slash — defaults to 'contact/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "contacto/", unlike every other GEO onboarded so far which kept the English "contact/" regardless of uiLocalized
   aboutUsPath?: string;  // baseURL-relative, no leading slash — defaults to 'about-us/' when omitted. Confirmed live: SNG ES genuinely translates this slug to "sobre-nosotros/"
@@ -745,6 +747,46 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogDesktopSearch: true, // unconfirmed — cloned from GC/SNG ES precedent (a real desktop search icon confirmed on those), verify on first real run
       hasBlogSearch: true, // unconfirmed — cloned from GC/SNG ES precedent, verify on first real run
       hasPromotionsIconInHeader: false, // confirmed live via real browser run 2026-07-27: website-header.spec.ts's and promotions-page.spec.ts's "Promotion icon in header" checks both failed — no promociones link exists inside the actual <header role="banner"> element. The data-tk-value="promotions" links found via curl all live in the sidebar/hamburger menu (already confirmed working there in sidebar-navigation.spec.ts), not the header banner itself
+    },
+
+    // AB (Alberta) — onboarding started 2026-07-27 against QA only
+    // (qa.megacasino.ca/ab — plain http redirects to https) — this market
+    // has NOT gone live yet (liveUrl: null in brand-urls.ts), so TEST_ENV
+    // must stay 'qa' for this GEO; there is no live site to fall back to.
+    // Same underlying platform/taxonomy as UK/COM/CA (online-slots/
+    // casino-games/live-casino), same family as SNG's own already-onboarded
+    // AB market — used as the reference for this one per explicit
+    // instruction this session. Like SNG AB, this QA environment shows
+    // signs of still being under active dev (see contactEmail/
+    // hasPaymentMethodsPage below) — no test account exists, so
+    // login.spec.ts's real-login test is skipped, same as SNG AB.
+    AB: {
+      locale: 'en', uiLocalized: false, // confirmed live: <html lang="en">
+      hasBlog: false, blogPath: null, // confirmed 404 pre-test via curl
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200 via curl (real "bonus"/"promotion" copy found, though the page's own <title> tag is empty — a QA-environment quirk, not a missing page)
+      featuresPath: null, // confirmed 404 pre-test via curl
+      mobileAppPath: 'mobile-app/', // confirmed live 200 via curl, real title ("Mega Casino Alberta Mobile Casino Apps")
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link exists for this brand family, skips cleanly if 404
+      currencySymbol: '$', // CAD — confirmed via homepage bonus copy ("$10", "$500")
+      contactEmail: '', // confirmed live: /contact/ page's own JSON config exposes "support_email":"" — genuinely blank, a QA-environment gap (same "still some issues from dev" pattern already noted on SNG AB), not a selector issue
+      hasContactMailto: false, // see contactEmail note above — no real mailto value to assert against yet
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero facebook/twitter/instagram/x.com links found homepage-wide
+      hasSocialMedia: false, // see note above
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // NOT independently confirmed via actual in-app search interaction — carried over from the MC UK/COM/CA precedent (same taxonomy, same "Casino" term confirmed working there), verify on first real run
+      gameTileHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // confirmed live via curl: homepage nav shows Online Slots/Casino Games/Live Casino/Blackjack/Roulette — same taxonomy as UK/COM/CA/FR-CA/IE/DK
+      hasGameFilterCarousel: true, // confirmed live via curl: homepage HTML contains 3 GamesSlider_wrapper rows
+      hasFeedbackForm: true, // confirmed live via curl: "Report a problem" link found on /contact/
+      hasGameCategoryNav: true, // confirmed live via curl: real Online Slots/Casino Games/Live Casino nav links found (see gameTileHrefSubstrings)
+      hasLoginRegistration: true, // confirmed live via curl: header shows real "Login"/"Join"/"Register" text — widget exists and is safe to inspect (registration.spec.ts never submits, login-widget.spec.ts only ever uses a deliberately wrong username/password), same as SNG AB
+      hasTestAccount: false, // no test account provided for this GEO this session — skip only login.spec.ts's real successful-login test, same as SNG AB (also has no working account per its own hasTestAccount:false)
+      hasAccountModal: true, // unconfirmed via real click this session — cloned from the SNG AB precedent (LOG IN/JOIN can be unreliable, but a game tile's Play CTA reliably opens a real #account modal), verify on first real run
+      hasPaymentMethodsPage: false, // confirmed live via curl: BOTH 'payment-methods/' and 'payment-options/' 404 (real "Page not found" title), despite the footer's own nav link pointing to /payment-options/ — a real broken-link QA-environment gap, not a selector issue
+      paymentMethodsPath: 'payment-options/', // confirmed live via real browser run 2026-07-27: footer-navigation.spec.ts's Payment Options step clicks a real footer link that genuinely navigates here (the click/navigation behavior is real even though the destination itself 404s — see hasPaymentMethodsPage above for the content gap)
+      hasBlogDesktopSearch: false, // no blog for AB anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for AB anyway — set false for consistency
+      hasRegulationLogos: false, // confirmed live via curl: no <son-license-logos> element exists anywhere in the homepage HTML at all (0 occurrences) — a real QA-environment gap (this market hasn't gone live yet), not a shadow-DOM timing issue
+      hasHelpFaqAccordion: false, // confirmed live via curl: the Help page's 'accordion-button' class only appears inside a <style> block's CSS rule — no actual <button class="accordion-button"> element renders, meaning no real FAQ content is configured yet on this pre-launch QA site
+      hasPromotionsIconInHeader: false, // confirmed live via curl: the promotions nav link (data-tk-value="promotions") uses the "MainMenu_" CSS prefix, the same sidebar/hamburger-menu class family already confirmed to live outside the header banner on MC ES — not the header's own "Nav_"/"Header_" prefix
     },
   },
 

@@ -44,6 +44,7 @@ test.describe('P3 - Help Page', () => {
 
   test('HP-01: Help page FAQ accordion expand/collapse', async ({ page }) => {
     test.setTimeout(90_000);
+    test.skip(currentGeoFeatures().hasHelpFaqAccordion === false, `No real FAQ accordion content for this GEO (${test.info().project.name})`);
 
     const results: { label: string; status: string }[] = [];
     function record(label: string, passed: boolean) {
