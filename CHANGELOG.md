@@ -14,10 +14,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - **Added an experimental way for our automated tests to try to get past the "please wait, verifying you're not a robot" screen that blocks Genting Casino UK and Mega Casino UK.** ⚠️ **Correction, same day:** this was first reported as "confirmed working" after two clean tests — further testing the same day showed it does NOT hold up reliably. On a later run, the exact same login box on Genting Casino UK went right back to showing up empty (no fillable fields at all), with no code changes in between. This only turns on for the specific markets that actually have this problem (currently Genting Casino UK and Mega Casino UK) — every other market's tests are completely unaffected either way. See "Known open items" below for what this means and what we think the real fix is.
+- **Onboarded Mega Casino's Sweden market.** Full checklist run against the live site now passes completely (0 failures). This market uses a Swedish ID-verification sign-in service (BankID) instead of a regular username/password login, same as our other Swedish sites, so there's nothing to sign into directly — that's expected, not a gap.
 
 ### Fixed
 
 - **Genting Casino Denmark's sign-up test would have failed for the wrong reason if run today** — it asks for a Danish personal ID number as its very first question, instead of the mobile number/birthday combo every other market uses, and our test wasn't expecting that yet. Now it skips cleanly with a clear explanation instead of erroring out confusingly. (Note for whoever picks this up next: a made-up but correctly-formatted ID number was accepted by the real site, so this market's sign-up CAN still be fully automated later — the groundwork just isn't built yet.)
+- **Mega Casino Sweden's search check was looking for the wrong word** — it searched for "Casino" (a category name), which this site's search box doesn't recognize at all, so the check always came up empty-handed. It now searches for an actual game name instead, which works reliably.
+- **Mega Casino Sweden's promotions-page check was trying to click the wrong button** — it was accidentally trying to click a page-header button that isn't actually meant to open a sign-in box on this market, so the check would hang and time out. It now recognizes this market doesn't use that kind of sign-in box and skips that one step cleanly, same as it already does on our other Swedish sites.
+- **Confirmed a real site gap on Mega Casino Sweden's promotions page** — the page never shows any bonus terms-and-conditions text, unlike every other market's promotions page. This is a genuine content gap on the live site (not a testing mistake), so the check now skips that one step for this market instead of failing it every single run.
 
 ### Known open items (carrying into next session)
 

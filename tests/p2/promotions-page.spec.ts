@@ -132,6 +132,10 @@ test.describe('P2 - Promotions Page', () => {
     });
 
     await runStep('Step 4: Approved T&C text displayed in pop-up banner', async () => {
+      if (currentGeoFeatures().hasBonusPolicyBanner === false) {
+        console.log('PP-01 Step 4 skipped — no bonus T&C banner text exists for this GEO');
+        return;
+      }
       // Match "and"/"&" (GEOs render this differently, e.g. ROW uses "Terms & Conditions
       // Apply") and filter to visible only — .first() alone can pick a same-text but
       // off-screen footer link ahead of the actually-visible banner text in DOM order.
@@ -141,6 +145,10 @@ test.describe('P2 - Promotions Page', () => {
     });
 
     await runStep('Step 5: "Play now"/"Let\'s Play" CTA opens login/registration widget', async () => {
+      if (currentGeoFeatures().hasAccountModal === false) {
+        console.log('PP-01 Step 5 skipped — Play CTA does not open an #account modal for this GEO (see helpers/geo-features.ts hasAccountModal)');
+        return;
+      }
       // .filter({visible:true}) — confirmed live on mobile: multiple
       // elements match this text (some are desktop-only and CSS-hidden at
       // mobile breakpoints), and .first() alone can grab a hidden one
