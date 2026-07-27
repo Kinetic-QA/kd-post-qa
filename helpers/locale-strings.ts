@@ -225,48 +225,45 @@ const STRINGS: Record<string, LocaleStrings> = {
     footerMobileAppText: /^mobilapp$/i, // not exercised — SE has no Mobile App footer link
     footerBingoCardGeneratorText: /^bingokortsgenerator$/i, // not exercised — SE has no Bingo Card Generator footer link
   },
-  // DK — onboarded 2026-07-24 against www.gentingcasino.dk. loginButton/
-  // joinButton confirmed live via real header button text ("LOG IND"/"OPRET
-  // DIG"). hasFeedbackForm/hasBlog are both false for this GEO, so the
-  // feedback-widget and readMoreText strings below are never exercised —
-  // left as reasonable best-guess Danish translations, not yet confirmed
-  // live, same convention as the fr/sv entries above. searchPlaceholder,
-  // backButtonText, loginErrorText, forgotPasswordText, noAccountText,
-  // membersLoginText, usernameOrEmailLabel, loginSubmitButton, and
-  // homeLinkText are ALSO not yet confirmed live — this GEO has no working
-  // test account (hasTestAccount: false) so the full login flow was never
-  // exercised, and the search/sidebar flows weren't manually walked before
-  // writing this entry. Expect to correct these from real failure
-  // screenshots on the next run, same pattern as every other locale here.
+  // DK — onboarded 2026-07-24, independently, against TWO different brands
+  // on the same underlying platform: Genting Casino (www.gentingcasino.dk)
+  // and Mega Casino (www.megacasino.dk). Same "shared-by-locale,
+  // different-brand-copy" situation already handled elsewhere in this file
+  // (see ES's joinButton) — fields confirmed live to differ between the two
+  // brands are widened to match both; fields confirmed identical (or
+  // guessed the same way) are left as a single pattern. GC has no working
+  // test account (hasTestAccount: false) so its own login-specific fields
+  // were never exercised; MC's ARE exercised except login.spec.ts itself
+  // (also hasTestAccount: false there). Expect to correct any still-guessed
+  // fields from real failures, same pattern as every other locale here.
   da: {
-    loginButton: /log ind/i, // confirmed live: header button reads "LOG IND"
-    loginSubmitButton: /^log ind$/i, // confirmed live: login modal's submit button also reads "Log ind" (same text as the header trigger)
-    usernameOrEmailLabel: /brugernavn eller e-?mail/i, // confirmed live: login modal field label reads "Brugernavn Eller E-Mail"
-    joinButton: /opret dig/i, // confirmed live: header button reads "OPRET DIG"
-    loginErrorText: /de indtastede loginoplysninger er forkerte/i, // NOT yet confirmed — guessed (no working test account to trigger a real failed-login attempt against, see hasTestAccount: false)
-    reportProblemText: /rapporter et problem/i, // not exercised — DK has no feedback form (hasFeedbackForm: false)
-    membersLoginText: /login for medlemmer/i, // confirmed live: registration modal's tab-switch link reads "Login for medlemmer"
-    backButtonText: /^tilbage$/i, // NOT yet confirmed — guessed
-    playCta: /^spil$/i, // NOT exercised via text — DK's hover CTA is ICON_ONLY (confirmed live), handled by playCtaLocator's icon fallback regardless of this regex
-    bonusPolicyText: /bonuspolitik|regler og betingelser/i, // NOT yet confirmed — guessed
-    readMoreText: /læs mere/i, // not exercised — DK has no Blog (hasBlog: false)
-    feedbackNext: /^næste$/i, // not exercised — hasFeedbackForm: false
-    feedbackOther: /^andet$/i, // not exercised
-    feedbackSubmit: /^send$/i, // not exercised
-    forgotPasswordText: /glemt din adgangskode/i, // confirmed live: login modal's link reads "Glemt din Adgangskode?"
-    noAccountText: /ny på gentingcasino|opret konto/i, // confirmed live: login modal's link reads "Ny på GentingCasino! Opret konto"
-    searchPlaceholder: /^search game$/i, // confirmed live: the search input's placeholder is genuinely in English ("Search game"), not translated — a real site quirk, not a guess gone wrong
-    feedbackTextareaPlaceholder: /skriv dit svar her/i, // not exercised
-    homeLinkText: /^hjem$/i, // NOT yet confirmed — guessed (Danish for "Home")
-    // Footer link texts confirmed live via direct footer inspection.
-    footerResponsibleGamingText: /^ansvarligt spil$/i,
-    footerBonusPolicyText: /^bonuspolitik$/i, // NOT confirmed live — DK's footer has no separate "Bonus Policy" link at all (only "Regler & Betingelser", which IS the real Terms link — see footerTermsText). Deliberately left as a non-matching guess rather than aliased to the T&C link's real text: aliasing it caused a real bug this session (the check found the T&C link, clicked it, landed on /terms/, and failed because it expected /bonus-policy/ specifically) — a non-matching guess lets the spec's own "link not found -> skip" handling apply correctly instead of falsely matching the wrong page.
-    footerTermsText: /^regler & betingelser$/i,
-    footerPrivacyPolicyText: /^privatlivspolitik$/i,
-    footerAboutUsText: /^om os$/i,
-    footerPaymentOptionsText: /^sikker betaling$/i,
-    footerAffiliatesText: /^affiliates$/i, // confirmed live: kept English, not translated
-    footerContactUsText: /^kontakt$/i,
+    loginButton: /log ind/i, // confirmed live on both GC and MC: header button reads "Log ind"/"LOG IND"
+    loginSubmitButton: /^log ind$/i, // confirmed live on both: login modal's submit button also reads "Log ind"
+    usernameOrEmailLabel: /brugernavn eller e-?mail/i, // confirmed live on both: login modal field label reads "Brugernavn Eller E-Mail"
+    joinButton: /opret dig|tilmeld/i, // confirmed live: GC's header button reads "OPRET DIG", MC's reads "TILMELD" — genuinely different brand copy, same language
+    loginErrorText: /de indtastede (login)?oplysninger er forkerte/i, // NOT yet confirmed on either brand — guessed (neither had a working test account to trigger a real failed-login attempt against)
+    reportProblemText: /rapporter et problem/i, // not exercised on either brand — both have hasFeedbackForm: false
+    membersLoginText: /login for medlemmer/i, // confirmed live on both: registration modal's tab-switch link reads "Login for medlemmer"
+    backButtonText: /^tilbage$/i, // NOT yet confirmed on either brand — guessed
+    playCta: /spil nu|^spil$/i, // confirmed live on MC: hover CTA reads "Spil nu". GC's hover CTA is ICON-ONLY (confirmed live) — its own text regex is never actually exercised, handled by playCtaLocator's icon fallback regardless
+    bonusPolicyText: /bonuspolitik|regler og betingelser|bonusbetingelser/i, // NOT yet confirmed on either brand — guessed
+    readMoreText: /læs mere/i, // not exercised on either brand — both have hasBlog: false
+    feedbackNext: /^næste$/i, // not exercised on either brand
+    feedbackOther: /^andet$/i, // not exercised on either brand
+    feedbackSubmit: /^send$/i, // not exercised on either brand
+    forgotPasswordText: /glemt.*adgangskode/i, // confirmed live on both: login modal's link reads "Glemt din Adgangskode?"
+    noAccountText: /ny på gentingcasino|ny på megacasino|opret konto/i, // confirmed live: GC's login modal link reads "Ny på GentingCasino! Opret konto", MC's reads "Ny på MegaCasino! Opret konto" — "opret konto" alone already matches both, kept the full phrases too for clarity
+    searchPlaceholder: /^search game$|^søg efter spil$/i, // confirmed live: GC's search placeholder is genuinely UNTRANSLATED English ("Search game", a real site quirk, not a guess gone wrong); MC's is real Danish ("Søg efter spil") — genuinely different brand behavior, not a guess conflict
+    feedbackTextareaPlaceholder: /skriv dit svar her/i, // not exercised on either brand
+    homeLinkText: /^hjem$/i, // confirmed live on MC (header logo link text); guessed for GC (not yet independently confirmed there)
+    footerResponsibleGamingText: /^ansvarligt spil$|^ansvarsbevidst spil$/i, // confirmed live: GC's footer reads "Ansvarligt spil", MC's reads "Ansvarsbevidst spil" — different real brand copy
+    footerBonusPolicyText: /^bonuspolitik$/i, // NOT confirmed on either brand — neither has a separate "Bonus Policy" footer link (GC's only "Regler & Betingelser" IS the real Terms link, see footerTermsText). Deliberately left as a non-matching guess rather than aliased to either brand's real Terms text: aliasing it caused a real bug on GC this session (the check found the T&C link, clicked it, landed on /terms/, and failed because it expected /bonus-policy/ specifically) — a non-matching guess lets the spec's own "link not found -> skip" handling apply correctly instead of falsely matching the wrong page.
+    footerTermsText: /^regler & betingelser$|^vilkår$/i, // confirmed live: GC's footer reads "Regler & Betingelser", MC's reads "Vilkår" — different real brand copy
+    footerPrivacyPolicyText: /^privatlivspolitik$/i, // confirmed live on both
+    footerAboutUsText: /^om os$/i, // confirmed live on both
+    footerPaymentOptionsText: /^sikker betaling$|^betalingsmuligheder$/i, // confirmed live: GC's footer reads "Sikker betaling", MC's reads "Betalingsmuligheder" — different real brand copy
+    footerAffiliatesText: /^affiliates$|^partnere$/i, // confirmed live: GC kept the English word "Affiliates" untranslated, MC's footer reads "Partnere" — different real brand behavior, not a guess conflict
+    footerContactUsText: /^kontakt$/i, // confirmed live on both
     footerMobileAppText: /^mobile app$/i, // not exercised — DK has no Mobile App footer link
     footerBingoCardGeneratorText: /^bingo card generator$/i, // not exercised — DK has no Bingo Card Generator footer link
   },

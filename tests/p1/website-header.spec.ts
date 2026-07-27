@@ -146,7 +146,10 @@ test.describe('P1 - Website Header', () => {
       // Login/Join — per live confirmation, which widget it opens can
       // depend on whichever was last used in the session, so this only
       // asserts the widget opens, not which specific form it lands on.
-      const playBtn = page.locator('[class*="MobileFooter"] button.play, [class*="MobileMenu_play-but"] button').first();
+      // Confirmed live on MC/DE: the mobile hamburger menu's Play entry is a
+      // plain <li> (icon + "Play" span), not a <button> descendant like
+      // every other GEO onboarded so far — same gap as registration.spec.ts.
+      const playBtn = page.locator('[class*="MobileFooter"] button.play, [class*="MobileMenu_play-but"]').first();
       await expect(playBtn).toBeVisible({ timeout: 10_000 });
       await playBtn.scrollIntoViewIfNeeded();
       await playBtn.click();

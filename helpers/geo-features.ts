@@ -561,6 +561,114 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: false, // no blog for IE anyway — set false for consistency
       hasPromotionsIconInHeader: false, // unconfirmed — cloned from COM/CA
     },
+
+    // DE (Germany) — onboarding started 2026-07-24, tested from a confirmed
+    // Hamburg VPN (verified via ipinfo.io before testing, per the CA-
+    // correction lesson above). Runs on a DIFFERENT domain than the other MC
+    // markets — www.megaspielhalle.de, not megacasino.* — but the site's own
+    // schema.org data confirms it's the same brand family ("family":
+    // "MegaCasino", "brandCode":"MC"). Same DE-market platform gap already
+    // seen on SC/SNG's German sites: no Casino/Live Casino category, no
+    // Blog/Features/Bingo Card Generator, plain-English game taxonomy slug
+    // (/online-slots/) with no separate /casino-games/ or /live-casino/
+    // (both confirmed 404 pre-test via curl). Onboarding COMPLETE 2026-07-24:
+    // full P1/P2/P3 desktop + mobile suite passes cleanly (0 real failures)
+    // after fixing 3 real bugs found this session — see search.spec.ts (bad
+    // assumed search term + a scrollIntoViewIfNeeded hang), registration-
+    // widget.spec.ts (widget content render delay needed a longer timeout),
+    // and registration.spec.ts/website-header.spec.ts (mobile Play entry is
+    // an <li>, not a <button>, unlike every other GEO so far).
+    DE: {
+      locale: 'de', uiLocalized: true,
+      hasBlog: false, blogPath: null, // confirmed 404 pre-test via curl
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed 200 pre-test via curl
+      featuresPath: null, // confirmed 404 pre-test via curl
+      mobileAppPath: 'mobile-app/', // confirmed 404 pre-test via curl — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 pre-test via curl
+      currencySymbol: '€', // confirmed via homepage bonus copy ("€10"/"€100")
+      contactEmail: 'support@megaspielhalle.de', // confirmed live on /contact/ — a DIFFERENT address than UK/COM/CA/IE's support@megacasino.com, matches this market's own domain
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // the only social link found (x.com/megacasino) is a schema.org "sameAs" JSON-LD reference, not a real visible icon strip — treated as none per the GC ES precedent
+      hasSocialMedia: false, // see note above
+      searchTerm: 'Book', searchResultHrefSubstrings: ['/online-slots/'], // confirmed live via real in-app search: "Slots" (assumed from the SC/SNG DE precedent) actually returns ZERO results here — this brand's search matches game TITLES, not category names, and no MC/DE game is literally titled "Slots". "Book" reliably returns 20 real /online-slots/ results (matches "Book of Dead" and others)
+      gameTileHrefSubstrings: ['/online-slots/'], // confirmed pre-test via curl: homepage game tiles only ever use this one path
+      paymentMethodsPath: 'payment-options/', // confirmed live: real slug is /payment-options/ (200); common 'payment-methods/' default 404s here, same override as COM/CA/FR-CA
+      hasGameFilterCarousel: false, // confirmed pre-test via curl: zero GamesSlider_wrapper elements on homepage
+      hasFeedbackForm: false, // confirmed pre-test via curl: no feedback/report-a-problem link found on /contact/
+      hasGameCategoryNav: false, // confirmed live via full suite run: header/menu nav has no real Slots/Casino/Live Casino category links, only Home/Aktionen/Verantwortungsvolles Spielen/Hilfe/Kontakt/Über uns
+      hasLoginRegistration: true, // confirmed pre-test via curl: /contact/ has a real #account/login link
+      hasTestAccount: true, // real test account provided 2026-07-24 (jnn@test.com) — confirmed working live (login.spec.ts passes)
+      hasAccountModal: true, // confirmed live: login.spec.ts/registration-widget.spec.ts/website-header.spec.ts all pass, including mobile's Play entry (see DE block's top comment)
+      hasPaymentMethodsPage: true, // confirmed live: /payment-options/ returns 200 (see paymentMethodsPath)
+      hasBlogDesktopSearch: false, // no blog for DE anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for DE anyway — set false for consistency
+      hasPromotionsIconInHeader: false, // unconfirmed — cloned from COM/CA/FR-CA/IE, verify live
+    },
+
+    // DK (Denmark) — onboarding started 2026-07-24, tested from a confirmed
+    // Copenhagen VPN (verified via ipinfo.io before testing). Runs on its
+    // own domain, www.megacasino.dk (same "no team credentials exist yet"
+    // situation as MC UK when it was first onboarded) — NO working test
+    // account exists this session; team is checking on one separately.
+    // hasTestAccount: false so login.spec.ts's real-login test and any
+    // other credential-dependent check skip cleanly rather than failing on
+    // a missing account, per explicit instruction this session. The widget
+    // ITSELF is still safe to inspect (registration.spec.ts never submits,
+    // login-widget.spec.ts only ever uses a deliberately wrong password),
+    // so hasLoginRegistration stays true.
+    //
+    // Unlike DE, this market has the FULL taxonomy (Online Slots/Casino
+    // Games/Live Casino all confirmed 200 pre-test via curl) — closer to
+    // UK/COM/CA/FR-CA/IE's shape than DE's stripped-down one. No Promotions
+    // page (confirmed via curl: /promotions/ redirects to the homepage, and
+    // no "Kampagner"-style nav link exists at all in the crawled homepage
+    // HTML).
+    //
+    // Onboarding COMPLETE 2026-07-24 for everything NOT gated on a real
+    // account: full P1/P2/P3 desktop + mobile suite passes cleanly (0 real
+    // failures) after fixing 5 real bugs this session — a Danish cookie-
+    // consent banner text missing from the shared accept-button list
+    // (helpers/common.ts, benefits every brand), a Join-button click race
+    // needing extraPageSettleMs (see above), two wrong locale-string
+    // guesses (noAccountText/searchPlaceholder/membersLoginText — the real
+    // widget text differs from the initial guess in each case), a wrong
+    // currencySymbol (DKK, not the homepage banner's "kr"), and a missing
+    // horizontal-carousel viewport check in game-info-modal.spec.ts's Step
+    // 10 retry loop (generic fix). registration.spec.ts is explicitly
+    // SKIPPED for this GEO — confirmed live this market's registration
+    // widget asks for a real Danish CPR number, not mobile/DOB, and no test
+    // CPR exists this session (see registration.spec.ts's isMcDkFormat).
+    DK: {
+      locale: 'da', uiLocalized: true, // confirmed live via curl: <html lang="da">, real header/nav copy in Danish (see locale-strings.ts's 'da' entry)
+      // Confirmed live via a repeated real-browser probe (2/3 runs failed,
+      // 1/3 succeeded with the standard wait): the header Log In/Join
+      // buttons render visible+clickable well before their click handlers
+      // are actually wired up — same race already documented for SNG FR-CA.
+      // 4/4 clean with this longer settle.
+      extraPageSettleMs: 6_000,
+      hasBlog: false, blogPath: null, // confirmed 404 pre-test via curl
+      hasPromotionsPage: false, promotionsPath: null, // confirmed live: /promotions/ redirects to the homepage (no distinct page), and no promotions-style nav link found anywhere in the crawled HTML
+      featuresPath: null, // confirmed 404 pre-test via curl
+      mobileAppPath: 'mobile-app/', // confirmed 404 pre-test via curl — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 pre-test via curl
+      currencySymbol: 'kr', // confirmed live via real browser probe: homepage bonus banner uses "kr" ("500 kr."/"100kr")
+      gameModalCurrencyText: 'DKK', // confirmed live via real browser probe: the game info modal's own bet-limit copy ("Min. indsats DKK 10.00") uses "DKK" instead of "kr" — same per-context formatting inconsistency already confirmed independently on GC DK; see gameModalCurrencyText's own doc comment
+      contactEmail: 'support@megacasino.com', // confirmed live via curl on /contact/ — same shared address as UK/COM/CA/IE, NOT its own domain's address (unlike DE's support@megaspielhalle.de)
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // the only social link found (x.com/megacasino) is a schema.org "sameAs" JSON-LD reference, not a real visible icon strip — treated as none per the GC ES/MC DE precedent
+      hasSocialMedia: false, // see note above
+      searchTerm: 'Bonanza', searchResultHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // confirmed live via the real in-app search flow (search.spec.ts passes): "Bonanza" reliably returns real results
+      gameTileHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // confirmed live via curl: homepage crawl shows all three category paths, same taxonomy as UK/COM/CA/FR-CA/IE
+      paymentMethodsPath: 'payment-options/', // confirmed live via curl: real slug is /payment-options/ (200); common 'payment-methods/' default 404s here, same override as COM/CA/FR-CA/IE
+      hasGameFilterCarousel: true, // confirmed live via curl: homepage HTML contains 3 GamesSlider_wrapper rows, unlike DE's zero
+      hasFeedbackForm: false, // confirmed live via curl: no feedback/report-a-problem link found on /contact/ (only a #account/login link)
+      hasGameCategoryNav: true, // confirmed live via curl: real Online Spillemaskiner/Casinospil/Live casino nav links found (see gameTileHrefSubstrings) — fuller taxonomy than DE
+      hasLoginRegistration: true, // confirmed live via curl: /contact/ has a real #account/login link, and header shows real Log ind/Tilmeld buttons — widget is safe to inspect even with no working account (see hasTestAccount)
+      hasTestAccount: false, // NO working test account exists yet — team is checking separately; skip only the real-login-dependent checks (login.spec.ts's actual sign-in test) per explicit instruction this session
+      hasAccountModal: true, // confirmed live: registration.spec.ts/registration-widget.spec.ts/website-header.spec.ts/banner.spec.ts all confirm the #account modal opens correctly (real LOGIN, not just JOIN, since login.spec.ts itself is the only thing skipped by hasTestAccount)
+      hasPaymentMethodsPage: true, // confirmed live via curl: /payment-options/ returns 200 (see paymentMethodsPath)
+      hasBlogDesktopSearch: false, // no blog for DK anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for DK anyway — set false for consistency
+      hasPromotionsIconInHeader: false, // no Promotions page exists at all for this GEO (see hasPromotionsPage) — consistent by necessity
+    },
   },
 
   // ── Genting Casino (GC) ───────────────────────────────────────────────────

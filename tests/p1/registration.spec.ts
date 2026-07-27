@@ -176,6 +176,16 @@ test.describe('Registration Flow', () => {
     const isMcFrCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
       && test.info().project.name.replace(/-mobile$/, '') === 'FR-CA';
     const mcFrCaStep0Labels = { mobile: 'Numéro de téléphone cellulaire', dob: 'Quelle est votre date de naissance?', continue: 'Continuer' };
+    // MC/DK — onboarding started 2026-07-24: confirmed live via real browser
+    // probe that this market's registration widget is NOT the usual mobile
+    // number + DOB shape at all — Step 0 asks for a Danish CPR number
+    // (format XXXXXX-XXXX, a real national ID number), consistent with
+    // Danish gambling regulation requiring CPR/MitID-based identity
+    // verification. No real (or safely fabricated) Danish CPR number exists
+    // this session, the same "can't proceed without real identity data" gap
+    // as a missing login account — skip rather than guess/fabricate one.
+    const isMcDkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
+      && test.info().project.name.replace(/-mobile$/, '') === 'DK';
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
 
@@ -186,8 +196,13 @@ test.describe('Registration Flow', () => {
       // nav (confirmed live). It shares its "play" class with every game
       // tile's individual play button, so scope to the mobile footer
       // container rather than matching on class/text alone.
+      // Confirmed live on MC/DE: the mobile hamburger menu's Play entry is a
+      // plain <li> (icon + "Play" span), not a <button> descendant like
+      // every other GEO onboarded so far — the old "button" descendant
+      // selector matched zero elements here even though the <li> itself is
+      // real, visible, and clickable (opens #account like everywhere else).
       const joinBtn = isMobile
-        ? page.locator('[class*="MobileFooter"] button.play, [class*="MobileMenu_play-but"] button').first()
+        ? page.locator('[class*="MobileFooter"] button.play, [class*="MobileMenu_play-but"]').first()
         : page.getByRole('banner').getByRole('button', { name: strings.joinButton }).first();
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
       await dismissCampaignPopup(page);
@@ -454,6 +469,11 @@ test.describe('Registration Flow', () => {
       // rather than guessing a shape that could silently pass or fail for
       // the wrong reason.
       test.skip(true, 'DE mobile registration flow not yet verified live — needs a dedicated inspection pass');
+    } else if (isMcDkFormat) {
+      // See isMcDkFormat's own comment above — Step 0 requires a real
+      // Danish CPR number that doesn't exist this session, on both desktop
+      // and mobile.
+      test.skip(true, 'MC/DK registration requires a real Danish CPR number (not mobile/DOB) — no test CPR available this session');
     } else if (isGermanFormat && !isMobile) {
       // DE desktop — confirmed live 2026-07-13 (cross-checked against
       // RevWright Claude.ai's independent walkthrough of the same flow).
