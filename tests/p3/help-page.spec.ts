@@ -28,16 +28,29 @@ test.describe('P3 - Help Page', () => {
     await dismissCampaignPopup(page);
     await page.waitForTimeout(500);
 
-    // Entry point: hamburger -> sidebar -> Help link (not a direct goto)
+    // Entry point: hamburger -> sidebar -> Help link (not a direct goto),
+    // matching how a real user reaches this page on brands where the
+    // sidebar has that entry point. Confirmed live on PC ES: the Help page
+    // itself is real (200s) but has NO sidebar entry at all — footer-only,
+    // same gap as sidebar-navigation.spec.ts's Help step. Fall back to a
+    // direct goto rather than hard-failing on a real site-structure gap;
+    // this spec's actual scope is the accordion behavior, not the nav path.
+    const helpPath = currentGeoFeatures().helpPath ?? 'help/';
     await page.evaluate((sel) => {
       const el = document.querySelector(sel);
       (el as HTMLElement | null)?.click();
     }, HAMBURGER);
     await page.waitForTimeout(800);
-    const helpPath = currentGeoFeatures().helpPath ?? 'help/';
     const helpLink = page.locator(SIDEBAR + ` a[href*="/${helpPath}"]`).first();
-    await helpLink.click();
-    await page.waitForLoadState('domcontentloaded');
+    const hasSidebarLink = await helpLink.isVisible({ timeout: 3_000 }).catch(() => false);
+    if (hasSidebarLink) {
+      await helpLink.click();
+      await page.waitForLoadState('domcontentloaded');
+    } else {
+      console.log('HP-01 no sidebar Help entry point for this GEO — navigating directly');
+      await page.keyboard.press('Escape').catch(() => {});
+      await page.goto(helpPath, { waitUntil: 'domcontentloaded' });
+    }
     await page.waitForTimeout(1_000);
     await dismissCampaignPopup(page);
   });
