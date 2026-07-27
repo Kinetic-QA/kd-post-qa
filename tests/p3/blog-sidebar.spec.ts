@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/stealth-fixtures';
 import { dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError, navigateToBlogViaSidebar } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 import { currentLocaleStrings } from '../../helpers/locale-strings';

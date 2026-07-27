@@ -9,6 +9,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-07-27
+
+### Added
+
+- **Added a way for our automated tests to get past the "please wait, verifying you're not a robot" screen that was blocking Genting Casino UK and Mega Casino UK.** Confirmed working twice, on two different days, on Genting Casino UK — both the login box and the sign-up box now show up as real, fillable forms instead of getting stuck on that screen. This only turns on for the specific markets that actually have this problem (currently Genting Casino UK and Mega Casino UK) — every other market's tests run exactly the same as before, nothing else changes.
+
+### Fixed
+
+- **Genting Casino Denmark's sign-up test would have failed for the wrong reason if run today** — it asks for a Danish personal ID number as its very first question, instead of the mobile number/birthday combo every other market uses, and our test wasn't expecting that yet. Now it skips cleanly with a clear explanation instead of erroring out confusingly. (Note for whoever picks this up next: a made-up but correctly-formatted ID number was accepted by the real site, so this market's sign-up CAN still be fully automated later — the groundwork just isn't built yet.)
+
+---
+
 ## Format
 
 Each release or change set uses this structure:

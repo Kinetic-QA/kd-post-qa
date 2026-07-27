@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/stealth-fixtures';
 import { dismissPopups, dismissCampaignPopup, setupCampaignPopupWatcher, expectedPlaysecureUrlPattern, waitForExtraPageSettle, dismissCloudflareChallenge } from '../../helpers/common';
 import { currentTestCredentials } from '../../helpers/test-credentials';
 import { currentLocaleStrings } from '../../helpers/locale-strings';

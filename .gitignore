@@ -23,6 +23,9 @@ memory/
 ### Local-only Slack update drafts — not part of repo history ###
 docs/updates/
 
+### Local-only demo recordings (Cloudflare-bypass test videos, etc.) — not part of repo history ###
+docs/*.webm
+
 ### OS files ###
 .DS_Store
 Thumbs.db

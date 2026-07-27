@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../helpers/stealth-fixtures';
 import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 // dismissCampaignPopup is called after every navigation — it only acts if popup is present,
