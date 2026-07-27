@@ -73,6 +73,15 @@ async function tryClickCookieConsent(page: Page): Promise<boolean> {
   }).catch(() => false);
 }
 
+// Compound/"second-level" TLDs where the real registrable domain needs 3
+// labels, not 2 — e.g. primecasino.co.uk, not just co.uk. Confirmed live
+// 2026-07-27 (PC UK onboarding): the naive last-2-labels slice collapsed
+// www.primecasino.co.uk down to just "co.uk", so the expected pattern never
+// matched the real redirect (playsecure.primecasino.co.uk) at all — add to
+// this list as new compound-TLD domains are onboarded, rather than special-
+// casing brands individually.
+const COMPOUND_TLDS = ['co.uk', 'com.au', 'co.nz', 'org.uk'];
+
 /**
  * After a successful login, every brand/GEO redirects to a "playsecure."
  * subdomain of its own ROOT domain — e.g. www.slingo.com -> playsecure.slingo.com,
@@ -87,7 +96,8 @@ async function tryClickCookieConsent(page: Page): Promise<boolean> {
  */
 export function expectedPlaysecureUrlPattern(): RegExp {
   const labels = new URL(getBaseUrl()).hostname.split('.');
-  const rootDomain = labels.slice(-2).join('.');
+  const lastTwo = labels.slice(-2).join('.');
+  const rootDomain = COMPOUND_TLDS.includes(lastTwo) ? labels.slice(-3).join('.') : lastTwo;
   return new RegExp(`playsecure\\.${rootDomain.replace(/\./g, '\\.')}`);
 }
 

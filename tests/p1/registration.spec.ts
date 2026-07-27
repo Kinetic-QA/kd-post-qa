@@ -1,7 +1,7 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
 import type { Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -156,6 +156,14 @@ test.describe('Registration Flow', () => {
     // match (see generateMalteseMobile's docstring for why UK's failed).
     const isMcComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
       && test.info().project.name.replace(/-mobile$/, '') === 'COM';
+    // PC/COM — onboarding started 2026-07-27, tested from a confirmed UAE
+    // VPN/IP. Same auto-detect-from-real-IP pattern as MC/COM (showed
+    // "+971" with no explicit selection needed) — only the mobile number
+    // format needs to match (see generateUaeMobile's docstring). DOB
+    // confirmed live as "Day/Month/Year" — same as the default UK-shaped
+    // format, no override needed there.
+    const isPcComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PC'
+      && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // MC/CA — confirmed live 2026-07-22 (correct Canada VPN/IP verified via
     // ipinfo.io): same auto-detect-from-real-IP pattern as COM/ROW/DE —
     // country code correctly shows Canada with no explicit selection needed.
@@ -164,6 +172,23 @@ test.describe('Registration Flow', () => {
     // generator for the same number format.
     const isMcCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
       && test.info().project.name.replace(/-mobile$/, '') === 'CA';
+    // PC/CA — onboarding started 2026-07-27, tested from a confirmed Canada
+    // VPN/IP. Same shape as MC/CA: country code auto-detects correctly (no
+    // explicit "Canada" dropdown selection needed, unlike SNG AB/CA), DOB
+    // field confirmed live to show "Year-Month-Day" placeholder — same
+    // non-UK format rejection already documented for SNG/MC CA — so reuses
+    // generateCanadianDOB() unchanged. Registration widget confirmed live:
+    // real Mobile number + DOB fields (3 visible inputs), same shape as
+    // PC/UK's Step 0.
+    const isPcCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PC'
+      && test.info().project.name.replace(/-mobile$/, '') === 'CA';
+    // PC/UK — onboarding started 2026-07-27. Same reasoning already
+    // established for MC (no Bingo vertical at all — Live Casino/Online
+    // Slots/Table Games/Instant Win, confirmed live via header+footer nav
+    // crawl) — no gdprBingo checkbox exists here either, same 3-checkbox set
+    // as MC/SNG CA.
+    const isPcUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PC'
+      && test.info().project.name.replace(/-mobile$/, '') === 'UK';
     // MC/FR-CA — onboarding started 2026-07-23, tested from a confirmed
     // Montreal VPN. Same underlying platform as MC/CA but genuinely
     // translated field labels — confirmed live via DOM snapshot: mobile
@@ -543,7 +568,7 @@ test.describe('Registration Flow', () => {
       // overridden, but NOT the same shape for both: CA's real address step
       // has no house-number field (see fillStep2CA), while ON's DOES (same
       // AB-shaped form — see generateOntarioAddress's docstring).
-      if (isCanadianMobileFormat) {
+      if (isCanadianMobileFormat || isPcCaFormat) {
         data.dob = isFrCaFormat ? generateFrCaDOB() : generateCanadianDOB();
         data.address = isOntarioFormat ? generateOntarioAddress() : generateCanadianAddress();
       }
@@ -552,10 +577,19 @@ test.describe('Registration Flow', () => {
         // SNG AB/CA/ON: country-code dropdown defaults to the tester's real
         // VPN/IP country — see fillStep0WithRetry's countryCodeLabel
         // handling and generateCanadianMobile's docstring.
+        // PC/CA (confirmed live 2026-07-27, mobile viewport): country code
+        // ALSO auto-detects to +1 correctly on its own (same as desktop),
+        // no explicit "Canada" dropdown selection needed — same
+        // auto-detect-from-real-IP pattern as MC/CA's desktop flow, just
+        // needs the Canadian mobile generator + dot-separated DOB above.
         await ((isAlbertaFormat || isCanadianMobileFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
+          : isPcCaFormat
+          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile)
           : isMcComFormat
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
+          : isPcComFormat
+          ? fillStep0WithRetry(page, scope, data, generateUaeMobile)
           : fillStep0WithRetry(page, scope, data));
       });
 
@@ -566,7 +600,13 @@ test.describe('Registration Flow', () => {
       });
 
       await runStep('Step 2 of 5: Gender + Email → Continue', async () => {
-        await (isCanadianMobileFormat
+        // PC/CA (confirmed live 2026-07-27): same no-house-number-yet shape
+        // as SNG CA at this step — reuses fillMobileStep2GenderEmailCA
+        // unchanged rather than adding a near-duplicate function. PC/COM:
+        // same shape confirmed live 2026-07-27 (this generic mobile block
+        // is what PC/COM falls into, same as PC/CA — no dedicated
+        // isXxxFormat && isMobile branch exists earlier in this file).
+        await ((isCanadianMobileFormat || isPcCaFormat || isPcComFormat)
           ? fillMobileStep2GenderEmailCA(page, scope, data,
               isFrCaFormat ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined,
               isFrCaFormat ? 'CONTINUER' : 'Continue', isFrCaFormat)
@@ -577,10 +617,10 @@ test.describe('Registration Flow', () => {
         // SNG AB/ON: house-number-bearing form (Province dropdown + postal-
         // code validation) — see fillMobileStep3AddressAB's docstring. SNG
         // CA: no house-number field at all — see fillMobileStep3AddressCA's
-        // docstring.
+        // docstring. PC/COM: same no-house-number shape confirmed live.
         await (usesAbAddressShape
           ? fillMobileStep3AddressAB(page, scope, data)
-          : isCanadianMobileFormat
+          : (isCanadianMobileFormat || isPcCaFormat || isPcComFormat)
           ? fillMobileStep3AddressCA(page, scope, data,
               isFrCaFormat ? 'Adresse' : 'Start typing your address',
               isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue')
@@ -609,6 +649,8 @@ test.describe('Registration Flow', () => {
           : isCanadianMobileFormat
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'], false,
               isFrCaFormat ? 'Non' : 'No')
+          : (isPcUkFormat || isPcCaFormat || isPcComFormat)
+          ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
           : fillMobileStep5Final(page, scope));
       });
 
@@ -644,7 +686,7 @@ test.describe('Registration Flow', () => {
       // the DOB needs overriding here, not the address (MC/CA's address step
       // uses the generic street/postcode/city shape via fillComAddress, not
       // SNG CA's province/postal-code shape).
-      if (isMcCaFormat) {
+      if (isMcCaFormat || isPcCaFormat) {
         data.dob = generateCanadianDOB();
       }
       // MC/FR-CA: same dash-separated YYYY-MM-DD format as SNG FR-CA
@@ -673,13 +715,15 @@ test.describe('Registration Flow', () => {
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
           : isMcComFormat
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
+          : isPcComFormat
+          ? fillStep0WithRetry(page, scope, data, generateUaeMobile)
           // MC/CA and MC/FR-CA: country already auto-detects correctly (no
           // 'Canada' label needed, unlike SNG AB/CA) — just needs a
           // NANP-format number; MC/FR-CA additionally needs its own
           // (genuinely translated, brand-specific) field labels.
           : isMcFrCaFormat
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, undefined, mcFrCaStep0Labels)
-          : isMcCaFormat
+          : (isMcCaFormat || isPcCaFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile)
           : fillStep0WithRetry(page, scope, data));
       });
@@ -698,7 +742,7 @@ test.describe('Registration Flow', () => {
         // firstName/lastName/email/gender labels NOT yet independently
         // confirmed for MC FR-CA, reusing SNG FR-CA's frCaStep1Labels as a
         // starting guess (same language, correct via real failures if wrong).
-        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isMcCaFormat || isMcFrCaFormat)
+        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isPcCaFormat || isPcComFormat)
           ? ((isFrCaFormat || isMcFrCaFormat) ? scope.getByLabel('Adresse').first() : scope.getByPlaceholder('Start typing your address').first())
           : undefined, (isFrCaFormat || isMcFrCaFormat) ? frCaStep1Labels : undefined,
           (isFrCaFormat || isMcFrCaFormat) ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined);
@@ -734,7 +778,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue',
               isFrCaFormat ? /nom d'utilisateur/i : /username/i)
           : isMcFrCaFormat ? fillComAddress(page, scope, data, 'Adresse', true, 'Code postal', 'Ville', 'Continuer', /nom d.utilisateur/i, /saisir l.adresse manuellement/i)
-          : (isMcComFormat || isMcCaFormat) ? fillComAddress(page, scope, data)
+          : (isMcComFormat || isMcCaFormat || isPcCaFormat || isPcComFormat) ? fillComAddress(page, scope, data)
           : fillStep2(page, scope, data));
       });
 
@@ -762,7 +806,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat)
           : isMcFrCaFormat
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'], /nom d.utilisateur/i, /mot de passe/i, true)
-          : (isMcComFormat || isMcCaFormat)
+          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat)
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
       });
@@ -2407,9 +2451,14 @@ async function fillMobileStep3AddressCA(
   await cityInput.fill(addr.city);
   await page.waitForTimeout(300);
 
+  // PC/COM (confirmed live 2026-07-27): this market's address step has no
+  // state/province field at all — street/postcode/city only, same as MC/COM's
+  // desktop fillComAddress. SNG/PC CA genuinely DO have this field, so treat
+  // it as optional (skip cleanly if absent) rather than assuming every brand
+  // sharing this function has a state dropdown.
   const stateSelect = scope.locator('select#state').first();
-  await expect(stateSelect).toBeVisible({ timeout: 5_000 });
-  if (addr.state) {
+  const hasStateSelect = await stateSelect.isVisible({ timeout: 5_000 }).catch(() => false);
+  if (hasStateSelect && addr.state) {
     await stateSelect.selectOption({ label: addr.state }).catch(() => {});
   }
   await page.waitForTimeout(300);
