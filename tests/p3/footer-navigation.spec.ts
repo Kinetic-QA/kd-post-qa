@@ -18,7 +18,17 @@ import { currentLocaleStrings } from '../../helpers/locale-strings';
  * Soft assertions used throughout so all checks run even if one fails.
  */
 
-const FOOTER = '[class*="Footer_footer-mid"]';
+// :is(...) groups the alternatives so 'FOOTER + " a"' concatenation still
+// means "an <a> inside EITHER container", not "a bare <footer> tag OR an
+// <a> inside Footer_footer-mid". Footer_site-footer added 2026-07-28 —
+// confirmed live: Lord Ping (LP) UK's real footer wrapper has NO
+// Footer_footer-mid class at all (uses a real semantic <footer> tag
+// instead, class Footer_site-footer__TyG5d) — genuinely different markup,
+// not a selector bug. Verified this doesn't break existing brands: SNG/MC
+// have zero <footer> tags at all (Footer_footer-mid is their only match),
+// while Slingo/PC nest Footer_footer-mid INSIDE a real <footer> tag (both
+// match, but .first() below always resolves to the outer one safely).
+const FOOTER = ':is(footer, [class*="Footer_footer-mid"])';
 
 test.describe('P3 - Footer Navigation', () => {
 
@@ -108,7 +118,7 @@ test.describe('P3 - Footer Navigation', () => {
     await test.step('Step 1: Footer is visible at bottom of page', async () => {
       await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
       await page.waitForTimeout(500);
-      const footerVisible = await page.locator(FOOTER).isVisible({ timeout: 5_000 }).catch(() => false);
+      const footerVisible = await page.locator(FOOTER).first().isVisible({ timeout: 5_000 }).catch(() => false);
       record('Footer visible at bottom of page', footerVisible);
       expect(footerVisible).toBe(true);
       console.log('Footer visible: ' + footerVisible);

@@ -1,5 +1,5 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError, resolveMobileAccountButton } from '../../helpers/common';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -56,31 +56,16 @@ test.describe('P2 - Registration Widget', () => {
     const geoFeatures = currentGeoFeatures();
     const isMobile = test.info().project.name.endsWith('-mobile');
 
-    // Mobile has no standalone Join button in the header — it lives inside
-    // the hamburger sidebar (confirmed live, see login.spec.ts). The
-    // sidebar has a real nonzero bounding box even while closed (just
-    // translated off-screen), so Playwright's isVisible() alone can't tell
-    // open from closed — check the actual on-screen position instead.
-    async function isMobileMenuOnScreen(): Promise<boolean> {
-      return await page.evaluate(() => {
-        const el = document.querySelector('[class*="MainMenu_main-menu"]');
-        if (!el) return false;
-        const rect = el.getBoundingClientRect();
-        return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
-      });
-    }
-
     async function openRegistrationWidget() {
       await dismissCampaignPopup(page);
-      if (isMobile && !(await isMobileMenuOnScreen())) {
-        await page.evaluate(() => {
-          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
-        });
-        await page.waitForTimeout(800);
-      }
+      // resolveMobileAccountButton tries known mobile shapes in order — see
+      // its doc comment in helpers/common.ts.
       const joinBtn = isMobile
-        ? page.locator('[class*="MainMenu_main-menu"]').getByRole('button', { name: strings.joinButton }).first()
+        ? await resolveMobileAccountButton(page, 'join', strings.joinButton)
         : page.getByRole('banner').getByRole('button', { name: strings.joinButton }).first();
+      if (!joinBtn) {
+        throw new Error('No mobile Join entry point found (checked #mobile-join and the hamburger sidebar)');
+      }
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
       await joinBtn.click();
       await expect(page).toHaveURL(/#account/, { timeout: 15_000 });

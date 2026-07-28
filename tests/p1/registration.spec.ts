@@ -1,6 +1,6 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
 import type { Page, FrameLocator, Locator } from '@playwright/test';
-import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle } from '../../helpers/common';
+import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle, resolveMobileAccountButton } from '../../helpers/common';
 import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateDERegistrationData, generateGermanMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, RegistrationData, EsRegistrationData, DeRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
@@ -189,6 +189,13 @@ test.describe('Registration Flow', () => {
     // as MC/SNG CA.
     const isPcUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PC'
       && test.info().project.name.replace(/-mobile$/, '') === 'UK';
+    // Lord Ping (LP) UK — onboarded 2026-07-28, brand-new brand. Same
+    // no-Bingo-vertical reasoning as MC/PC (LP's taxonomy is Online Slots/
+    // Live Casino/Casino Games — confirmed live via sidebar accordion
+    // crawl, no Bingo category anywhere) — no gdprBingo checkbox exists
+    // here either, same 3-checkbox set.
+    const isLpUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
+      && test.info().project.name.replace(/-mobile$/, '') === 'UK';
     // MC/FR-CA — onboarding started 2026-07-23, tested from a confirmed
     // Montreal VPN. Same underlying platform as MC/CA but genuinely
     // translated field labels — confirmed live via DOM snapshot: mobile
@@ -241,8 +248,19 @@ test.describe('Registration Flow', () => {
       // every other GEO onboarded so far — the old "button" descendant
       // selector matched zero elements here even though the <li> itself is
       // real, visible, and clickable (opens #account like everywhere else).
+      // Confirmed live on Lord Ping (LP) UK, 2026-07-28: the old ambiguous
+      // MobileMenu_play-but <li> selector can resolve to a container that
+      // holds BOTH a separate #mobile-login AND #mobile-join button
+      // together — clicking the <li>'s bounding box can land on whichever
+      // button happens to sit at that point, opening the LOGIN widget
+      // instead of Join and silently stalling every step after (no Mobile
+      // number/DOB field ever appears because we're in the wrong modal).
+      // resolveMobileAccountButton checks the real #mobile-join id first
+      // before falling back to the ambiguous shapes — see its doc comment
+      // in helpers/common.ts.
       const joinBtn = isMobile
-        ? page.locator('[class*="MobileFooter"] button.play, [class*="MobileMenu_play-but"]').first()
+        ? await resolveMobileAccountButton(page, 'join', strings.joinButton)
+          ?? page.locator('[class*="MobileFooter"] button.play, [class*="MobileMenu_play-but"]').first()
         : page.getByRole('banner').getByRole('button', { name: strings.joinButton }).first();
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
       await dismissCampaignPopup(page);
@@ -649,7 +667,7 @@ test.describe('Registration Flow', () => {
           : isCanadianMobileFormat
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'], false,
               isFrCaFormat ? 'Non' : 'No')
-          : (isPcUkFormat || isPcCaFormat || isPcComFormat)
+          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
           : fillMobileStep5Final(page, scope));
       });
@@ -806,7 +824,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat)
           : isMcFrCaFormat
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'], /nom d.utilisateur/i, /mot de passe/i, true)
-          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat)
+          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat)
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
       });

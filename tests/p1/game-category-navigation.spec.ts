@@ -261,6 +261,176 @@ test.describe('P1 - Game Category Navigation', () => {
       await clickNavAndVerify('/live-casino/live-games/', 'Live Games');
     });
 
+    // ── Lord Ping (LP) UK — brand-new brand, onboarded 2026-07-28 ─────────
+    // Confirmed live: LP's sub-categories (Jackpots/Daily Jackpots/Megaways/
+    // Themes/Providers/Roulette/Blackjack/Baccarat/Game Shows/Table Games/
+    // Poker/Scratch Cards) are NOT reachable via the header's Nav_nav__ bar
+    // at all — unlike Slingo/SNG, where sub-tabs stay visible inline on the
+    // category page itself, LP's Nav_nav__ bar only ever shows the 3
+    // top-level tabs (Online Slots/Live Casino/Casino Games), confirmed by
+    // inspecting it while already on a sub-category page. Every sub-category
+    // link exists ONLY inside the hamburger sidebar's per-category
+    // accordion (each of the 3 top-level items independently toggles a
+    // collapsed <ul>, maxHeight 0 -> ~410px on click) — and that sidebar
+    // itself is off-canvas by default even on desktop (same pattern already
+    // confirmed on Prime Casino Germany), so it must be opened via the
+    // hamburger first. Top-level categories ARE reachable via Nav_nav__, so
+    // those reuse clickNavAndVerify unchanged; only sub-categories need the
+    // dedicated helper below.
+    const isLpUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
+      && test.info().project.name.replace(/-mobile$/, '') === 'UK';
+
+    async function clickSidebarSubCategoryAndVerify(categoryClass: string, hrefPart: string, label: string) {
+      await page.evaluate(() => (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click());
+      await page.waitForTimeout(600);
+      // Expand this category's accordion — confirmed live: each of the 3
+      // top-level rows is its own independent toggle; clicking one does not
+      // auto-collapse a sibling, so no need to track which is open already.
+      // :not([href]) — same documented pattern as the GC UK mobile-sidebar
+      // note above (see geo-features.ts): the expandable toggle and the
+      // "All X" sub-link it reveals share this exact CSS class, so an
+      // unscoped match risks a strict-mode "resolved to 2 elements"
+      // violation, and even where DOM order happens to make .first() land
+      // on the right one, being explicit is safer than relying on that.
+      // Native el.click() via evaluate, not a real Playwright .click() —
+      // confirmed live: even after the hamburger-open wait above, this
+      // toggle can still be mid-CSS-transition (translating on-screen) when
+      // Playwright's actionability check runs, reporting "element is
+      // outside of the viewport" — same off-canvas-menu class of issue
+      // documented elsewhere in this file/project, worked around the same
+      // way (bypass hit-testing entirely, fire the click handler directly).
+      await page.locator(`[class*="${categoryClass}"]:not([href])`).first().evaluate((el: HTMLElement) => el.click());
+      await page.waitForTimeout(500);
+      const link = page.locator(`[class*="MainMenu_main-menu"] a[href$="${hrefPart}"]`).first();
+      const exists = await link.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!exists) {
+        results.push({ label: `${label} (skipped — not offered for this GEO)`, status: 'Pass' });
+        console.log('SKIP | ' + label + ' | link not found for this GEO');
+        return;
+      }
+      await link.evaluate((el: HTMLElement) => el.click());
+      await page.waitForLoadState('domcontentloaded');
+      await dismissCampaignPopup(page);
+      const expectedUrl = siteUrl(hrefPart);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 8_000 }).then(() => true).catch(() => false);
+      const actualUrl = page.url();
+      const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
+      results.push({ label, status: passed ? 'Pass' : 'Fail' });
+      console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+      // Close the sidebar before the next step re-opens it — avoids a
+      // leftover open sidebar's overlay blocking the next click, the same
+      // lesson already learned from the unconditional-sidebar-opening bug
+      // documented at the top of this file.
+      await page.evaluate(() => (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click());
+      await page.waitForTimeout(300);
+    }
+
+    if (isLpUkFormat) {
+      await test.step('Online Slots category → /online-slots/', async () => {
+        await clickNavAndVerify('/online-slots/', 'Online Slots');
+      });
+      await test.step('Online Slots > Jackpots → /online-slots/jackpots/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_1_slots', '/online-slots/jackpots/', 'Jackpots');
+      });
+      await test.step('Online Slots > Daily Jackpots → /online-slots/daily-jackpots/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_1_slots', '/online-slots/daily-jackpots/', 'Daily Jackpots');
+      });
+      await test.step('Online Slots > Megaways → /online-slots/megaways/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_1_slots', '/online-slots/megaways/', 'Megaways');
+      });
+      await test.step('Online Slots > Providers → /online-slots/slots-providers/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_1_slots', '/online-slots/slots-providers/', 'Providers');
+      });
+      await test.step('Online Slots > Themes → /online-slots/slots-themes/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_1_slots', '/online-slots/slots-themes/', 'Themes');
+      });
+
+      // ── Themes page: "More Themes" dropdown ──────────────────────────
+      // Confirmed live: this is a react-select SINGLE-select control
+      // (classes slots-select__*) that, on picking a theme, navigates to
+      // /online-slots/slots-themes/<theme-slug>/ and updates the control's
+      // own displayed text to the selected theme's label — it is NOT a
+      // true multi-select (no multi-value chips ever appeared). Testing
+      // 2-3 DIFFERENT theme selections in sequence (not the same one twice)
+      // verifies the control genuinely re-navigates and re-labels itself
+      // each time, rather than only ever proving the first selection works.
+      await test.step('Online Slots > Themes → "More Themes" dropdown selects multiple themes', async () => {
+        await page.goto(siteUrl('/online-slots/slots-themes/'), { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(1_500);
+        await dismissCookieConsent(page);
+        await dismissCampaignPopup(page);
+
+        async function selectTheme(visibleText: string, expectedSlug: string) {
+          const control = page.locator('.slots-select__control').first();
+          // Confirmed live on Lord Ping UK mobile: a fresh page.goto() here
+          // can leave the control below the fold or mid-layout-shift long
+          // enough that even scrollIntoViewIfNeeded() + a real Playwright
+          // .click() still reports "not visible" repeatedly — native
+          // el.click() via evaluate bypasses that actionability wait
+          // entirely, same pattern used for every other troublesome click
+          // target in this file.
+          await control.scrollIntoViewIfNeeded().catch(() => {});
+          await page.waitForTimeout(300);
+          await control.evaluate((el: HTMLElement) => el.click());
+          await page.waitForTimeout(500);
+          const option = page.locator('[class*="slots-select__option"]', { hasText: visibleText }).first();
+          const optionExists = await option.isVisible({ timeout: 3_000 }).catch(() => false);
+          if (!optionExists) {
+            results.push({ label: `Themes dropdown: "${visibleText}" (skipped — option not found)`, status: 'Pass' });
+            return;
+          }
+          await option.click();
+          await page.waitForTimeout(1_500);
+          const expectedUrl = siteUrl(`/online-slots/slots-themes/${expectedSlug}/`);
+          const actualUrl = page.url();
+          const passed = actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
+          const controlText = await page.locator('.slots-select__control').first().evaluate(el => {
+            const label = el.querySelector('[class*="singleValue"]');
+            return label ? label.textContent?.trim() : el.textContent?.trim();
+          });
+          results.push({ label: `Themes dropdown: "${visibleText}" → ${expectedSlug} (shows "${controlText}")`, status: passed ? 'Pass' : 'Fail' });
+          console.log((passed ? 'PASS' : 'FAIL') + ' | Themes dropdown "' + visibleText + '" | ' + actualUrl);
+          await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+        }
+
+        // 3 different themes, confirmed live to each exist and navigate correctly.
+        await selectTheme('Egyptian', 'ancient-egyptian');
+        await selectTheme('Pirates', 'pirates');
+        await selectTheme('Vikings', 'vikings');
+      });
+
+      await test.step('Live Casino category → /live-casino/', async () => {
+        await clickNavAndVerify('/live-casino/', 'Live Casino');
+      });
+      await test.step('Live Casino > Roulette → /live-casino/roulette/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_2_live', '/live-casino/roulette/', 'Live Casino Roulette');
+      });
+      await test.step('Live Casino > Blackjack → /live-casino/blackjack/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_2_live', '/live-casino/blackjack/', 'Live Casino Blackjack');
+      });
+      await test.step('Live Casino > Baccarat → /live-casino/baccarat/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_2_live', '/live-casino/baccarat/', 'Live Casino Baccarat');
+      });
+      await test.step('Live Casino > Game Shows → /live-casino/game-shows/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_2_live', '/live-casino/game-shows/', 'Live Casino Game Shows');
+      });
+
+      await test.step('Casino Games category → /casino-games/', async () => {
+        await clickNavAndVerify('/casino-games/', 'Casino Games');
+      });
+      await test.step('Casino Games > Table Games → /casino-games/table-games/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_3_casino', '/casino-games/table-games/', 'Table Games');
+      });
+      await test.step('Casino Games > Poker → /casino-games/poker/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_3_casino', '/casino-games/poker/', 'Poker');
+      });
+      await test.step('Casino Games > Scratch Cards → /casino-games/scratch-cards/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_3_casino', '/casino-games/scratch-cards/', 'Scratch Cards');
+      });
+    }
+
     printSummary();
   });
 

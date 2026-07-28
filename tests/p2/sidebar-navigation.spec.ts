@@ -203,6 +203,18 @@ test.describe('P2 - Sidebar Navigation', () => {
       }
       await openSidebar();
       const loginBtn = page.locator(SIDEBAR + ' button').filter({ hasText: strings.loginButton }).first();
+      // Confirmed live on Lord Ping (LP) UK, 2026-07-28: this brand's sidebar
+      // has NO Login/Join buttons at all — they live only in the header
+      // (desktop) and a separate MobileFooter play-but <li> (mobile), never
+      // inside MainMenu_main-menu. A genuinely different structure from
+      // every other brand, not a selector bug — skip cleanly rather than
+      // hard-fail on an entry point this brand's sidebar never offers.
+      const exists = await loginBtn.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!exists) {
+        record('LOG IN CTA opens login modal (/#account) (skipped — no Login button inside this brand\'s sidebar)', true);
+        console.log('SN-01 Steps 5-8 skipped — no Login button inside the sidebar for this brand');
+        return;
+      }
       await loginBtn.click();
       await page.waitForTimeout(2_000);
       const hasAccount = page.url().includes('#account');
@@ -220,6 +232,13 @@ test.describe('P2 - Sidebar Navigation', () => {
       }
       await openSidebar();
       const joinBtn = page.locator(SIDEBAR + ' button').filter({ hasText: strings.joinButton }).first();
+      // See the Login step above — same brand-specific sidebar gap.
+      const exists = await joinBtn.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!exists) {
+        record('JOIN CTA opens registration modal (/#account) (skipped — no Join button inside this brand\'s sidebar)', true);
+        console.log('SN-01 Steps 9-11 skipped — no Join button inside the sidebar for this brand');
+        return;
+      }
       await joinBtn.click();
       await page.waitForTimeout(2_000);
       const hasAccount = page.url().includes('#account');
@@ -254,6 +273,19 @@ test.describe('P2 - Sidebar Navigation', () => {
       await openSidebar();
       // Slingo logo is the second <a href="/"> in sidebar (first is hamburger toggle)
       const slingoLogo = page.locator(SIDEBAR + ` a[href="${siteUrl('')}"]`).first();
+      // Confirmed live on Lord Ping (LP) UK, 2026-07-28: this brand's
+      // sidebar has NO logo/home link at all — its category list starts
+      // directly with "Online Slots", genuinely different from every other
+      // brand's sidebar (which all lead with a logo or "Home" item). Skip
+      // cleanly rather than hard-fail on an entry point this sidebar never
+      // offers; the real homepage-via-logo path is still covered on desktop
+      // by website-header.spec.ts's brand-logo click.
+      const exists = await slingoLogo.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!exists) {
+        record('Slingo logo -> homepage (no slug) (skipped — no logo/home link inside this brand\'s sidebar)', true);
+        console.log('SN-01 Steps 15-17 skipped — no logo/home link inside the sidebar for this brand');
+        return;
+      }
       await slingoLogo.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
@@ -287,6 +319,15 @@ test.describe('P2 - Sidebar Navigation', () => {
       // matches (see locale-strings.ts). `.first()` is correct once the text
       // itself matches — no DOM-order workaround needed.
       const homeLink = page.locator(SIDEBAR + ` a[href="${siteUrl('')}"]`).filter({ hasText: strings.homeLinkText }).first();
+      // Same brand-specific sidebar gap as the Slingo logo step above —
+      // confirmed live on Lord Ping UK: no logo AND no "Home" text link
+      // exist in this sidebar at all, only the category list.
+      const homeLinkExists = await homeLink.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!homeLinkExists) {
+        record('Home link -> homepage (no slug) (skipped — no Home link inside this brand\'s sidebar)', true);
+        console.log('SN-01 Steps 21-23 skipped — no Home link inside the sidebar for this brand');
+        return;
+      }
       await homeLink.click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);

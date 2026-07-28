@@ -54,6 +54,14 @@ test.describe('P3 - Payment Method Strip', () => {
       });
     }
 
+    // Confirmed live on Lord Ping (LP) UK, 2026-07-28: the provider deep
+    // links live under this GEO's OWN paymentMethodsPath override
+    // (/payment-options/...), not the hardcoded '/payment-methods/' every
+    // step below used to assume — same hardcoded-path bug class already
+    // fixed for helpPath/affiliatesPath/privacyPath/termsPath elsewhere.
+    // Falls back to 'payment-methods/' for every GEO that doesn't override it.
+    const pmPath = (currentGeoFeatures().paymentMethodsPath ?? 'payment-methods/').replace(/\/$/, '');
+
     try {
 
     await runStep('Step 1: Payment provider logos are displayed', async () => {
@@ -69,7 +77,7 @@ test.describe('P3 - Payment Method Strip', () => {
       // deep-link <a> tags (those exist as separate elements elsewhere on
       // the page — see Steps 2-3) — a third distinct implementation shape.
       const logos = page.locator(
-        'a[href*="/payment-methods/"] img, img[alt*="pay" i], img[src*="sectionCode=payments"], img[src*="cmscdn"]'
+        `a[href*="/${pmPath}/"] img, img[alt*="pay" i], img[src*="sectionCode=payments"], img[src*="cmscdn"], img[src*="primeapi.com"]`
       );
       const count = await logos.count();
       expect(count).toBeGreaterThan(0);
@@ -77,17 +85,19 @@ test.describe('P3 - Payment Method Strip', () => {
     });
 
     await runStep('Step 2: PayPal logo redirects to the PayPal payment methods page', async () => {
-      // Not every GEO offers PayPal (e.g. Slingo ROW doesn't) — skip this one
-      // provider check rather than failing when it's genuinely not offered.
-      const paypalLink = page.locator('a[href*="/payment-methods/paypal/"]').first();
+      // Not every GEO offers PayPal (e.g. Slingo ROW doesn't), and some
+      // (Lord Ping UK, confirmed live) show the PayPal logo as a plain
+      // unlinked <img> with no wrapping <a> at all — skip this one provider
+      // check rather than failing when it's genuinely not a clickable link.
+      const paypalLink = page.locator(`a[href*="/${pmPath}/paypal/"]`).first();
       const exists = await paypalLink.isVisible({ timeout: 5_000 }).catch(() => false);
       if (!exists) {
-        console.log('PM-01 PayPal not offered for this GEO — skipping');
+        console.log('PM-01 PayPal not offered (or not a clickable link) for this GEO — skipping');
         return;
       }
       await paypalLink.click();
       await page.waitForLoadState('domcontentloaded');
-      await expect(page).toHaveURL(/\/payment-methods\/paypal\//, { timeout: 10_000 });
+      await expect(page).toHaveURL(new RegExp(`/${pmPath}/paypal/`), { timeout: 10_000 });
       await page.goBack({ waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
     });
@@ -97,7 +107,7 @@ test.describe('P3 - Payment Method Strip', () => {
       // on this page (ES's logos aren't wrapped in anchors at all) — skip
       // rather than fail when the deep link genuinely doesn't exist.
       await dismissCampaignPopup(page);
-      const vmLink = page.locator('a[href*="/payment-methods/visa-mastercard/"]').first();
+      const vmLink = page.locator(`a[href*="/${pmPath}/visa-mastercard/"]`).first();
       const exists = await vmLink.isVisible({ timeout: 10_000 }).catch(() => false);
       if (!exists) {
         console.log('PM-01 Visa/Mastercard deep link not present for this GEO — skipping');
@@ -105,7 +115,7 @@ test.describe('P3 - Payment Method Strip', () => {
       }
       await vmLink.click();
       await page.waitForLoadState('domcontentloaded');
-      await expect(page).toHaveURL(/\/payment-methods\/visa-mastercard\//, { timeout: 10_000 });
+      await expect(page).toHaveURL(new RegExp(`/${pmPath}/visa-mastercard/`), { timeout: 10_000 });
     });
 
     } finally {

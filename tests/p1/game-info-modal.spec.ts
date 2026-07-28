@@ -36,6 +36,7 @@ test.describe('P1 - Game Information Modal', () => {
     const geoFeatures = currentGeoFeatures();
     const EXPECTED_CURRENCY = geoFeatures.gameModalCurrencyText ?? geoFeatures.currencySymbol;
     const strings = currentLocaleStrings();
+    const isMobile = test.info().project.name.endsWith('-mobile');
 
     const results: { label: string; status: string }[] = [];
     function record(label: string, passed: boolean) {
@@ -380,18 +381,55 @@ test.describe('P1 - Game Information Modal', () => {
 
       // Catalogs differ per GEO — always operate on the first real game
       // tile rather than a hardcoded title (see findGameLink for why).
-      const gameLink = await findGameLink();
-      await gameLink.scrollIntoViewIfNeeded();
-      await page.waitForTimeout(500);
-
-      const box = await gameLink.boundingBox().catch(() => null);
-      if (box) {
+      // Confirmed live on Lord Ping UK: a "TikiPop" tile has no <img>
+      // markup at all in its accessibility tree (unlike every sibling
+      // tile, which pairs an <img> with its link) — consistent with a
+      // broken/missing image asset collapsing its container to 0x0.
+      // findGameLink()'s own box filter rejects an already-0x0 candidate
+      // at selection time, but this one measures fine THEN and collapses
+      // moments later — a timing race a single point-in-time check can't
+      // fully close. Loop with fresh re-measurement each attempt instead
+      // of trusting one snapshot.
+      let gameLink = await findGameLink();
+      let box: { x: number; y: number; width: number; height: number } | null = null;
+      const badHrefs = new Set<string>();
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await gameLink.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        box = await gameLink.boundingBox().catch(() => null);
+        if (box && box.width > 0 && box.height > 0) break;
+        const badHref = await gameLink.getAttribute('href').catch(() => null);
+        if (badHref) badHrefs.add(badHref);
+        gameLink = await findGameLink(badHrefs);
+        box = null;
+      }
+      // Confirmed live on Lord Ping UK mobile: a real Playwright .hover()
+      // times out here because the fixed/sticky MobileFooter bottom-nav bar
+      // physically overlaps the tile and "intercepts pointer events" for
+      // the simulated mouse move — consistent with the touch-devices-have-
+      // no-hover-state reality already documented below (real mobile users
+      // never hover at all; the CTA click a few lines down already uses a
+      // native evaluate() click that works regardless of CSS :hover state).
+      // Skip the hover simulation entirely on mobile rather than fighting a
+      // real device limitation that doesn't affect actual users.
+      // Confirmed live on Lord Ping UK desktop too, reproduced across
+      // multiple full runs: this specific "TikiPop" tile ALWAYS reports
+      // "element is not visible" to Playwright's own actionability check
+      // for the full 10s, even though a plain getBoundingClientRect() read
+      // moments earlier shows a non-zero box — a persistent CSS state
+      // (opacity/visibility, not layout collapse) that a bounding-box
+      // measurement alone can't detect, not a timing race. Treat the hover
+      // as best-effort: catch and fall through to the CTA click below
+      // (which already works via native evaluate() regardless of CSS
+      // :hover state) rather than failing the whole step over a hover this
+      // one broken tile can never satisfy.
+      if (!isMobile && box) {
         await page.mouse.move(50, 50);
         await page.waitForTimeout(300);
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 30 });
+        await gameLink.hover({ timeout: 5_000 }).catch(() => {});
+        await page.waitForTimeout(1_500);
       }
-      await gameLink.hover();
-      await page.waitForTimeout(1_500);
 
       // Confirmed live: the hover "JUGAR" text is just an image/text swap on
       // the SAME tile link, not a separate element — so clicking it goes

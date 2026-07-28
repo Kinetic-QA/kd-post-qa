@@ -83,7 +83,7 @@ async function tryClickCookieConsent(page: Page): Promise<boolean> {
 const COMPOUND_TLDS = ['co.uk', 'com.au', 'co.nz', 'org.uk'];
 
 /**
- * After a successful login, every brand/GEO redirects to a "playsecure."
+ * After a successful login, most brands/GEOs redirect to a "playsecure."
  * subdomain of its own ROOT domain — e.g. www.slingo.com -> playsecure.slingo.com,
  * www.slingocasino.es -> playsecure.slingocasino.es. Confirmed live 2026-07-21
  * (SNG ON onboarding): this holds even when the baseURL itself carries a
@@ -93,12 +93,64 @@ const COMPOUND_TLDS = ['co.uk', 'com.au', 'co.nz', 'org.uk'];
  * than only stripping a literal "www." prefix, before prepending
  * "playsecure.". Deriving it from the current project's baseURL means
  * login.spec.ts doesn't need a hardcoded domain per GEO.
+ *
+ * Confirmed live 2026-07-28 (Lord Ping UK onboarding, brand-new brand): this
+ * brand does NOT use a subdomain at all — a real successful login redirects
+ * to www.lordping.co.uk/playsecure/home, a PATH on the same host. The regex
+ * below matches either shape (subdomain OR same-host /playsecure/ path)
+ * rather than assuming every brand follows the subdomain convention.
  */
 export function expectedPlaysecureUrlPattern(): RegExp {
   const labels = new URL(getBaseUrl()).hostname.split('.');
   const lastTwo = labels.slice(-2).join('.');
   const rootDomain = COMPOUND_TLDS.includes(lastTwo) ? labels.slice(-3).join('.') : lastTwo;
-  return new RegExp(`playsecure\\.${rootDomain.replace(/\./g, '\\.')}`);
+  const escapedRoot = rootDomain.replace(/\./g, '\\.');
+  return new RegExp(`playsecure\\.${escapedRoot}|${escapedRoot}\\/playsecure\\/`);
+}
+
+/**
+ * Resolves the mobile Login/Join button, trying known shapes in order —
+ * every spec that needs a mobile Login/Join click (login.spec.ts,
+ * feedback-form.spec.ts, login-widget.spec.ts, registration-widget.spec.ts,
+ * sidebar-navigation.spec.ts) previously duplicated its own copy of the
+ * sidebar-only version of this logic; consolidated here once a second real
+ * shape existed to justify sharing it. Returns null if no shape matched, so
+ * callers can decide whether that's a real gap worth failing on or a known
+ * per-GEO absence worth skipping.
+ *
+ * Shape 1 — Lord Ping (LP) UK, confirmed live 2026-07-28: separate, real
+ * #mobile-login/#mobile-join buttons living inside the MobileFooter's
+ * play-but <li>, NOT inside the hamburger sidebar at all (LP's sidebar has
+ * no Login/Join buttons whatsoever — confirmed by inspecting its full DOM).
+ * Checked first since it's the most specific/unambiguous match.
+ *
+ * Shape 2 — most other brands: hidden inside the off-canvas hamburger
+ * sidebar (MainMenu_main-menu), matched by the button's own text. The
+ * sidebar has a real nonzero bounding box even while closed (just
+ * translated off-screen), so isVisible() alone can't tell open from closed
+ * — opens the hamburger first if the sidebar isn't already on-screen.
+ */
+export async function resolveMobileAccountButton(
+  page: Page, kind: 'login' | 'join', textMatcher: RegExp
+): Promise<Locator | null> {
+  const byId = page.locator(`#mobile-${kind}`);
+  if (await byId.count() > 0) return byId.first();
+
+  const sidebarOnScreen = await page.evaluate(() => {
+    const el = document.querySelector('[class*="MainMenu_main-menu"]');
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
+  });
+  if (!sidebarOnScreen) {
+    await page.evaluate(() => {
+      (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+    });
+    await page.waitForTimeout(800);
+  }
+  const sidebarBtn = page.locator('[class*="MainMenu_main-menu"]').getByRole('button', { name: textMatcher }).first();
+  if (await sidebarBtn.count() > 0) return sidebarBtn;
+  return null;
 }
 
 /**
