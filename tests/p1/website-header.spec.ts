@@ -177,6 +177,16 @@ test.describe('P1 - Website Header', () => {
       const searchLink = isMobile && (await mobileFooterSearch.count()) > 0
         ? mobileFooterSearch
         : page.locator('a[href="#search"]').first();
+      // Confirmed live on ZI UK: this brand has no separate header search
+      // icon at all — its only #search link is the hamburger sidebar's
+      // "Search game" item, off-canvas until the sidebar is opened.
+      if (geoFeatures.searchRequiresSidebarOpen && !(isMobile && (await mobileFooterSearch.count()) > 0)) {
+        await page.evaluate(() => {
+          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+        });
+        await page.waitForTimeout(600);
+        await dismissCampaignPopup(page);
+      }
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
       await searchLink.click({ force: true });
       await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
@@ -186,9 +196,14 @@ test.describe('P1 - Website Header', () => {
       // Escape/history.pushState instead changes the URL but leaves the
       // search-cover overlay at full size, which then blocks clicks on
       // whatever step runs next.
+      // Confirmed live on ZI UK: the desktop back control has NO text at all
+      // (not even the screen-reader-only "Back" every other brand has) —
+      // just an <i> icon inside button.SearchBar_search-back. Falling back
+      // to the same class-based locator mobile already uses covers this
+      // without affecting brands where the text-based one still matches.
       const backBtn = isMobile
         ? page.locator('[class*="SearchBar_search-back"]').first()
-        : page.getByText(strings.backButtonText, { exact: true }).first();
+        : page.getByText(strings.backButtonText, { exact: true }).or(page.locator('[class*="SearchBar_search-back"]')).first();
       if (await backBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
         await backBtn.click();
         await page.waitForTimeout(1_000);
@@ -261,7 +276,15 @@ test.describe('P1 - Website Header', () => {
         });
         await page.waitForTimeout(800);
       }
-      await promoLink.click();
+      // Confirmed live on ZI UK: a leftover Overlay_overlay backdrop (from the
+      // just-closed search popup) persists over the header long enough to
+      // physically cover this link — even click({force:true}) still
+      // dispatches a real mouse click at the link's coordinates, which the
+      // overlay swallows (URL never changes). A native el.click() via
+      // evaluate — same fix sidebar-navigation.spec.ts's navStep already
+      // uses for its own overlap issue — fires directly on the element
+      // regardless of what's visually on top of it.
+      await promoLink.evaluate((el: HTMLElement) => el.click());
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(new RegExp(geoFeatures.promotionsPath.replace(/\/$/, '')), { timeout: 10_000 });
       await page.goBack({ waitUntil: 'domcontentloaded' });
