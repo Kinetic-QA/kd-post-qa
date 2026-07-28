@@ -62,7 +62,10 @@ const EN: LocaleStrings = {
   feedbackSubmit: /^submit$/i,
   forgotPasswordText: /forgot.*password/i,
   noAccountText: /don'?t have an account/i,
-  searchPlaceholder: /^search game$/i,
+  // "search"-only added 2026-07-28 — confirmed live: Lord Ping (LP) UK's
+  // real placeholder is plain "Search" (id="search-game"), not "Search
+  // game" like every other brand onboarded so far.
+  searchPlaceholder: /^search( game)?$/i,
   feedbackTextareaPlaceholder: /type your answer here/i,
   homeLinkText: /^home$/i,
   footerResponsibleGamingText: /^responsible gaming$/i,

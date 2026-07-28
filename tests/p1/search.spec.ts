@@ -140,7 +140,14 @@ test.describe('P1 - Search', () => {
       // sibling image/back-button) can sit on top of the target link right
       // after scrollIntoViewIfNeeded(), intercepting a plain click — force
       // it through rather than waiting on actionability that never resolves.
-      await titleLink.click({ force: true });
+      // Confirmed live on Lord Ping UK: force:true still throws "Element is
+      // outside of the viewport" if the layout shifts (e.g. lazy-loaded
+      // rows above pushing content down) between the box check above and
+      // the click itself, since force only skips the actionability WAIT,
+      // not the coordinate requirement. A native el.click() via evaluate
+      // sidesteps coordinates/hit-testing entirely — same pattern already
+      // used for this exact class of issue elsewhere in the project.
+      await titleLink.evaluate((el: HTMLElement) => el.click());
       await page.waitForTimeout(2_000);
       await expect(page).toHaveURL(/#search-gamepage\//, { timeout: 10_000 });
       console.log('GS-01 modal opened for: ' + gameTitle);

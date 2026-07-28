@@ -19,7 +19,6 @@ test.describe('P1 - Game Filter', () => {
   test.setTimeout(120_000);
 
   test.beforeEach(async ({ page }) => {
-    test.skip(!currentGeoFeatures().hasGameFilterCarousel, `No game filter carousel for this GEO (${test.info().project.name}) — homepage shows a plain grid instead`);
     await setupCampaignPopupWatcher(page);
     await page.goto('', { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('domcontentloaded');
@@ -64,6 +63,18 @@ test.describe('P1 - Game Filter', () => {
     try {
 
     await runStep('Step 1: Game filter category rows are visible with correct games', async () => {
+      // Confirmed live on Lord Ping (LP) UK, 2026-07-28: this brand's
+      // homepage uses a static grid + "See All" link (CategoryGamesShowcase_
+      // show-case container) instead of the GamesSlider_wrapper caret
+      // carousel — hasGameFilterCarousel: false correctly captures that. But
+      // that's not a reason to skip the WHOLE spec: Step 3 below (Load
+      // more/See All) is genuinely testable on this brand's real "See All"
+      // links and shouldn't be thrown away just because Steps 1-2 don't
+      // apply — skip only what doesn't apply, per-step.
+      if (!currentGeoFeatures().hasGameFilterCarousel) {
+        console.log('GF-01 Step 1 skipped — no GamesSlider carousel for this GEO (homepage shows a plain grid instead)');
+        return;
+      }
       const filterRows = page.locator('[class*="GamesSlider_wrapper"]');
       const count = await filterRows.count();
       expect(count).toBeGreaterThan(0);
@@ -75,6 +86,10 @@ test.describe('P1 - Game Filter', () => {
     });
 
     await runStep('Step 2: Caret buttons scroll the filter row', async () => {
+      if (!currentGeoFeatures().hasGameFilterCarousel) {
+        console.log('GF-01 Step 2 skipped — no GamesSlider carousel for this GEO, so no carets exist to scroll');
+        return;
+      }
       if (isMobile) {
         // Confirmed live: caret nav is CSS-hidden at mobile breakpoints —
         // the row scrolls via touch swipe instead. Playwright's synthetic

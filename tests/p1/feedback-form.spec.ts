@@ -1,5 +1,5 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
-import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher } from '../../helpers/common';
+import { dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, resolveMobileAccountButton } from '../../helpers/common';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -66,33 +66,18 @@ test.describe('P1 - Feedback Form', () => {
     const strings = currentLocaleStrings();
     const isMobile = test.info().project.name.endsWith('-mobile');
 
-    // Mobile has no standalone Login button in the header — it lives inside
-    // the hamburger sidebar (confirmed live, same as login.spec.ts). The
-    // sidebar has a real nonzero bounding box even while closed (just
-    // translated off-screen), so Playwright's isVisible() alone can't tell
-    // open from closed — check the actual on-screen position instead.
-    async function isMobileMenuOnScreen(): Promise<boolean> {
-      return await page.evaluate(() => {
-        const el = document.querySelector('[class*="MainMenu_main-menu"]');
-        if (!el) return false;
-        const rect = el.getBoundingClientRect();
-        return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
-      });
-    }
-
     try {
 
     // ── Step 1: Open Login widget ────────────────────────────────────────
     await runStep('Log In button → widget opens', async () => {
-      if (isMobile && !(await isMobileMenuOnScreen())) {
-        await page.evaluate(() => {
-          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
-        });
-        await page.waitForTimeout(800);
-      }
+      // resolveMobileAccountButton tries known mobile shapes in order — see
+      // its doc comment in helpers/common.ts.
       const loginBtn = isMobile
-        ? page.locator('[class*="MainMenu_main-menu"]').getByRole('button', { name: strings.loginButton }).first()
+        ? await resolveMobileAccountButton(page, 'login', strings.loginButton)
         : page.getByRole('banner').getByRole('button', { name: strings.loginButton }).first();
+      if (!loginBtn) {
+        throw new Error('No mobile Login entry point found (checked #mobile-login and the hamburger sidebar)');
+      }
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
       await expect(page).toHaveURL(/#account/, { timeout: 15_000 });

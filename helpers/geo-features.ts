@@ -1277,6 +1277,59 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: false, // no blog for SE anyway — set false for consistency
     },
   },
+
+  // ── Lord Ping (LP) ────────────────────────────────────────────────────────
+  LP: {
+    // UK — onboarding started 2026-07-28, brand-new brand (first market).
+    // Real test account confirmed working. Own taxonomy: Online Slots (All
+    // Slots/Jackpots/Daily Jackpots/Megaways/Themes/Providers), Live Casino
+    // (All Live Casino/Roulette/Blackjack/Baccarat/Game Shows), Casino Games
+    // (All Casino Games/Table Games/Poker/Scratch Cards) — a Live Casino
+    // vertical like SNG's, but its own distinct sub-tab set (no "New Slots",
+    // has "Themes"/"Providers" instead). See game-category-navigation.spec.ts
+    // for the "Themes" page's "More Themes" react-select dropdown coverage.
+    //
+    // Two structural quirks confirmed live, both real (not guesses):
+    // 1. Post-login redirect is NOT a "playsecure." subdomain like every
+    //    other brand — it's a same-host PATH (www.lordping.co.uk/playsecure/
+    //    home). helpers/common.ts's expectedPlaysecureUrlPattern() updated
+    //    to match both shapes rather than assuming every brand uses a
+    //    subdomain.
+    // 2. The hamburger sidebar (MainMenu_main-menu) is off-canvas by default
+    //    EVEN ON DESKTOP (x: -290px until the hamburger is clicked) — same
+    //    pattern already confirmed on Prime Casino Germany, not mobile-only.
+    //    Sub-categories (Jackpots/Megaways/Themes/etc.) exist ONLY inside
+    //    this sidebar's per-category accordion — the header's Nav_nav__ bar
+    //    (used by clickNavAndVerify for every other brand) only ever shows
+    //    the 3 top-level tabs here, confirmed by inspecting it while already
+    //    on a sub-category page. Top-level categories ARE reachable via
+    //    Nav_nav__; sub-categories need the sidebar-accordion route instead.
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed live 200 — nav label reads "Opinions" but the real slug is unchanged
+      hasPromotionsPage: true, promotionsPath: 'casino-promotions/', // confirmed live 200
+      hasPromotionsIconInHeader: true, // confirmed live: real "Promotions" link inside <header>, not footer-only
+      featuresPath: 'casino-features/', // confirmed live 200
+      mobileAppPath: 'mobile-app/', // confirmed live: 404s, kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live: 404s
+      currencySymbol: '£',
+      contactEmail: 'support@lordping.com', // confirmed live on /contact/ — real mailto link
+      paymentMethodsPath: 'payment-options/', // confirmed live: real slug is /payment-options/ (200); common 'payment-methods/' default 404s here. NOTE: the footer LINK TEXT itself reads "Secure Banking", not "Payment Options" — locale-strings.ts's shared EN footerPaymentOptionsText (/^payment options$/i) won't match it, so footer-navigation.spec.ts's Payment Options step will silently skip (not fail) for this brand rather than actually verify the link. Known gap, not blocking — same class of issue documented for PC DE's footer text mismatches.
+      socialMedia: { twitter: 'LordPingUK', facebook: 'LordPingUK', instagram: 'lordpinguk' }, // confirmed live homepage-wide
+      hasSocialMedia: true,
+      searchTerm: 'Book', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/casino-games/'], // confirmed live via real in-app search: real results (Sticky Diamonds, 88 Fortunes, etc.)
+      gameTileHrefSubstrings: ['/online-slots/', '/live-casino/', '/casino-games/'], // confirmed live via sidebar accordion crawl — this brand's own 3-category taxonomy
+      hasGameFilterCarousel: false, // confirmed live: 0 GamesSlider-style elements found on homepage — genuinely different from every other brand onboarded so far, which all have at least one carousel row
+      hasFeedbackForm: true, // confirmed live: real "Report a problem" link, twice, on /contact/ and inside the registration widget
+      hasGameCategoryNav: true, // confirmed live: rich taxonomy, see top-of-block comment — sub-categories reachable via sidebar accordion only, not the header Nav_nav__ bar
+      hasLoginRegistration: true, // confirmed live: Log in/Join buttons in header, both open a real #account modal with real shadow-root content — Join: Mobile number, DOB, password (standard UK shape)
+      hasTestAccount: true, // real test account confirmed working live 2026-07-28 (solace7097@flipssl.com) — real login redirected to www.lordping.co.uk/playsecure/home (see top-of-block comment on the non-subdomain redirect shape)
+      hasAccountModal: true, // confirmed live: both Log in and Join advance the URL to /#account
+      hasPaymentMethodsPage: true, // confirmed live: /payment-options/ returns 200 (see paymentMethodsPath)
+      hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
+      hasBlogSearch: true, // unconfirmed — same as above
+    },
+  },
 };
 
 // Mobile sidebar accordion note (GC UK, confirmed live 2026-07-23): the
