@@ -221,10 +221,35 @@ test.describe('P1 - Website Header', () => {
       // own promotions icon is CSS-hidden at mobile breakpoints, and there's
       // also a real (but off-screen unless scrolled) footer link with the
       // same href, so an unscoped .first() picks the wrong one on mobile.
+      // Desktop scope changed from getByRole('banner') to the MainMenu_
+      // container — confirmed live on PC DE (the first GEO with
+      // hasPromotionsIconInHeader: true): its "Aktionen" link sits inside a
+      // separate <nav role="navigation"> landmark, a SIBLING of the small
+      // <header role="banner"> strip (logo/search/login/register only), not
+      // nested inside it — getByRole('banner') never found it. This code
+      // path was never exercised against a true case before, so widening it
+      // carries no regression risk for any other GEO.
       const promoLink = isMobile
         ? page.locator(`[class*="MobileMenu_promos-but"] a[href*="${geoFeatures.promotionsPath.replace(/\/$/, '')}"]`).first()
-        : page.getByRole('banner').locator(`a[href*="${geoFeatures.promotionsPath.replace(/\/$/, '')}"]`).first();
+        : page.locator(`[class*="MainMenu_"] a[href*="${geoFeatures.promotionsPath.replace(/\/$/, '')}"]`).first();
       await expect(promoLink).toBeVisible({ timeout: 10_000 });
+      // Confirmed live on PC DE: the MainMenu_ container is a hamburger-
+      // triggered off-canvas sidebar that's off-screen by default even on
+      // DESKTOP (x: -271px), not just mobile — genuinely different from
+      // every other GEO's directly-visible header nav. isVisible() reports
+      // true regardless of on-screen position (same gap already handled for
+      // mobile elsewhere in this file), so open the hamburger first if the
+      // link isn't actually on-screen yet.
+      const isOnScreen = await promoLink.evaluate(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
+      }).catch(() => false);
+      if (!isOnScreen) {
+        await page.evaluate(() => {
+          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+        });
+        await page.waitForTimeout(800);
+      }
       await promoLink.click();
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(new RegExp(geoFeatures.promotionsPath.replace(/\/$/, '')), { timeout: 10_000 });

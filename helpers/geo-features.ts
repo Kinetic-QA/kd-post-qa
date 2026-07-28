@@ -70,6 +70,8 @@ export interface GeoFeatureConfig {
   responsibleGamingPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'responsible-gaming/' when omitted. Confirmed live: GC ES genuinely translates this slug to "juego-mas-seguro/"
   helpPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'help/' when omitted. Confirmed live: GC ES genuinely translates this slug to "ayuda/"
   affiliatesPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'affiliates/' when omitted. Confirmed live: PC ES genuinely translates this slug to "afiliados/"
+  privacyPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'privacy/' when omitted. Confirmed live: PC DE's real slug is "privacy-policy/" — a genuinely different (not translated, just longer) English slug than every other GEO onboarded so far
+  termsPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'terms/' when omitted. Confirmed live: PC DE's real slug is "terms-conditions/" — same longer-English-slug pattern as privacyPath above
   needsStealthLaunch?: boolean; // optional — true means this GEO's site sits behind Cloudflare bot-detection that blocks/challenges a plain automated Chromium (confirmed on GC UK and MC UK — see helpers/stealth-fixtures.ts). When true, tests/p1|p2|p3 specs (which import `test`/`expect` from stealth-fixtures, not '@playwright/test' directly) launch via playwright-extra + puppeteer-extra-plugin-stealth instead of Playwright's default launcher. Defaults to false/undefined — every other GEO's launch is completely unchanged. Set this the moment a NEW GEO is confirmed to hit the same Cloudflare wall; no other wiring is needed, the fixture reads this flag automatically.
 }
 
@@ -1176,6 +1178,103 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (the common default path, same as UK/CA/IE)
       hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
       hasBlogSearch: true, // unconfirmed — same as above
+    },
+
+    // DE — onboarding started 2026-07-28 against a DIFFERENT domain than
+    // every other PC market: www.primespielhalle.de ("Spielhalle" = German
+    // for slot arcade), not primecasino.*. Same DE-market platform gap
+    // already seen on SC/SNG/MC's German sites: single stripped-down game
+    // taxonomy (Online-Slot-Spiele only — no Live Casino/Table Games/Instant
+    // Win like every other PC market), no Blog/Features/Mobile
+    // App/Bingo Card Generator (all confirmed 404 live). Real test account
+    // confirmed working live 2026-07-28 (jomobif938@insgogc.com — login
+    // redirected to playsecure.primespielhalle.de with a real token, no
+    // Cloudflare interference). Registration confirmed live: Mobile number +
+    // password + DOB (dd.mm.yyyy placeholder) — same isGermanFormat branch
+    // already GEO-keyed (not brand-keyed) in registration.spec.ts, so it
+    // applies here automatically, no new branch needed.
+    DE: {
+      locale: 'de', uiLocalized: true,
+      hasBlog: false, blogPath: null, // confirmed live: /blog/ 404s
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200
+      hasPromotionsIconInHeader: true, // confirmed live: header's primary nav has "Aktionen" directly (Home/Online-Slot-Spiele/Aktionen) — genuinely different from every other PC market, which is footer-link-only
+      featuresPath: null, // confirmed live: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live: 404s — kept as the common placeholder, skips cleanly like every other GEO's 404 case
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live: 404s
+      currencySymbol: '€', // Euro — not independently confirmed via visible price/bonus copy this session; Germany, same as every other German market onboarded so far (SC/SNG/MC)
+      contactEmail: 'support@primespielhalle.de', // confirmed live on /contact/ — real mailto link, a DIFFERENT address than every other PC market (matches this market's own domain, same pattern as MC DE)
+      aboutUsPath: 'about/', // confirmed live: footer "Über uns" link is /about/ — untranslated slug, same as UK/CA/IE/COM
+      helpPath: 'faqs/', // confirmed live: footer "FAQs" link is /faqs/ — untranslated slug, same as every other PC market
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide
+      hasSocialMedia: false,
+      searchTerm: 'Book', searchResultHrefSubstrings: ['/online-slots/'], // confirmed live via real in-app search — matches game TITLES (Book of Dead etc.), same MC DE precedent; the generic "Casino"/"Slots" terms used by other PC markets are untested here and may not match anything
+      gameTileHrefSubstrings: ['/online-slots/'], // confirmed live via slots-page + homepage nav crawl — this market's own single-category taxonomy
+      hasGameFilterCarousel: true, // confirmed live: 42 GamesSlider-style elements found on homepage
+      hasFeedbackForm: false, // confirmed live: no "problem/feedback/report" link found on /contact/ or inside the login/registration widget — only a live-chat entry point ("Hilfe gebraucht? Chatte mit uns")
+      hasGameCategoryNav: false, // confirmed live: header nav has only a single flat Online-Slot-Spiele link, no expandable category dropdown — same gap as MC DE
+      hasLoginRegistration: true, // confirmed live: Registrieren/Einloggen buttons in header, both open a real #account modal with real shadow-root content — Einloggen: username+password; Registrieren: Mobile number, DOB (dd.mm.yyyy), password
+      hasTestAccount: true, // real test account confirmed working live 2026-07-28 (jomobif938@insgogc.com) — real login redirected to playsecure.primespielhalle.de with a token
+      hasAccountModal: true, // confirmed live: both Einloggen and Registrieren advance the URL to /#account
+      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (the common default path — no override needed, same as UK/CA/IE/COM)
+      hasBlogDesktopSearch: false, // no blog for DE anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for DE anyway — set false for consistency
+      privacyPath: 'privacy-policy/', // confirmed live: footer-navigation.spec.ts's default '/privacy/' 404s here — real slug is longer
+      termsPath: 'terms-conditions/', // confirmed live: real slug is longer than the default '/terms/' — NOTE: footerTermsText's shared 'de' regex (/^agb$/i) doesn't match this market's real "AGBs" link text either, so this path currently isn't exercised (silently skipped, not failed) until that regex is also widened
+    },
+
+    // SE — onboarding started 2026-07-28 against se.primecasino.com. Own
+    // taxonomy: Online Slotsspel/Video Bingo/Instant Win Spel (no Casino/Live
+    // Casino category at all) — Video Bingo is unique to this market, not
+    // seen on any other PC GEO. No Blog/Features/Mobile App/Bingo Card
+    // Generator/Promotions page at all (all confirmed 404 — genuinely no
+    // promotions page here, unlike every other PC market). Real footer slugs
+    // are the same longer-English-slug pattern as DE (/privacy-policy/,
+    // /terms-conditions/).
+    //
+    // hasLoginRegistration set to false per explicit instruction from Reeve
+    // (2026-07-28): no test accounts exist for SE across any brand, same as
+    // every other brand's SE market. NOTE this brand's actual UI is NOT the
+    // simple single-button BankID pattern already documented for GC/SC/SNG/MC
+    // SE (a "Registrera/Logga in" button with no separate widget) — PC SE
+    // genuinely shows separate "Gå med"/"Logga in" buttons that open a real
+    // widget with a Swedish personnummer field (name="personalID",
+    // placeholder "XXXXXXXX-XXXX") + password, confirmed live via real
+    // browser inspection. Clicking Join did NOT advance the URL to /#account
+    // (unlike every traditional-login GEO), consistent with hasAccountModal:
+    // false. No real or safely-fabricated personnummer exists this session —
+    // same "can't proceed without real identity data" gap already documented
+    // for MC/GC DK's CPR field — so this is set false to skip cleanly rather
+    // than let the default registration flow fail on a field it doesn't know
+    // about. If a personnummer generator is ever built, this GEO would need
+    // its own isPcSeFormat branch in registration.spec.ts, not the generic
+    // BankID no-widget-at-all skip path used by other SE markets.
+    SE: {
+      locale: 'sv', uiLocalized: true, // confirmed live: <html lang="sv">, real Swedish nav/header/footer copy
+      hasBlog: false, blogPath: null, // confirmed live: /blog/ 404s
+      hasPromotionsPage: false, promotionsPath: null, // confirmed live: /promotions/ 404s — genuinely no promotions page for this market, unlike every other PC GEO
+      hasPromotionsIconInHeader: false, // no promotions page at all (see above)
+      featuresPath: null, // confirmed live: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live: 404s
+      currencySymbol: 'kr', // Swedish Krona — not independently confirmed via visible price/bonus copy this session; same caveat as MC SE
+      contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link, the shared UK/CA/IE/COM address, NOT its own domain's address (unlike DE, which has its own primespielhalle.de address)
+      aboutUsPath: 'about/', // confirmed live: footer "Om oss" link is /about/ — untranslated slug
+      helpPath: 'faqs/', // confirmed live: footer/header "Vanliga Frågor" link is /faqs/ — untranslated slug
+      privacyPath: 'privacy-policy/', // confirmed live: real slug matches DE's longer-than-default pattern, not the shared '/privacy/' default
+      termsPath: 'terms-conditions/', // confirmed live: same longer-slug pattern as DE
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide
+      hasSocialMedia: false,
+      searchTerm: 'Gold', searchResultHrefSubstrings: ['/online-slots/'], // confirmed live via real in-app search: 23 real results (Golden Winner, Gold Strike 2, etc.), all under /online-slots/
+      gameTileHrefSubstrings: ['/online-slots/', '/video-bingo/', '/instant-win/'], // confirmed live via header/footer nav crawl — this market's own 3-category taxonomy
+      hasGameFilterCarousel: true, // confirmed live: 26 GamesSlider-style elements found on homepage
+      hasFeedbackForm: false, // confirmed live: no "problem/feedback/rapport" link found on /contact/
+      hasGameCategoryNav: true, // confirmed live: header shows Online Slotsspel (dropdown)/Video Bingo/Instant Win Spel with real sub-links
+      hasLoginRegistration: false, // see top-of-block comment — no personnummer generator exists, skip cleanly like every other SE market
+      hasTestAccount: false, // no working test account/personnummer for this market
+      hasAccountModal: false, // confirmed live: clicking Join did not advance the URL to /#account
+      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (the common default path)
+      hasBlogDesktopSearch: false, // no blog for SE anyway (hasBlog: false) — set false for consistency
+      hasBlogSearch: false, // no blog for SE anyway — set false for consistency
     },
   },
 };

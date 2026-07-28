@@ -197,10 +197,26 @@ test.describe('P2 - Promotions Page', () => {
       // Mobile's visible entry point is the gift icon in the bottom nav
       // (confirmed live in website-header.spec.ts) — the header's own
       // promotions icon is CSS-hidden at mobile breakpoints.
+      // Desktop scope changed from getByRole('banner') to the MainMenu_
+      // container — see website-header.spec.ts Step 4 for why (PC DE's
+      // "Aktionen" link lives in a sibling <nav> landmark, not inside
+      // <header role="banner">).
       const promoIcon = isMobile
         ? page.locator(`[class*="MobileMenu_promos-but"] a[href*="${promoPath!.replace(/\/$/, '')}"]`).first()
-        : page.getByRole('banner').locator(`a[href*="${promoPath!.replace(/\/$/, '')}"]`).first();
+        : page.locator(`[class*="MainMenu_"] a[href*="${promoPath!.replace(/\/$/, '')}"]`).first();
       await expect(promoIcon).toBeVisible({ timeout: 10_000 });
+      // See website-header.spec.ts Step 4 — PC DE's MainMenu_ container is an
+      // off-canvas sidebar that's off-screen by default even on desktop.
+      const isOnScreen = await promoIcon.evaluate(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
+      }).catch(() => false);
+      if (!isOnScreen) {
+        await page.evaluate(() => {
+          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+        });
+        await page.waitForTimeout(800);
+      }
       await promoIcon.click();
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(new RegExp(promoPath!.replace(/\/$/, '')), { timeout: 10_000 });
