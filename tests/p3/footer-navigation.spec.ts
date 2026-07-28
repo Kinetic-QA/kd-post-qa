@@ -142,10 +142,12 @@ test.describe('P3 - Footer Navigation', () => {
     await footerStep('Bonus Policy -> /bonus-policy/', strings.footerBonusPolicyText, '/bonus-policy/');
 
     // ── Steps 14-15: Terms and Conditions ─────────────────────────────────
-    await footerStep('Terms and Conditions -> /terms/', strings.footerTermsText, '/terms/');
+    const termsPath = geoFeatures.termsPath ?? 'terms/';
+    await footerStep(`Terms and Conditions -> /${termsPath}`, strings.footerTermsText, `/${termsPath}`);
 
     // ── Steps 16-17: Privacy Policy ───────────────────────────────────────
-    await footerStep('Privacy Policy -> /privacy/', strings.footerPrivacyPolicyText, '/privacy/');
+    const privacyPath = geoFeatures.privacyPath ?? 'privacy/';
+    await footerStep(`Privacy Policy -> /${privacyPath}`, strings.footerPrivacyPolicyText, `/${privacyPath}`);
 
     // ── Steps 18-19: About us ─────────────────────────────────────────────
     await footerStep(`About us -> /${aboutUsPath}`, strings.footerAboutUsText, `/${aboutUsPath}`);

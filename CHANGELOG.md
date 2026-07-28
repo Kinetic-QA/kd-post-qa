@@ -9,6 +9,30 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-07-28
+
+### Automation Coverage Status (per brand, for tracker use)
+
+- **Prime Casino (PC) Germany is now fully confirmed** — ran the whole checklist on both desktop and phone screens: 31 checks passed, 17 skipped for the right reasons (no blog, features page, or mobile app page on this market), zero real failures.
+- **Prime Casino (PC) Sweden is now fully confirmed** — ran the whole checklist on both desktop and phone screens: 24 checks passed, 24 skipped for the right reasons (no sign-in test account, same as every other Swedish market we test; no promotions page at all on this specific market; no blog), zero real failures.
+
+### Added
+
+- **Onboarded Prime Casino's Germany market — passes the full checklist cleanly on both desktop and phone screens.** Real test account confirmed working. This market runs on its own separate website address (not the usual "Prime Casino" name) and only offers slot games — no live casino, table games, or instant-win games like every other Prime Casino market has. Sign-up uses the same German birthdate format already built for our other German markets.
+- **Onboarded Prime Casino's Sweden market — passes the full checklist cleanly on both desktop and phone screens.** Like every other Swedish market we test, there's no regular sign-in test account here, so those checks are skipped by design, not because anything's broken. This market also has its own extra game category ("Video Bingo") that no other Prime Casino market offers, and — unlike every other Prime Casino market — has no promotions page at all.
+
+### Fixed
+
+- **The "join/sign up" button check only recognized the German word "Anmelden" — Prime Casino's German site actually says "Registrieren" instead.** Now recognizes both, the same kind of fix already made once for Prime Casino UK's "Sign In" wording.
+- **The "Privacy Policy" and "Terms and Conditions" footer link checks had their web addresses hard-coded the same way for every market, instead of reading a per-market setting like every other footer link check already does.** Prime Casino's German and Swedish sites both use longer web addresses for these two pages, which is what finally exposed the hard-coding. Fixed so each market can now have its own correct address.
+- **The "Promotions" icon-in-header check had never actually been tested against a real market that has one** — Prime Casino Germany is the first market we've onboarded where that icon truly lives in the header instead of only the footer. It turned out the check was looking in the wrong part of the page, and separately didn't know this market's entire top menu is normally tucked out of sight until the menu button is clicked, even on a full-size desktop screen (unusual — no other market does this). Fixed both issues.
+
+### Known open items (carrying into next session)
+
+- **Prime Casino Germany's footer has a few links whose visible wording doesn't match what the check is currently looking for** (Bonus Policy, Terms and Conditions, Affiliates, Payment Options, Responsible Gaming) — a leftover from those checks being written against a different German-language site's wording. Not causing failures today (those specific checks just skip cleanly instead of erroring), but worth revisiting so this brand gets full coverage on those specific links.
+
+---
+
 ## [Unreleased] - 2026-07-27
 
 ### Automation Coverage Status (per brand, for tracker use)

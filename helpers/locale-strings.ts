@@ -117,7 +117,11 @@ const STRINGS: Record<string, LocaleStrings> = {
     loginButton: /einloggen/i,
     loginSubmitButton: /^einloggen$/i,
     usernameOrEmailLabel: /benutzername oder e-?mail/i,
-    joinButton: /anmelden/i,
+    // "registrieren" added 2026-07-28 — confirmed live: Prime Casino (PC) DE's
+    // header CTA reads "Registrieren", not "Anmelden" like slingospiel.de —
+    // same shared-regex-covers-multiple-brands pattern already used for PC
+    // UK's "Sign In" loginButton addition.
+    joinButton: /anmelden|registrieren/i,
     loginErrorText: /die eingegebenen anmeldedaten sind nicht korrekt/i,
     reportProblemText: /problem melden/i, // not exercised — DE has no feedback form (hasFeedbackForm: false)
     membersLoginText: /mitglieder-anmeldung/i,
