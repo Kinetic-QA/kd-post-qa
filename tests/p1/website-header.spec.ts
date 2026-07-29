@@ -150,6 +150,23 @@ test.describe('P1 - Website Header', () => {
       // plain <li> (icon + "Play" span), not a <button> descendant like
       // every other GEO onboarded so far — same gap as registration.spec.ts.
       const playBtn = page.locator('[class*="MobileFooter"] button.play, [class*="MobileMenu_play-but"]').first();
+      // Confirmed live on ZI UK: this brand has no bottom-nav/hamburger-menu
+      // "Play" entry point at all — Login and Join stay as their own separate
+      // buttons inside the hamburger sidebar, same as desktop, so fall back
+      // to whichever of those the sidebar actually exposes instead of
+      // assuming every brand collapses both into one Play button.
+      if (await playBtn.count() === 0) {
+        await openMobileMenuIfNeeded();
+        const sidebarLoginBtn = page.locator('[class*="MainMenu_main-menu"]')
+          .getByRole('button', { name: strings.loginButton }).first();
+        await expect(sidebarLoginBtn).toBeVisible({ timeout: 10_000 });
+        await sidebarLoginBtn.click();
+        await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
+        await page.goto('', { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('domcontentloaded');
+        await dismissCampaignPopup(page);
+        return;
+      }
       await expect(playBtn).toBeVisible({ timeout: 10_000 });
       await playBtn.scrollIntoViewIfNeeded();
       await playBtn.click();
@@ -296,22 +313,31 @@ test.describe('P1 - Website Header', () => {
       await dismissCampaignPopup(page);
       const hamburger = page.locator('[class*="hamburger" i]').first();
       await expect(hamburger).toBeVisible({ timeout: 10_000 });
-      await page.evaluate(() => {
-        const el = document.querySelector('[class*="hamburger" i]');
-        (el as HTMLElement | null)?.click();
-      });
-      await page.waitForTimeout(800);
+      async function toggleHamburger() {
+        await page.evaluate(() => {
+          const el = document.querySelector('[class*="hamburger" i]');
+          (el as HTMLElement | null)?.click();
+        });
+        await page.waitForTimeout(800);
+      }
+      // Confirmed live on ZI UK: a GEO with searchRequiresSidebarOpen (Step 3
+      // above) opens this same hamburger toggle to reach the search link but
+      // never explicitly closes it again afterward — the toggle's internal
+      // open/closed state can therefore already be "open" by the time this
+      // step runs, so a single click here would actually CLOSE it instead of
+      // opening it. Reset to a known-closed baseline first rather than
+      // assuming the toggle always starts closed.
+      if (await isMobileMenuOnScreen()) {
+        await toggleHamburger();
+      }
+      await toggleHamburger();
       // Not page.locator(...).isVisible() — the sidebar has a real, nonzero
       // bounding box even while closed (just translated off-screen), so
       // that check reports "visible" regardless of open state. Confirming
       // it's actually on-screen is what makes this assertion meaningful.
       const sidebarVisible = await isMobileMenuOnScreen();
       expect(sidebarVisible).toBe(true);
-      await page.evaluate(() => {
-        const el = document.querySelector('[class*="hamburger" i]');
-        (el as HTMLElement | null)?.click();
-      });
-      await page.waitForTimeout(500);
+      await toggleHamburger();
     });
 
     await runStep('Step 6: Brand logo click sends to homepage', async () => {

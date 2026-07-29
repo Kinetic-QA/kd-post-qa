@@ -89,7 +89,10 @@ test.describe('P3 - Payment Method Strip', () => {
       // (Lord Ping UK, confirmed live) show the PayPal logo as a plain
       // unlinked <img> with no wrapping <a> at all — skip this one provider
       // check rather than failing when it's genuinely not a clickable link.
-      const paypalLink = page.locator(`a[href*="/${pmPath}/paypal/"]`).first();
+      // Scoped to :has(img) — same fix as the Visa/Mastercard step below —
+      // in case a future GEO's payment table also has a duplicate,
+      // non-functional row-title link sharing this same href.
+      const paypalLink = page.locator(`a[href*="/${pmPath}/paypal/"]:has(img)`).first();
       const exists = await paypalLink.isVisible({ timeout: 5_000 }).catch(() => false);
       if (!exists) {
         console.log('PM-01 PayPal not offered (or not a clickable link) for this GEO — skipping');
@@ -107,7 +110,16 @@ test.describe('P3 - Payment Method Strip', () => {
       // on this page (ES's logos aren't wrapped in anchors at all) — skip
       // rather than fail when the deep link genuinely doesn't exist.
       await dismissCampaignPopup(page);
-      const vmLink = page.locator(`a[href*="/${pmPath}/visa-mastercard/"]`).first();
+      // Confirmed live on MC/CA mobile 2026-07-29: this page's own payment
+      // details table has its OWN duplicate row-title links sharing the
+      // exact same href as the real logo further down the page (Visa row +
+      // Mastercard row, both /visa-mastercard/) — an unscoped .first() grabs
+      // whichever table row link appears first in DOM order instead of the
+      // actual logo icon, and clicking that in-table link doesn't navigate
+      // anywhere (stayed on the same page both times, confirmed reproducible).
+      // Scope to the same "wraps an img" shape Step 1 already uses to find
+      // real provider logos, so this always targets the actual clickable icon.
+      const vmLink = page.locator(`a[href*="/${pmPath}/visa-mastercard/"]:has(img)`).first();
       const exists = await vmLink.isVisible({ timeout: 10_000 }).catch(() => false);
       if (!exists) {
         console.log('PM-01 Visa/Mastercard deep link not present for this GEO — skipping');

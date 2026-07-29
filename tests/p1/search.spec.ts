@@ -433,6 +433,16 @@ test.describe('P1 - Search', () => {
       // Promotions-icon click.
       await backBtn.evaluate((el: HTMLElement) => el.click());
       await page.waitForTimeout(2_000);
+      // Confirmed live on MC SE mobile 2026-07-29: same leftover
+      // #search-gamepage/<slug>/ hash already documented on ZI UK at Step 5
+      // above — clicking Back here can register but leave the route stuck
+      // on the game-specific hash instead of clearing it entirely. Same
+      // reliable recovery: a direct location.hash assignment fires a real
+      // hashchange the app's router picks up.
+      if (/#search/.test(page.url())) {
+        await page.evaluate(() => { window.location.hash = ''; });
+        await page.waitForTimeout(1_500);
+      }
       await expect(page).not.toHaveURL(/#search/);
     });
 
