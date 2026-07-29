@@ -586,8 +586,8 @@ test.describe('Registration Flow', () => {
       // overridden, but NOT the same shape for both: CA's real address step
       // has no house-number field (see fillStep2CA), while ON's DOES (same
       // AB-shaped form — see generateOntarioAddress's docstring).
-      if (isCanadianMobileFormat || isPcCaFormat) {
-        data.dob = isFrCaFormat ? generateFrCaDOB() : generateCanadianDOB();
+      if (isCanadianMobileFormat || isPcCaFormat || isMcCaFormat || isMcFrCaFormat) {
+        data.dob = (isFrCaFormat || isMcFrCaFormat) ? generateFrCaDOB() : generateCanadianDOB();
         data.address = isOntarioFormat ? generateOntarioAddress() : generateCanadianAddress();
       }
 
@@ -600,10 +600,30 @@ test.describe('Registration Flow', () => {
         // no explicit "Canada" dropdown selection needed — same
         // auto-detect-from-real-IP pattern as MC/CA's desktop flow, just
         // needs the Canadian mobile generator + dot-separated DOB above.
+        // MC/CA (confirmed live 2026-07-29, mobile, tested from a real
+        // Montreal/Quebec connection): this GEO had NO branch here at all —
+        // it was silently falling through to the plain UK-shaped default
+        // generator, which the real Canadian form rejected outright
+        // ("mobile not accepted after 10 attempts", confirmed reproducible,
+        // not a one-off bad draw). Same auto-detect-from-real-IP pattern as
+        // PC/CA — no explicit "Canada" dropdown selection needed either.
+        // MC/FR-CA (confirmed live 2026-07-29, mobile, tested from a real
+        // Montreal/Quebec connection): same gap as MC/CA above — had NO
+        // mobile branch anywhere in this file at all, so Step 0 was looking
+        // for the English "Mobile number" textbox on a fully French UI and
+        // timing out immediately. Also tried SNG's frCaStep0Labels first,
+        // which don't match — MC/FR-CA's own field wording was already
+        // confirmed live on desktop as mcFrCaStep0Labels ("Numéro de
+        // téléphone cellulaire", not SNG's "Numéro de mobile"; "Continuer"
+        // lowercase, not SNG's all-caps "CONTINUER") — reuse that directly
+        // instead of re-guessing. Same auto-detect-from-real-IP pattern as
+        // MC/CA, no explicit "Canada" dropdown selection needed either.
         await ((isAlbertaFormat || isCanadianMobileFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
-          : isPcCaFormat
+          : (isPcCaFormat || isMcCaFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile)
+          : isMcFrCaFormat
+          ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, undefined, mcFrCaStep0Labels)
           : isMcComFormat
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
           : isPcComFormat
@@ -612,7 +632,7 @@ test.describe('Registration Flow', () => {
       });
 
       await runStep('Step 1 of 5: First/Last name → Continue', async () => {
-        await (isFrCaFormat
+        await ((isFrCaFormat || isMcFrCaFormat)
           ? fillMobileStep1Name(page, scope, data, 'CONTINUER', /choisissez votre sexe|genre/i)
           : fillMobileStep1Name(page, scope, data));
       });
@@ -624,10 +644,21 @@ test.describe('Registration Flow', () => {
         // same shape confirmed live 2026-07-27 (this generic mobile block
         // is what PC/COM falls into, same as PC/CA — no dedicated
         // isXxxFormat && isMobile branch exists earlier in this file).
-        await ((isCanadianMobileFormat || isPcCaFormat || isPcComFormat)
+        // MC/COM (confirmed live 2026-07-29, mobile viewport, tested from a
+        // real Malta connection): same no-house-number autocomplete-only
+        // Step 3 shape as MC/CA's desktop flow (see fillComAddress) — gender
+        // + email fill and Continue click both succeed, but the generic
+        // fillMobileStep2GenderEmail's own end-of-step readiness check waits
+        // on a "House No./Name" placeholder that doesn't exist here, timing
+        // out even though the real page already advanced to Step 3/5.
+        // MC/FR-CA: confirmed live on desktop (fillComAddress's address-step
+        // call, and mcFrCaStep0Labels.continue) that this brand's Continue
+        // button is lowercase "Continuer" everywhere, NOT SNG FR-CA's
+        // all-caps "CONTINUER" — kept distinct from isFrCaFormat below.
+        await ((isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isMcCaFormat || isMcFrCaFormat)
           ? fillMobileStep2GenderEmailCA(page, scope, data,
-              isFrCaFormat ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined,
-              isFrCaFormat ? 'CONTINUER' : 'Continue', isFrCaFormat)
+              (isFrCaFormat || isMcFrCaFormat) ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined,
+              isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue', (isFrCaFormat || isMcFrCaFormat))
           : fillMobileStep2GenderEmail(page, scope, data));
       });
 
@@ -636,24 +667,36 @@ test.describe('Registration Flow', () => {
         // code validation) — see fillMobileStep3AddressAB's docstring. SNG
         // CA: no house-number field at all — see fillMobileStep3AddressCA's
         // docstring. PC/COM: same no-house-number shape confirmed live.
+        // MC/COM: same no-house-number autocomplete-only shape confirmed
+        // live 2026-07-29 (mobile, tested from a real Malta connection) —
+        // see the Step 2 comment above for the readiness-check gap this
+        // pairs with. MC/FR-CA: same lowercase "Continuer" fact as Step 2
+        // above. Also: desktop already documented this GEO's "Adresse"
+        // autocomplete field as a genuine, unresolved environment blocker
+        // (never returns suggestions to any automated session, regardless
+        // of input method) — if this step times out here on mobile too,
+        // that's the same pre-existing site-side issue, not a new bug.
         await (usesAbAddressShape
           ? fillMobileStep3AddressAB(page, scope, data)
-          : (isCanadianMobileFormat || isPcCaFormat || isPcComFormat)
+          : (isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isMcCaFormat || isMcFrCaFormat)
           ? fillMobileStep3AddressCA(page, scope, data,
-              isFrCaFormat ? 'Adresse' : 'Start typing your address',
-              isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue')
+              (isFrCaFormat || isMcFrCaFormat) ? 'Adresse' : 'Start typing your address',
+              (isFrCaFormat || isMcFrCaFormat), isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue')
           : fillMobileStep3Address(page, scope, data));
       });
 
       await runStep('Step 4 of 5: Username + Password → Continue', async () => {
         // SNG AB/ON: no separate "Set deposit limits" sub-step — confirmed
         // live 2026-07-21 ON matches AB here too, not the generic/CA shape —
-        // see fillMobileStep4CredentialsAB's docstring.
+        // see fillMobileStep4CredentialsAB's docstring. MC/FR-CA: same
+        // lowercase "Continuer" fact as Steps 2/3 above; deposit-limit
+        // sub-step label NOT yet independently confirmed for MC/FR-CA,
+        // reusing SNG FR-CA's as a best guess (correct via real failures).
         await (usesAbAddressShape
           ? fillMobileStep4CredentialsAB(page, scope, data)
           : fillMobileStep4Credentials(page, scope, data,
-              isFrCaFormat ? 'CONTINUER' : 'Continue',
-              isFrCaFormat ? 'Fixer des limites de dépôt' : 'Set deposit limits'));
+              isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue',
+              (isFrCaFormat || isMcFrCaFormat) ? 'Fixer des limites de dépôt' : 'Set deposit limits'));
       });
 
       await runStep('Step 5 of 5: Deposit limit + consents', async () => {
@@ -662,12 +705,18 @@ test.describe('Registration Flow', () => {
         // see fillMobileStep5FinalAB's docstring.
         // SNG CA: confirmed live 2026-07-20 — no gdprBingo checkbox either,
         // consistent with CA having no Bingo category at all (same as IE/ROW).
+        // MC (all markets): confirmed live on desktop — this brand has no
+        // Bingo vertical at all (no gdprBingo checkbox anywhere), same
+        // brand-wide fact as the desktop Step 5 fix above; mobile had never
+        // actually reached this step for MC/COM before (blocked earlier by
+        // the Step 2/3 gap fixed above), so this was still on the generic
+        // 4-checkbox default until now.
         await (usesAbAddressShape
           ? fillMobileStep5FinalAB(page, scope)
-          : isCanadianMobileFormat
+          : (isCanadianMobileFormat || isMcFrCaFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'], false,
-              isFrCaFormat ? 'Non' : 'No')
-          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat)
+              (isFrCaFormat || isMcFrCaFormat) ? 'Non' : 'No')
+          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
           : fillMobileStep5Final(page, scope));
       });

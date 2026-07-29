@@ -9,6 +9,30 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-07-29
+
+### Automation Coverage Status (per brand, for tracker use)
+
+- **Mega Casino (MC) — checked which markets actually had phone-screen testing done, not just desktop.** Turned out only Germany did; Canada, French Canada, Ireland, Sweden, and Spain had all been marked as "desktop + mobile confirmed" in earlier notes when they were really desktop-only. Ran the phone-screen checklist properly against all of them today. **International (.com), Canada, Ireland, and Sweden now pass cleanly on phone screens.** French Canada passes everything except sign-up, which hits a real, pre-existing site problem (see below). Denmark and Alberta are not done yet — next up. UK is still blocked by the same automated security service noted in earlier sessions (unrelated to phone-screen testing).
+
+### Fixed
+
+- **Mega Casino's international (.com) site couldn't complete sign-up on a phone screen at all** — the phone version of the form doesn't have a house-number field the way the check assumed, and it also expected a "no Bingo games here" tick-box that doesn't exist on this brand. Both fixed so sign-up now completes cleanly on a phone screen.
+- **Mega Casino Canada's phone sign-up was generating a UK-style phone number and getting rejected every time** — confirmed this failed 10 times in a row, not just bad luck. Now generates a real Canadian-format number, and also fills in the correct Canadian-style birthdate and address, the same fix already applied to the desktop version of this site.
+- **A payment page check on Mega Casino Canada was clicking a decorative table heading instead of the real clickable payment logo** — the page happens to have two things pointing to the same web address, and the check was grabbing the wrong one, which didn't actually go anywhere. Now correctly targets the real, clickable logo.
+- **Mega Casino French Canada's phone sign-up wasn't finding any of its French-language fields** — it was checking for English text on this fully French site. Fixed the phone number field, birthdate field, and the "Continuer" button (lowercase, matching this brand's own style, unlike other French-Canadian sites that use all-caps "CONTINUER").
+- **A "returning to homepage" check on Mega Casino Sweden's phone site could get stuck on a leftover game page address** — same root cause as a Zingo Bingo bug fixed yesterday. Applied the same fix here too.
+- **Mega Casino Spain's blog page menu button didn't work on a phone screen** — the blog has its own separate 3-line menu icon that's hidden on phones; the real clickable one is a "Menu" button at the bottom of the screen. Fixed to use the correct button.
+- **Two Zingo Bingo phone-screen sign-up bugs carried over from yesterday, now fixed:** the "Play" button check was looking for a single combined Login/Join button that doesn't exist on this brand (Login and Join stay separate here), and a menu-icon check could accidentally close the menu instead of opening it if a different check had already opened it earlier in the same run.
+
+### Known open items (carrying into next session)
+
+- **Mega Casino French Canada's address field on sign-up genuinely doesn't work** — typing an address never shows any suggestions to pick from, on both desktop and now confirmed on phone too. Postcode, city, and province all fill in correctly, so this is isolated to just the address-suggestion feature. This needs someone who can check it manually (not through our automated tests) or fix whatever service powers the address suggestions — it's not something we can work around from our side.
+- **Zingo Bingo's phone site is missing the row of gambling-authority logos (GamCare, Gamstop, UK Gambling Commission, etc.) in the footer** — confirmed missing every time we checked, even though they show up fine on desktop. Needs to be flagged to the brand owner.
+- Mega Casino Denmark and Alberta still need their phone-screen checklist run — next up.
+
+---
+
 ## [Unreleased] - 2026-07-28
 
 ### Automation Coverage Status (per brand, for tracker use)

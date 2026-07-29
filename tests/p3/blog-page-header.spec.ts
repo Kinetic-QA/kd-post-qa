@@ -189,12 +189,18 @@ test.describe('P3 - Blog Page Header', () => {
 
     await runStep('Step 5: Sidebar menu opens after clicking the 3-line icon', async () => {
       await dismissCampaignPopup(page);
-      const hamburger = page.locator('[class*="hamburger" i]').first();
+      // Confirmed live on MC ES mobile 2026-07-29: the blog's own desktop-
+      // style header hamburger (withMainMenu_hamburger, same class prefix
+      // as Step 3's search icon) is CSS-hidden at mobile breakpoints, same
+      // pattern already documented there — the real visible mobile entry
+      // point is a plain "Menu" button (English text even on this Spanish
+      // site) inside the blog's own MobileFooter bottom nav, alongside
+      // Buscar/Entra al casino.
+      const hamburger = isMobile
+        ? page.locator('[class*="MobileFooter"]').getByRole('button', { name: /menu/i }).first()
+        : page.locator('[class*="hamburger" i]').first();
       await expect(hamburger).toBeVisible({ timeout: 10_000 });
-      await page.evaluate(() => {
-        const el = document.querySelector('[class*="hamburger" i]');
-        (el as HTMLElement | null)?.click();
-      });
+      await hamburger.evaluate((el: HTMLElement) => el.click());
       await page.waitForTimeout(800);
       const sidebarVisible = await page.locator('[class*="MainMenu_main-menu"]').isVisible({ timeout: 5_000 }).catch(() => false);
       expect(sidebarVisible).toBe(true);
