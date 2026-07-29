@@ -46,32 +46,6 @@ export interface EsRegistrationData {
   password: string;      // Always 5Tandard@1 (min 10 chars required by the form)
 }
 
-/**
- * DE (Slingo, slingospiel.de) has a genuinely different registration shape
- * from UK/IE/ROW — confirmed live 2026-07-13 (cross-checked against
- * RevWright Claude.ai's independent walkthrough): extra KYC fields required
- * by German gambling regulation (place of birth, nationality, state/Bundesland,
- * a dependent city dropdown), and a house-number field IS present (unlike
- * IE/ROW, which omit it).
- */
-export interface DeRegistrationData {
-  mobile: string;        // national number, no leading 0 (form defaults country code to +49)
-  dob: string;            // DD.MM.YYYY (placeholder confirmed live: "dd.mm.yyyy")
-  firstName: string;
-  lastName: string;
-  birthPlace: string;     // "Geburtsort" — required, no equivalent in UK's flow
-  gender: 'Männlich' | 'Weiblich';
-  email: string;
-  zipCode: string;
-  buildingName: string;   // "Hausnr." — DE has this, unlike IE/ROW
-  street: string;
-  state: string;          // "Bundesland" <select> option label
-  city: string;           // "Stadt" <select> — cascades from state, must be set after
-  username: string;
-  password: string;       // DE's live rule checklist confirmed 2026-07-13: special
-                           // char must be one of "!?$" specifically — the suite's
-                           // usual 5Tandard@1 (with "@") would FAIL this GEO's rule.
-}
 
 // ── Source pools ─────────────────────────────────────────────────────────────
 
@@ -254,26 +228,6 @@ const IE_ADDRESSES: UKAddress[] = [
   { houseNumber: '', street: 'Shop Street', postcode: 'H91 XY89', city: 'Galway', country: 'IRELAND' },
 ];
 
-const DE_FIRST_NAMES = [
-  'Lukas', 'Maximilian', 'Jonas', 'Felix', 'Paul',
-  'Emilia', 'Mia', 'Hannah', 'Lea', 'Anna',
-];
-
-const DE_LAST_NAMES = [
-  'Müller', 'Schmidt', 'Schneider', 'Fischer', 'Weber',
-  'Meyer', 'Wagner', 'Becker', 'Hoffmann', 'Schulz',
-];
-
-/**
- * Berlin is both the state (Bundesland) and its own city — confirmed live
- * the city <select> cascades from state and only lists valid cities for
- * whatever state is chosen, so using Berlin for both sidesteps needing a
- * full city-per-state lookup table for a single test address.
- */
-const DE_ADDRESSES: { zipCode: string; buildingName: string; street: string; state: string; city: string }[] = [
-  { zipCode: '10115', buildingName: '12', street: 'Musterstraße', state: 'Berlin', city: 'Berlin' },
-];
-
 // ── Generators ───────────────────────────────────────────────────────────────
 
 function randomFrom<T>(arr: T[]): T {
@@ -339,7 +293,7 @@ export function generateSouthAfricanMobile(): string {
  * Generates a random valid Maltese mobile number. MC/COM's registration
  * form country-code selector auto-detects from the tester's real IP
  * (confirmed live: showed "MT"/+356 when tested from a Malta VPN — same
- * auto-detect pattern as ROW/DE), so generateUKMobile's 10-digit UK-shaped
+ * auto-detect pattern as ROW), so generateUKMobile's 10-digit UK-shaped
  * number gets rejected there (confirmed live: 10 attempts, Continue never
  * advanced). Maltese mobiles are 8 digits total, no leading 0 — confirmed
  * live against the real form that an 8-digit number passes client-side
@@ -391,21 +345,10 @@ export function generateCyprusMobile(): string {
 }
 
 /**
- * Generates a random valid German mobile number WITHOUT the leading 0. The
- * form defaults its country-code selector to "+49" (confirmed live), so we
- * supply the national number — German mobiles start 15/16/17 nationally.
- */
-export function generateGermanMobile(): string {
-  const prefix = randomFrom(['15', '16', '17']);
-  const rest = Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join('');
-  return `${prefix}${rest}`;
-}
-
-/**
  * Generates a random valid Alberta (Canada) mobile number in NANP format:
  * a real Alberta area code (403/587/780/825) + 3-digit exchange (can't
  * start 0/1) + 4-digit subscriber number, 10 digits total, no leading 1.
- * Confirmed live on SNG AB: unlike ROW/DE, the form's country-code dropdown
+ * Confirmed live on SNG AB: unlike ROW, the form's country-code dropdown
  * does NOT need to be relied on for auto-detection — it defaults to
  * whichever country the tester's real IP/VPN resolves to (Israel, +972,
  * since the IL/CY VPN required to reach this QA site has nothing to do with
@@ -423,12 +366,19 @@ export function generateCanadianMobile(): string {
 }
 
 /**
- * Generates a random date of birth for a person aged 25–50, joined with the
- * given separator (UK's form wants DD/MM/YYYY, ES's wants DD-MM-YYYY).
+ * Generates a random date of birth with a HARDCODED 1990-2000 birth-year
+ * range (never derived from the current date), joined with the given
+ * separator (UK's form wants DD/MM/YYYY, ES's wants DD-MM-YYYY). Confirmed
+ * by Reeve 2026-07-29: a currentYear-relative range produced a garbled/
+ * out-of-range year live (observed as "2409") that a registration form
+ * correctly rejected, masking as a false mobile-number failure across
+ * several retries. A fixed, clearly-legal-age range (every market this
+ * suite covers sets the age of majority at 21 or below) removes that whole
+ * class of date-math edge case for every registration flow, not just one
+ * brand/GEO.
  */
 function generateDOBWithSeparator(separator: string): string {
-  const currentYear = new Date().getFullYear();
-  const year  = currentYear - 25 - Math.floor(Math.random() * 26); // 25–50 years old
+  const year  = 1990 + Math.floor(Math.random() * 11); // 1990-2000 inclusive
   const month = 1 + Math.floor(Math.random() * 12);
   const maxDay = new Date(year, month, 0).getDate();
   const day   = 1 + Math.floor(Math.random() * maxDay);
@@ -451,8 +401,7 @@ function generateDOB(): string {
  * dot-separated, year-first. Confirmed working live with this exact shape.
  */
 export function generateCanadianDOB(): string {
-  const currentYear = new Date().getFullYear();
-  const year  = currentYear - 25 - Math.floor(Math.random() * 26); // 25–50 years old
+  const year  = 1990 + Math.floor(Math.random() * 11); // 1990-2000 inclusive — see generateDOBWithSeparator's doc comment for why this is hardcoded, not currentYear-relative
   const month = 1 + Math.floor(Math.random() * 12);
   const maxDay = new Date(year, month, 0).getDate();
   const day   = 1 + Math.floor(Math.random() * maxDay);
@@ -471,8 +420,7 @@ export function generateCanadianDOB(): string {
  * FR-CA on the assumption the two share a format; they don't.
  */
 export function generateFrCaDOB(): string {
-  const currentYear = new Date().getFullYear();
-  const year  = currentYear - 25 - Math.floor(Math.random() * 26); // 25–50 years old
+  const year  = 1990 + Math.floor(Math.random() * 11); // 1990-2000 inclusive — see generateDOBWithSeparator's doc comment for why this is hardcoded, not currentYear-relative
   const month = 1 + Math.floor(Math.random() * 12);
   const maxDay = new Date(year, month, 0).getDate();
   const day   = 1 + Math.floor(Math.random() * maxDay);
@@ -623,33 +571,3 @@ export function generateROWRegistrationData(): RegistrationData {
   };
 }
 
-/**
- * Generates registration data for DE — confirmed live 2026-07-13. Uses
- * German name pools, a dot-separated DOB (form placeholder: "dd.mm.yyyy"),
- * and a password with "!" as its special character since DE's live password
- * rule checklist only accepts "!?$" (the rest of the suite's "@" would fail
- * DE's rule specifically).
- */
-export function generateDERegistrationData(): DeRegistrationData {
-  const firstName = randomFrom(DE_FIRST_NAMES);
-  const lastName  = randomFrom(DE_LAST_NAMES);
-  const timestamp = Date.now();
-  const addr = randomFrom(DE_ADDRESSES);
-
-  return {
-    mobile:       generateGermanMobile(),
-    dob:          generateDOBWithSeparator('.'),
-    firstName,
-    lastName,
-    birthPlace:   'Berlin',
-    gender:       randomFrom(['Männlich', 'Weiblich'] as const),
-    email:        `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
-    zipCode:      addr.zipCode,
-    buildingName: addr.buildingName,
-    street:       addr.street,
-    state:        addr.state,
-    city:         addr.city,
-    username:     `TestDE_${firstName[0]}${timestamp}`,
-    password:     '5Tandard!1',
-  };
-}

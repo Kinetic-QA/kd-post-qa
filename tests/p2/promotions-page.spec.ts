@@ -9,7 +9,7 @@ import { currentLocaleStrings } from '../../helpers/locale-strings';
  * inlinks, T&C copy visibility, Play Now → login/registration handoff, and
  * the header promo-icon entry point.
  * Path is GEO-dependent (see helpers/geo-features.ts) — e.g. UK/ROW/IE use
- * /casino-promotions/, DE uses /promotions/, ES uses /promociones/. Some
+ * /casino-promotions/, ES uses /promociones/. Some
  * GEOs (e.g. Slingo SE) have no Promotions page at all and this suite skips.
  */
 
@@ -165,7 +165,7 @@ test.describe('P2 - Promotions Page', () => {
         );
         if (isClickable) { playBtn = candidate; break; }
       }
-      // Confirmed live on DE: this umbrella page's only "Spielen" match is a
+      // Confirmed live on MC: this umbrella page's only playCta match is a
       // per-game-tile hover CTA (same as the homepage's showcase grid) —
       // hidden until hovered, not a standalone always-visible Play button
       // like other GEOs have. Skip rather than false-fail; a hover-based
@@ -198,9 +198,9 @@ test.describe('P2 - Promotions Page', () => {
       // (confirmed live in website-header.spec.ts) — the header's own
       // promotions icon is CSS-hidden at mobile breakpoints.
       // Desktop scope changed from getByRole('banner') to the MainMenu_
-      // container — see website-header.spec.ts Step 4 for why (PC DE's
-      // "Aktionen" link lives in a sibling <nav> landmark, not inside
-      // <header role="banner">).
+      // container — see website-header.spec.ts Step 4 for why (a brand with
+      // hasPromotionsIconInHeader: true can have its Promotions link live in
+      // a sibling <nav> landmark, not inside <header role="banner">).
       const promoIcon = isMobile
         ? page.locator(`[class*="MobileMenu_promos-but"] a[href*="${promoPath!.replace(/\/$/, '')}"]`).first()
         : page.locator(`[class*="MainMenu_"] a[href*="${promoPath!.replace(/\/$/, '')}"]`).first();
@@ -212,7 +212,7 @@ test.describe('P2 - Promotions Page', () => {
         console.log(`PP-01 Step 6 skipped — no ${isMobile ? 'mobile bottom-nav' : 'header'} Promotions icon for this GEO`);
         return;
       }
-      // See website-header.spec.ts Step 4 — PC DE's MainMenu_ container is an
+      // See website-header.spec.ts Step 4 — the MainMenu_ container can be an
       // off-canvas sidebar that's off-screen by default even on desktop.
       const isOnScreen = await promoIcon.evaluate(el => {
         const rect = el.getBoundingClientRect();

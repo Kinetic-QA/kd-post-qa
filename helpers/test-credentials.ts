@@ -18,12 +18,12 @@ import { test } from '@playwright/test';
  * there's nothing to safely fall back to.
  */
 const KNOWN_GEOS_BY_BRAND: Record<string, string[]> = {
-  SC: ['UK', 'ES', 'IE', 'ROW', 'DE'],
-  SNG: ['UK', 'IE', 'CA', 'ON', 'FR-CA', 'ES', 'DE', 'ROW'],
+  SC: ['UK', 'ES', 'IE', 'ROW'],
+  SNG: ['UK', 'IE', 'CA', 'ON', 'FR-CA', 'ES', 'ROW'],
   GC: ['UK', 'ES'],
-  MC: ['UK', 'COM', 'CA', 'FR-CA', 'IE', 'DE', 'ES'],
-  PC: ['UK', 'ES', 'CA', 'IE', 'COM', 'DE'],
-  LP: ['UK'],
+  MC: ['UK', 'COM', 'CA', 'FR-CA', 'IE', 'ES'],
+  PC: ['UK', 'ES', 'CA', 'IE', 'COM'],
+  LP: ['UK', 'ES', 'IE', 'CA'],
   ZI: ['UK'],
 };
 

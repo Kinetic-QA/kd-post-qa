@@ -136,7 +136,7 @@ test.describe('P2 - Footer Regulations', () => {
             expect(page.url()).toContain(expectedFragment);
           } else {
             // Confirmed live 2026-07-16: this click can silently miss on a
-            // long-lived run (DE + SE both hit a 10s waitForEvent timeout
+            // long-lived run (SE hit a 10s waitForEvent timeout
             // here during the 6-GEO baseline run, but 3 isolated re-runs
             // afterwards were all clean — a one-off click-swallow under
             // load, e.g. the campaign popup remounting right as we click,

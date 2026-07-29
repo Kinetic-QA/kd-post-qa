@@ -122,7 +122,7 @@ test.describe('P1 - Search', () => {
     });
 
     // ── Step 4: Click a game title → info modal opens ────────────────────
-    // Scoped to the actual results container — confirmed live on DE: an
+    // Scoped to the actual results container — confirmed live on MC: an
     // unscoped page-wide search for the game-link selector can match a
     // same-href game tile from the homepage's own showcase grid sitting
     // behind the search overlay (not a descendant of the results container
@@ -144,14 +144,14 @@ test.describe('P1 - Search', () => {
           break;
         }
       }
-      // Confirmed live on MC/DE: scrollIntoViewIfNeeded() itself can hang
+      // Confirmed live on MC: scrollIntoViewIfNeeded() itself can hang
       // past its timeout on a tile already picked to be within the current
       // viewport (see the box.y check above) — same "already visible but
       // the call still waits" quirk as game-category-navigation.spec.ts.
       // Swallow it and fall through to the force click below rather than
       // failing the whole step over a no-op scroll.
       await titleLink.scrollIntoViewIfNeeded().catch(() => {});
-      // Confirmed live on DE: the scrollable results container itself (and a
+      // Confirmed live on MC: the scrollable results container itself (and a
       // sibling image/back-button) can sit on top of the target link right
       // after scrollIntoViewIfNeeded(), intercepting a plain click — force
       // it through rather than waiting on actionability that never resolves.
@@ -260,7 +260,7 @@ test.describe('P1 - Search', () => {
           break;
         }
       }
-      // Same MC/DE hang seen in Step 4 above — swallow rather than fail.
+      // Same MC hang seen in Step 4 above — swallow rather than fail.
       await titleLink.scrollIntoViewIfNeeded().catch(() => {});
       await page.waitForTimeout(500);
 

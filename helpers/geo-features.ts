@@ -14,10 +14,10 @@
  * uiLocalized: true means header/CTA copy is in the local language, not
  * English — every test asserting on English strings (LOG IN, Logout, Join,
  * etc.) needs a localized string map before it can run reliably there (see
- * helpers/locale-strings.ts). That work is confirmed done for ES and DE;
+ * helpers/locale-strings.ts). That work is confirmed done for ES;
  * not yet for SE.
  *
- * Verified live 2026-07-06 against each GEO's production site (DE re-verified 2026-07-13).
+ * Verified live 2026-07-06 against each GEO's production site.
  */
 
 import { test } from '@playwright/test';
@@ -43,10 +43,11 @@ export interface GeoFeatureConfig {
   contactEmail: string;       // support mailto: address shown on /contact/
   socialMedia: SocialMediaHandles;
   hasSocialMedia: boolean;    // false = confirmed live no social icon strip at all for this GEO (skip FS-01 entirely, not just per-icon)
-  searchTerm: string;         // GS-01's search query — GEOs with no Casino category (DE, SE) need a term that actually returns results, e.g. "Slots"
+  searchTerm: string;         // GS-01's search query — GEOs with no Casino category (SE) need a term that actually returns results, e.g. "Slots"
   searchResultHrefSubstrings: string[]; // substrings used to identify a real game result link in the search panel for this GEO's searchTerm
   hasGameFilterCarousel: boolean; // false = confirmed live homepage has no [class*="GamesSlider_wrapper"] slider at all (games shown as a plain grid instead) — skip GF-01 entirely, not a broken selector
   hasFeedbackForm: boolean;   // false = confirmed live no "Report a problem"/feedback link anywhere in the login flow for this GEO — skip FF-01 entirely
+  hasContactPageFeedbackLink?: boolean; // optional — the Contact Us page's OWN "Report a problem" link (contact-us-page.spec.ts's Steps 6/13-14), distinct from the login/registration WIDGET's embedded one that hasFeedbackForm covers. Confirmed live on Lord Ping (LP) ES 2026-07-29: the contact page's link works fine (real a[href*="#account/feedback"], opens the same feedback iframe), but the login widget's failed-login error state shows no such link at all — the first brand/GEO where these two genuinely diverge (every other GEO has them coincide, hence this defaulting to hasFeedbackForm's value when omitted). Set explicitly only when they differ.
   hasGameCategoryNav: boolean; // false = confirmed live no Slingo/Slots/Bingo/Casino category nav links anywhere on the homepage (no exact "/slots/" link exists at all, only individual game tiles) — skip GCN entirely, not a broken selector
   hasLoginRegistration: boolean; // false = this GEO has no traditional username/password login+registration widget to test (e.g. SE's Pay N Play/Trustly-based deposit flow, no test account exists) — skip login/registration specs entirely
   hasTestAccount?: boolean;  // false = the login/registration WIDGET exists and is safe to inspect (registration.spec.ts never submits; login-widget.spec.ts only ever uses a deliberately wrong username/password), but no real, working test ACCOUNT exists yet to actually log in with — skip only login.spec.ts's real successful-login test. Distinct from hasLoginRegistration: a brand can have the widget worth inspecting (true) while having no usable account yet (hasTestAccount: false), e.g. a pre-live brand where registration itself is still broken/unsubmittable. Defaults to true (has a working account) when omitted, so existing GEOs need no change.
@@ -71,8 +72,8 @@ export interface GeoFeatureConfig {
   responsibleGamingPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'responsible-gaming/' when omitted. Confirmed live: GC ES genuinely translates this slug to "juego-mas-seguro/"
   helpPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'help/' when omitted. Confirmed live: GC ES genuinely translates this slug to "ayuda/"
   affiliatesPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'affiliates/' when omitted. Confirmed live: PC ES genuinely translates this slug to "afiliados/"
-  privacyPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'privacy/' when omitted. Confirmed live: PC DE's real slug is "privacy-policy/" — a genuinely different (not translated, just longer) English slug than every other GEO onboarded so far
-  termsPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'terms/' when omitted. Confirmed live: PC DE's real slug is "terms-conditions/" — same longer-English-slug pattern as privacyPath above
+  privacyPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'privacy/' when omitted. Confirmed live: PC SE's real slug is "privacy-policy/" — a genuinely different (not translated, just longer) English slug than every other GEO onboarded so far
+  termsPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'terms/' when omitted. Confirmed live: PC SE's real slug is "terms-conditions/" — same longer-English-slug pattern as privacyPath above
   needsStealthLaunch?: boolean; // optional — true means this GEO's site sits behind Cloudflare bot-detection that blocks/challenges a plain automated Chromium (confirmed on GC UK and MC UK — see helpers/stealth-fixtures.ts). When true, tests/p1|p2|p3 specs (which import `test`/`expect` from stealth-fixtures, not '@playwright/test' directly) launch via playwright-extra + puppeteer-extra-plugin-stealth instead of Playwright's default launcher. Defaults to false/undefined — every other GEO's launch is completely unchanged. Set this the moment a NEW GEO is confirmed to hit the same Cloudflare wall; no other wiring is needed, the fixture reads this flag automatically.
 }
 
@@ -81,9 +82,8 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
     UK:  { locale: 'en', uiLocalized: false, hasBlog: true,  blogPath: 'blog/', hasPromotionsPage: true,  promotionsPath: 'casino-promotions/', featuresPath: 'casino-features/', mobileAppPath: 'mobile-app/',        bingoCardGeneratorPath: 'bingo-card-generator/',        currencySymbol: '£', contactEmail: 'contact@slingo.com', socialMedia: { twitter: 'Slingo_official', facebook: 'SlingoCom', instagram: 'slingoofficial' }, hasSocialMedia: true,  searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots/casino', '/casino/other/casino'], hasGameFilterCarousel: true, hasFeedbackForm: true, hasGameCategoryNav: true, hasLoginRegistration: true, hasAccountModal: true, hasPaymentMethodsPage: true, hasBlogDesktopSearch: true, hasBlogSearch: true },
     ROW: { locale: 'en', uiLocalized: false, hasBlog: false, blogPath: null,    hasPromotionsPage: true,  promotionsPath: 'casino-promotions/', featuresPath: 'casino-features/', mobileAppPath: 'mobile-app/',        bingoCardGeneratorPath: 'bingo-card-generator/',        currencySymbol: '€', contactEmail: 'contact@slingo.com', socialMedia: { twitter: 'Slingo_official', facebook: 'SlingoCom', instagram: 'slingoofficial' }, hasSocialMedia: false, searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots/casino', '/casino/other/casino'], hasGameFilterCarousel: true, hasFeedbackForm: true, hasGameCategoryNav: true, hasLoginRegistration: true, hasAccountModal: true, hasPaymentMethodsPage: true, hasBlogDesktopSearch: true, hasBlogSearch: true }, // confirmed live: promo banner shows "€100"; no social icon strip on the homepage
     IE:  { locale: 'en', uiLocalized: false, hasBlog: false, blogPath: null,    hasPromotionsPage: true,  promotionsPath: 'casino-promotions/', featuresPath: 'casino-features/', mobileAppPath: 'mobile-app/',        bingoCardGeneratorPath: 'bingo-card-generator/',        currencySymbol: '€', contactEmail: 'contact@slingo.com', socialMedia: { twitter: 'Slingo_official', facebook: 'SlingoCom', instagram: 'slingoofficial' }, hasSocialMedia: false, searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots/casino', '/casino/other/casino'], hasGameFilterCarousel: true, hasFeedbackForm: true, hasGameCategoryNav: true, hasLoginRegistration: true, hasAccountModal: true, hasPaymentMethodsPage: true, hasBlogDesktopSearch: true, hasBlogSearch: true }, // Ireland uses Euro; no social icon strip on the homepage
-    DE:  { locale: 'de', uiLocalized: true,  hasBlog: false, blogPath: null,    hasPromotionsPage: true,  promotionsPath: 'promotions/',         featuresPath: null,               mobileAppPath: 'mobile-app/',        bingoCardGeneratorPath: 'bingo-card-generator/',        currencySymbol: '€', contactEmail: 'contact@slingo.com', socialMedia: { twitter: null, facebook: null, instagram: null }, hasSocialMedia: false, searchTerm: 'Slots',  searchResultHrefSubstrings: ['/slots/'], hasGameFilterCarousel: false, hasFeedbackForm: false, hasGameCategoryNav: false, hasLoginRegistration: true, hasAccountModal: true, hasPaymentMethodsPage: true, hasBlogDesktopSearch: true, hasBlogSearch: true }, // confirmed live 2026-07-13: no /casino-features/, /blog/, /mobile-app/, or /bingo-card-generator/ pages (all 404), no social icon strip in footer, no Casino category — "Slots" confirmed to return real results (/slots/monkey-slots/); homepage has no slider carousel at all, games shown as a plain grid instead; no "Report a problem"/feedback link anywhere in the login flow; no Slingo/Slots/Bingo/Casino category nav links at all (no exact "/slots/" link exists, only individual game tiles)
     ES:  { locale: 'es', uiLocalized: true,  hasBlog: true,  blogPath: 'blog/', hasPromotionsPage: true,  promotionsPath: 'promociones/',        featuresPath: 'funciones/',       mobileAppPath: 'app-casino-movil/', bingoCardGeneratorPath: 'generador-cartones-bingo/',    currencySymbol: '€', contactEmail: 'soporte@slingocasino.es', socialMedia: { twitter: 'slingoespana', facebook: 'slingospain', instagram: 'slingoespana' }, hasSocialMedia: true, searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots/casino', '/casino/other/casino'], hasGameFilterCarousel: true, hasFeedbackForm: true, hasGameCategoryNav: true, hasLoginRegistration: true, hasAccountModal: true, hasPaymentMethodsPage: true, hasBlogDesktopSearch: true, hasBlogSearch: true },
-    SE:  { locale: 'sv', uiLocalized: true,  hasBlog: false, blogPath: null,    hasPromotionsPage: false, promotionsPath: null,                  featuresPath: null,               mobileAppPath: 'mobile-app/',        bingoCardGeneratorPath: 'bingo-card-generator/',        currencySymbol: 'kr', contactEmail: 'contact@slingo.com', socialMedia: { twitter: null, facebook: null, instagram: null }, hasSocialMedia: false, searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots/'], hasGameFilterCarousel: true, hasFeedbackForm: false, hasGameCategoryNav: true, hasLoginRegistration: false, hasAccountModal: false, hasPaymentMethodsPage: false, hasBlogDesktopSearch: false, hasBlogSearch: false }, // confirmed live 2026-07-13: Swedish Krona; footer confirms Slingo/Slots/Casino category links exist (SE DOES have a Casino category, unlike DE), no social icon strip, contactEmail correct, 2 GamesSlider_wrapper carousels present. Searching "Casino" returns real results under /slots/ (e.g. "Mighty Hot Wilds"), not a /casino/-specific path. No traditional login/registration — header shows "INSÄTTNING" (Deposit) / "SPELA" (Play) instead of Login/Join, footer has Trustly + Pay N Play links (Swedish BankID/Trustly-based instant-deposit model, no username/password account) — no test credentials exist, skip login/registration specs entirely (hasLoginRegistration: false). Clicking the game info modal's "SPELA" button does NOT open an #account modal (confirmed live — no navigation, no modal) — hasAccountModal: false. /payment-methods/ confirmed 404 (real page-not-found, not a selector issue) — hasPaymentMethodsPage: false. featuresPath not yet independently verified live — placeholder assumption carried over from DE
+    SE:  { locale: 'sv', uiLocalized: true,  hasBlog: false, blogPath: null,    hasPromotionsPage: false, promotionsPath: null,                  featuresPath: null,               mobileAppPath: 'mobile-app/',        bingoCardGeneratorPath: 'bingo-card-generator/',        currencySymbol: 'kr', contactEmail: 'contact@slingo.com', socialMedia: { twitter: null, facebook: null, instagram: null }, hasSocialMedia: false, searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots/'], hasGameFilterCarousel: true, hasFeedbackForm: false, hasGameCategoryNav: true, hasLoginRegistration: false, hasAccountModal: false, hasPaymentMethodsPage: false, hasBlogDesktopSearch: false, hasBlogSearch: false }, // confirmed live 2026-07-13: Swedish Krona; footer confirms Slingo/Slots/Casino category links exist, no social icon strip, contactEmail correct, 2 GamesSlider_wrapper carousels present. Searching "Casino" returns real results under /slots/ (e.g. "Mighty Hot Wilds"), not a /casino/-specific path. No traditional login/registration — header shows "INSÄTTNING" (Deposit) / "SPELA" (Play) instead of Login/Join, footer has Trustly + Pay N Play links (Swedish BankID/Trustly-based instant-deposit model, no username/password account) — no test credentials exist, skip login/registration specs entirely (hasLoginRegistration: false). Clicking the game info modal's "SPELA" button does NOT open an #account modal (confirmed live — no navigation, no modal) — hasAccountModal: false. /payment-methods/ confirmed 404 (real page-not-found, not a selector issue) — hasPaymentMethodsPage: false. featuresPath not yet independently verified live — best-guess placeholder
   },
 
   // ── SpinGenie (SNG) ─────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPromotionsPage: true, promotionsPath: 'promotions/',
       featuresPath: 'features/',
       mobileAppPath: 'mobile-app/',
-      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 — not a Slingo-brand feature, skips gracefully same as DE/SE
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 — not a Slingo-brand feature, skips gracefully same as SE
       currencySymbol: '$', // CAD — confirmed via "$10"/"$500" bonus copy on homepage
       contactEmail: 'contact.alberta@spingenie.ca', // confirmed live on /contact/
       socialMedia: { twitter: null, facebook: null, instagram: null },
@@ -295,39 +295,9 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: true, // unconfirmed — cloned from SC ES
     },
 
-    // DE (Germany) — onboarded 2026-07-22 against www.spingenie.de. Live
-    // inspection (header/menu/footer/contact page/homepage) done BEFORE
-    // writing this config, not after — same lesson from FR-CA/ES onboarding.
-    // Unlike ES, DE keeps every slug in plain English (same platform gap as
-    // SC's DE) — nothing here needed translating.
-    DE: {
-      locale: 'de', uiLocalized: true,
-      hasBlog: false, blogPath: null, // confirmed live: no Blog link anywhere in menu or footer
-      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via menu + footer
-      featuresPath: null, // confirmed live: no Features/Funktionen link anywhere in menu or footer
-      mobileAppPath: 'mobile-app/', // unconfirmed — no footer link found (same as SC DE), carried over as a placeholder that skips cleanly if 404
-      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — same as above
-      currencySymbol: '€',
-      contactEmail: 'support@spingenie.de', // confirmed live: /contact/ page's mailto link
-      contactPath: 'contact/', // confirmed live — kept English, unlike SNG ES's translated "contacto/"
-      aboutUsPath: 'about-us/', // confirmed live — kept English
-      socialMedia: { twitter: null, facebook: null, instagram: null },
-      hasSocialMedia: false, // confirmed live: zero facebook/twitter/instagram/x.com links found homepage-wide
-      searchTerm: 'Slots', searchResultHrefSubstrings: ['/slots/'], // confirmed live: no Casino category exists (same platform gap as SC DE), "Slots" search returns 20 real /slots/ results
-      hasGameFilterCarousel: false, // confirmed live: zero GamesSlider_wrapper elements on homepage
-      hasFeedbackForm: false, // confirmed live: /contact/ has a LOGIN link but no #account/feedback link anywhere
-      hasGameCategoryNav: false, // confirmed live: header/menu nav has no Slots/Casino/Live Casino category links at all, only Home/Aktionen/Verantwortungsvolles Spielen/Hilfe/Kontakt/Über uns
-      hasLoginRegistration: true, // confirmed live: EINLOGGEN/ANMELDEN buttons in header and hamburger menu
-      hasTestAccount: true, // real test account provided by Reeve 2026-07-22
-      hasAccountModal: true, // confirmed live: /contact/ page's LOGIN link present (a[href*="#account/login"])
-      hasPaymentMethodsPage: true, // confirmed live footer link to /payment-methods/
-      hasBlogDesktopSearch: false, // no blog exists at all (see hasBlog) — consistent by necessity
-      hasBlogSearch: false, // no blog exists at all — consistent by necessity
-    },
-
     // SE (Sweden) — onboarded 2026-07-22 against se.spingenie.com. Live
     // inspection done BEFORE writing this config (header/menu/footer/contact
-    // page/homepage play-click/payment-methods), same as DE/ES/FR-CA. Same
+    // page/homepage play-click/payment-methods), same as ES/FR-CA. Same
     // Pay N Play/Trustly deposit model as SC's SE — no traditional
     // username/password login exists here at all.
     SE: {
@@ -338,7 +308,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       mobileAppPath: 'mobile-app/', // unconfirmed — no footer link found, carried over as a placeholder that skips cleanly if 404
       bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — same as above
       currencySymbol: 'kr', // Swedish Krona — not independently re-verified (no bonus/promo banner exists to check copy against), carried over from SC SE
-      contactEmail: 'contact@spingenie.com', // confirmed live: /contact/ page's mailto link — the shared UK/IE/CA/FR-CA address, NOT its own domain like DE/ES
+      contactEmail: 'contact@spingenie.com', // confirmed live: /contact/ page's mailto link — the shared UK/IE/CA/FR-CA address, NOT its own domain like ES
       contactPath: 'contact/', // confirmed live — kept English
       aboutUsPath: 'about-us/', // confirmed live — kept English
       socialMedia: { twitter: null, facebook: null, instagram: null },
@@ -403,7 +373,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed 200
       featuresPath: null, // confirmed 404 — no /features/ page for this brand
       mobileAppPath: 'mobile-app/', // confirmed 200
-      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 — not a Slingo-brand feature, skips gracefully same as SC's DE/SE
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 — not a Slingo-brand feature, skips gracefully same as SC's SE
       currencySymbol: '£', // confirmed via bonus copy ("£25")
       contactEmail: 'support@megacasino.com', // confirmed live 2026-07-21 on /contact/ — re-confirmation attempt 2026-07-22 hit the same intermittent Cloudflare challenge documented in PLAN.md rather than a changed value
       socialMedia: { twitter: null, facebook: 'MegaCasinoUK', instagram: 'megacasinouk' }, // confirmed live: facebook.com/MegaCasinoUK/ and instagram.com/megacasinouk/ found homepage-wide; no twitter/x link found
@@ -429,7 +399,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
     // Cloudflare interference seen this session (unlike UK) — both plain and
     // browser-UA curl requests returned 200 cleanly throughout. Registration's
     // mobile-number step auto-detects country from real IP (Malta/+356, same
-    // auto-detect pattern as SC's ROW/DE, not SNG AB/CA's explicit-dropdown
+    // auto-detect pattern as SC's ROW, not SNG AB/CA's explicit-dropdown
     // case) — see generateMalteseMobile's docstring in helpers/testData.ts.
     COM: {
       locale: 'en', uiLocalized: false,
@@ -572,48 +542,6 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPromotionsIconInHeader: false, // unconfirmed — cloned from COM/CA
     },
 
-    // DE (Germany) — onboarding started 2026-07-24, tested from a confirmed
-    // Hamburg VPN (verified via ipinfo.io before testing, per the CA-
-    // correction lesson above). Runs on a DIFFERENT domain than the other MC
-    // markets — www.megaspielhalle.de, not megacasino.* — but the site's own
-    // schema.org data confirms it's the same brand family ("family":
-    // "MegaCasino", "brandCode":"MC"). Same DE-market platform gap already
-    // seen on SC/SNG's German sites: no Casino/Live Casino category, no
-    // Blog/Features/Bingo Card Generator, plain-English game taxonomy slug
-    // (/online-slots/) with no separate /casino-games/ or /live-casino/
-    // (both confirmed 404 pre-test via curl). Onboarding COMPLETE 2026-07-24:
-    // full P1/P2/P3 desktop + mobile suite passes cleanly (0 real failures)
-    // after fixing 3 real bugs found this session — see search.spec.ts (bad
-    // assumed search term + a scrollIntoViewIfNeeded hang), registration-
-    // widget.spec.ts (widget content render delay needed a longer timeout),
-    // and registration.spec.ts/website-header.spec.ts (mobile Play entry is
-    // an <li>, not a <button>, unlike every other GEO so far).
-    DE: {
-      locale: 'de', uiLocalized: true,
-      hasBlog: false, blogPath: null, // confirmed 404 pre-test via curl
-      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed 200 pre-test via curl
-      featuresPath: null, // confirmed 404 pre-test via curl
-      mobileAppPath: 'mobile-app/', // confirmed 404 pre-test via curl — kept as the common placeholder, skips cleanly
-      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 pre-test via curl
-      currencySymbol: '€', // confirmed via homepage bonus copy ("€10"/"€100")
-      contactEmail: 'support@megaspielhalle.de', // confirmed live on /contact/ — a DIFFERENT address than UK/COM/CA/IE's support@megacasino.com, matches this market's own domain
-      socialMedia: { twitter: null, facebook: null, instagram: null }, // the only social link found (x.com/megacasino) is a schema.org "sameAs" JSON-LD reference, not a real visible icon strip — treated as none per the GC ES precedent
-      hasSocialMedia: false, // see note above
-      searchTerm: 'Book', searchResultHrefSubstrings: ['/online-slots/'], // confirmed live via real in-app search: "Slots" (assumed from the SC/SNG DE precedent) actually returns ZERO results here — this brand's search matches game TITLES, not category names, and no MC/DE game is literally titled "Slots". "Book" reliably returns 20 real /online-slots/ results (matches "Book of Dead" and others)
-      gameTileHrefSubstrings: ['/online-slots/'], // confirmed pre-test via curl: homepage game tiles only ever use this one path
-      paymentMethodsPath: 'payment-options/', // confirmed live: real slug is /payment-options/ (200); common 'payment-methods/' default 404s here, same override as COM/CA/FR-CA
-      hasGameFilterCarousel: false, // confirmed pre-test via curl: zero GamesSlider_wrapper elements on homepage
-      hasFeedbackForm: false, // confirmed pre-test via curl: no feedback/report-a-problem link found on /contact/
-      hasGameCategoryNav: false, // confirmed live via full suite run: header/menu nav has no real Slots/Casino/Live Casino category links, only Home/Aktionen/Verantwortungsvolles Spielen/Hilfe/Kontakt/Über uns
-      hasLoginRegistration: true, // confirmed pre-test via curl: /contact/ has a real #account/login link
-      hasTestAccount: true, // real test account provided 2026-07-24 (jnn@test.com) — confirmed working live (login.spec.ts passes)
-      hasAccountModal: true, // confirmed live: login.spec.ts/registration-widget.spec.ts/website-header.spec.ts all pass, including mobile's Play entry (see DE block's top comment)
-      hasPaymentMethodsPage: true, // confirmed live: /payment-options/ returns 200 (see paymentMethodsPath)
-      hasBlogDesktopSearch: false, // no blog for DE anyway (hasBlog: false) — set false for consistency
-      hasBlogSearch: false, // no blog for DE anyway — set false for consistency
-      hasPromotionsIconInHeader: false, // unconfirmed — cloned from COM/CA/FR-CA/IE, verify live
-    },
-
     // DK (Denmark) — onboarding started 2026-07-24, tested from a confirmed
     // Copenhagen VPN (verified via ipinfo.io before testing). Runs on its
     // own domain, www.megacasino.dk (same "no team credentials exist yet"
@@ -626,9 +554,9 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
     // login-widget.spec.ts only ever uses a deliberately wrong password),
     // so hasLoginRegistration stays true.
     //
-    // Unlike DE, this market has the FULL taxonomy (Online Slots/Casino
-    // Games/Live Casino all confirmed 200 pre-test via curl) — closer to
-    // UK/COM/CA/FR-CA/IE's shape than DE's stripped-down one. No Promotions
+    // This market has the FULL taxonomy (Online Slots/Casino
+    // Games/Live Casino all confirmed 200 pre-test via curl), matching
+    // UK/COM/CA/FR-CA/IE's shape. No Promotions
     // page (confirmed via curl: /promotions/ redirects to the homepage, and
     // no "Kampagner"-style nav link exists at all in the crawled homepage
     // HTML).
@@ -662,15 +590,15 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed 404 pre-test via curl
       currencySymbol: 'kr', // confirmed live via real browser probe: homepage bonus banner uses "kr" ("500 kr."/"100kr")
       gameModalCurrencyText: 'DKK', // confirmed live via real browser probe: the game info modal's own bet-limit copy ("Min. indsats DKK 10.00") uses "DKK" instead of "kr" — same per-context formatting inconsistency already confirmed independently on GC DK; see gameModalCurrencyText's own doc comment
-      contactEmail: 'support@megacasino.com', // confirmed live via curl on /contact/ — same shared address as UK/COM/CA/IE, NOT its own domain's address (unlike DE's support@megaspielhalle.de)
-      socialMedia: { twitter: null, facebook: null, instagram: null }, // the only social link found (x.com/megacasino) is a schema.org "sameAs" JSON-LD reference, not a real visible icon strip — treated as none per the GC ES/MC DE precedent
+      contactEmail: 'support@megacasino.com', // confirmed live via curl on /contact/ — same shared address as UK/COM/CA/IE, NOT its own domain's address
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // the only social link found (x.com/megacasino) is a schema.org "sameAs" JSON-LD reference, not a real visible icon strip — treated as none per the GC ES precedent
       hasSocialMedia: false, // see note above
       searchTerm: 'Bonanza', searchResultHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // confirmed live via the real in-app search flow (search.spec.ts passes): "Bonanza" reliably returns real results
       gameTileHrefSubstrings: ['/online-slots/', '/casino-games/', '/live-casino/'], // confirmed live via curl: homepage crawl shows all three category paths, same taxonomy as UK/COM/CA/FR-CA/IE
       paymentMethodsPath: 'payment-options/', // confirmed live via curl: real slug is /payment-options/ (200); common 'payment-methods/' default 404s here, same override as COM/CA/FR-CA/IE
-      hasGameFilterCarousel: true, // confirmed live via curl: homepage HTML contains 3 GamesSlider_wrapper rows, unlike DE's zero
+      hasGameFilterCarousel: true, // confirmed live via curl: homepage HTML contains 3 GamesSlider_wrapper rows
       hasFeedbackForm: false, // confirmed live via curl: no feedback/report-a-problem link found on /contact/ (only a #account/login link)
-      hasGameCategoryNav: true, // confirmed live via curl: real Online Spillemaskiner/Casinospil/Live casino nav links found (see gameTileHrefSubstrings) — fuller taxonomy than DE
+      hasGameCategoryNav: true, // confirmed live via curl: real Online Spillemaskiner/Casinospil/Live casino nav links found (see gameTileHrefSubstrings)
       hasLoginRegistration: true, // confirmed live via curl: /contact/ has a real #account/login link, and header shows real Log ind/Tilmeld buttons — widget is safe to inspect even with no working account (see hasTestAccount)
       hasTestAccount: false, // NO working test account exists yet — team is checking separately; skip only the real-login-dependent checks (login.spec.ts's actual sign-in test) per explicit instruction this session
       hasAccountModal: true, // confirmed live: registration.spec.ts/registration-widget.spec.ts/website-header.spec.ts/banner.spec.ts all confirm the #account modal opens correctly (real LOGIN, not just JOIN, since login.spec.ts itself is the only thing skipped by hasTestAccount)
@@ -729,7 +657,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       mobileAppPath: 'mobile-app/', // confirmed 404 pre-test via curl — kept as the common placeholder, skips cleanly
       bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link exists for this brand family, skips cleanly if 404
       currencySymbol: '€', // confirmed live via homepage bonus copy ("10€", "200€")
-      contactEmail: 'soporte@megacasinos.es', // confirmed live: /contacto/ page's own JSON config exposes "support_email":"soporte@megacasinos.es" — this GEO's own domain address, NOT the shared support@megacasino.com used by UK/COM/CA/IE/DE/DK/SE
+      contactEmail: 'soporte@megacasinos.es', // confirmed live: /contacto/ page's own JSON config exposes "support_email":"soporte@megacasinos.es" — this GEO's own domain address, NOT the shared support@megacasino.com used by UK/COM/CA/IE/DK/SE
       contactPath: 'contacto/', // confirmed live via curl: real nav link uses this translated slug (English 'contact/' also 200s with identical content but isn't what the real nav links to)
       helpPath: 'ayuda/', // confirmed live via curl: real nav link uses this translated slug (English 'help/' also 200s with identical content but isn't what the real nav links to)
       responsibleGamingPath: 'juego-mas-seguro/', // confirmed live via curl: real nav link uses this translated slug — the English 'responsible-gaming/' slug 200s too but serves DIFFERENT (unrelated homepage-ish) content, not a real alias
@@ -739,7 +667,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       socialMedia: { twitter: null, facebook: 'MegacasinoEs', instagram: 'megacasinoespana' }, // confirmed live: Facebook/Instagram found homepage-wide, no Twitter/X link found
       hasSocialMedia: true, // see note above
       searchTerm: 'Buffalo', searchResultHrefSubstrings: ['/online-slots/', '/juegos-de-casino/', '/ruleta-en-vivo/'], // NOT independently confirmed via actual in-app search interaction — inferred from a real homepage game title ("Buffalo Blitz Megaways Jackpot"); MC SE's search was confirmed live to index game titles only, not category names, so a category-name term was deliberately avoided here
-      gameTileHrefSubstrings: ['/online-slots/', '/juegos-de-casino/', '/ruleta-en-vivo/'], // confirmed live via curl: header nav categories are Slots (/online-slots/), Todos los juegos (/juegos-de-casino/), and Ruleta/Ruleta en Vivo (/ruleta/, /ruleta-en-vivo/) — a richer taxonomy than UK/COM/CA/DE/DK/SE, also including standalone Blackjack/Crash Games/Jackpots/Megaways/Slingo/Providers categories not modeled here
+      gameTileHrefSubstrings: ['/online-slots/', '/juegos-de-casino/', '/ruleta-en-vivo/'], // confirmed live via curl: header nav categories are Slots (/online-slots/), Todos los juegos (/juegos-de-casino/), and Ruleta/Ruleta en Vivo (/ruleta/, /ruleta-en-vivo/) — a richer taxonomy than UK/COM/CA/DK/SE, also including standalone Blackjack/Crash Games/Jackpots/Megaways/Slingo/Providers categories not modeled here
       paymentMethodsPath: 'metodos-de-pago/', // confirmed live via real browser run 2026-07-27: footer-navigation.spec.ts's Payment Options step landed on this URL, not the guessed 'payment-options/' — the real footer link (data-tk-value="payments", text "Métodos de Pago") points here. 'payment-options/' does separately 200 with real content (same false-alias trap as contact/help/responsible-gaming/about-us above), but it's not what the real nav actually links to
       hasGameFilterCarousel: true, // confirmed live via curl: homepage HTML contains 8 GamesSlider_wrapper rows
       hasFeedbackForm: true, // confirmed live via curl: real "Reportar un problema" link -> #account/feedback found on /contacto/
@@ -1181,56 +1109,14 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: true, // unconfirmed — same as above
     },
 
-    // DE — onboarding started 2026-07-28 against a DIFFERENT domain than
-    // every other PC market: www.primespielhalle.de ("Spielhalle" = German
-    // for slot arcade), not primecasino.*. Same DE-market platform gap
-    // already seen on SC/SNG/MC's German sites: single stripped-down game
-    // taxonomy (Online-Slot-Spiele only — no Live Casino/Table Games/Instant
-    // Win like every other PC market), no Blog/Features/Mobile
-    // App/Bingo Card Generator (all confirmed 404 live). Real test account
-    // confirmed working live 2026-07-28 (jomobif938@insgogc.com — login
-    // redirected to playsecure.primespielhalle.de with a real token, no
-    // Cloudflare interference). Registration confirmed live: Mobile number +
-    // password + DOB (dd.mm.yyyy placeholder) — same isGermanFormat branch
-    // already GEO-keyed (not brand-keyed) in registration.spec.ts, so it
-    // applies here automatically, no new branch needed.
-    DE: {
-      locale: 'de', uiLocalized: true,
-      hasBlog: false, blogPath: null, // confirmed live: /blog/ 404s
-      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200
-      hasPromotionsIconInHeader: true, // confirmed live: header's primary nav has "Aktionen" directly (Home/Online-Slot-Spiele/Aktionen) — genuinely different from every other PC market, which is footer-link-only
-      featuresPath: null, // confirmed live: /features/ 404s
-      mobileAppPath: 'mobile-app/', // confirmed live: 404s — kept as the common placeholder, skips cleanly like every other GEO's 404 case
-      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live: 404s
-      currencySymbol: '€', // Euro — not independently confirmed via visible price/bonus copy this session; Germany, same as every other German market onboarded so far (SC/SNG/MC)
-      contactEmail: 'support@primespielhalle.de', // confirmed live on /contact/ — real mailto link, a DIFFERENT address than every other PC market (matches this market's own domain, same pattern as MC DE)
-      aboutUsPath: 'about/', // confirmed live: footer "Über uns" link is /about/ — untranslated slug, same as UK/CA/IE/COM
-      helpPath: 'faqs/', // confirmed live: footer "FAQs" link is /faqs/ — untranslated slug, same as every other PC market
-      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide
-      hasSocialMedia: false,
-      searchTerm: 'Book', searchResultHrefSubstrings: ['/online-slots/'], // confirmed live via real in-app search — matches game TITLES (Book of Dead etc.), same MC DE precedent; the generic "Casino"/"Slots" terms used by other PC markets are untested here and may not match anything
-      gameTileHrefSubstrings: ['/online-slots/'], // confirmed live via slots-page + homepage nav crawl — this market's own single-category taxonomy
-      hasGameFilterCarousel: true, // confirmed live: 42 GamesSlider-style elements found on homepage
-      hasFeedbackForm: false, // confirmed live: no "problem/feedback/report" link found on /contact/ or inside the login/registration widget — only a live-chat entry point ("Hilfe gebraucht? Chatte mit uns")
-      hasGameCategoryNav: false, // confirmed live: header nav has only a single flat Online-Slot-Spiele link, no expandable category dropdown — same gap as MC DE
-      hasLoginRegistration: true, // confirmed live: Registrieren/Einloggen buttons in header, both open a real #account modal with real shadow-root content — Einloggen: username+password; Registrieren: Mobile number, DOB (dd.mm.yyyy), password
-      hasTestAccount: true, // real test account confirmed working live 2026-07-28 (jomobif938@insgogc.com) — real login redirected to playsecure.primespielhalle.de with a token
-      hasAccountModal: true, // confirmed live: both Einloggen and Registrieren advance the URL to /#account
-      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (the common default path — no override needed, same as UK/CA/IE/COM)
-      hasBlogDesktopSearch: false, // no blog for DE anyway (hasBlog: false) — set false for consistency
-      hasBlogSearch: false, // no blog for DE anyway — set false for consistency
-      privacyPath: 'privacy-policy/', // confirmed live: footer-navigation.spec.ts's default '/privacy/' 404s here — real slug is longer
-      termsPath: 'terms-conditions/', // confirmed live: real slug is longer than the default '/terms/' — NOTE: footerTermsText's shared 'de' regex (/^agb$/i) doesn't match this market's real "AGBs" link text either, so this path currently isn't exercised (silently skipped, not failed) until that regex is also widened
-    },
-
     // SE — onboarding started 2026-07-28 against se.primecasino.com. Own
     // taxonomy: Online Slotsspel/Video Bingo/Instant Win Spel (no Casino/Live
     // Casino category at all) — Video Bingo is unique to this market, not
     // seen on any other PC GEO. No Blog/Features/Mobile App/Bingo Card
     // Generator/Promotions page at all (all confirmed 404 — genuinely no
     // promotions page here, unlike every other PC market). Real footer slugs
-    // are the same longer-English-slug pattern as DE (/privacy-policy/,
-    // /terms-conditions/).
+    // use a longer English pattern than the shared defaults
+    // (/privacy-policy/, /terms-conditions/).
     //
     // hasLoginRegistration set to false per explicit instruction from Reeve
     // (2026-07-28): no test accounts exist for SE across any brand, same as
@@ -1258,11 +1144,11 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       mobileAppPath: 'mobile-app/', // confirmed live: 404s — kept as the common placeholder, skips cleanly
       bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live: 404s
       currencySymbol: 'kr', // Swedish Krona — not independently confirmed via visible price/bonus copy this session; same caveat as MC SE
-      contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link, the shared UK/CA/IE/COM address, NOT its own domain's address (unlike DE, which has its own primespielhalle.de address)
+      contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link, the shared UK/CA/IE/COM address, NOT its own domain's address
       aboutUsPath: 'about/', // confirmed live: footer "Om oss" link is /about/ — untranslated slug
       helpPath: 'faqs/', // confirmed live: footer/header "Vanliga Frågor" link is /faqs/ — untranslated slug
-      privacyPath: 'privacy-policy/', // confirmed live: real slug matches DE's longer-than-default pattern, not the shared '/privacy/' default
-      termsPath: 'terms-conditions/', // confirmed live: same longer-slug pattern as DE
+      privacyPath: 'privacy-policy/', // confirmed live: real slug is longer than the shared '/privacy/' default
+      termsPath: 'terms-conditions/', // confirmed live: same longer-slug pattern as privacyPath above
       socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide
       hasSocialMedia: false,
       searchTerm: 'Gold', searchResultHrefSubstrings: ['/online-slots/'], // confirmed live via real in-app search: 23 real results (Golden Winner, Gold Strike 2, etc.), all under /online-slots/
@@ -1297,9 +1183,8 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
     //    to match both shapes rather than assuming every brand uses a
     //    subdomain.
     // 2. The hamburger sidebar (MainMenu_main-menu) is off-canvas by default
-    //    EVEN ON DESKTOP (x: -290px until the hamburger is clicked) — same
-    //    pattern already confirmed on Prime Casino Germany, not mobile-only.
-    //    Sub-categories (Jackpots/Megaways/Themes/etc.) exist ONLY inside
+    //    EVEN ON DESKTOP (x: -290px until the hamburger is clicked), not
+    //    mobile-only. Sub-categories (Jackpots/Megaways/Themes/etc.) exist ONLY inside
     //    this sidebar's per-category accordion — the header's Nav_nav__ bar
     //    (used by clickNavAndVerify for every other brand) only ever shows
     //    the 3 top-level tabs here, confirmed by inspecting it while already
@@ -1315,7 +1200,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live: 404s
       currencySymbol: '£',
       contactEmail: 'support@lordping.com', // confirmed live on /contact/ — real mailto link
-      paymentMethodsPath: 'payment-options/', // confirmed live: real slug is /payment-options/ (200); common 'payment-methods/' default 404s here. NOTE: the footer LINK TEXT itself reads "Secure Banking", not "Payment Options" — locale-strings.ts's shared EN footerPaymentOptionsText (/^payment options$/i) won't match it, so footer-navigation.spec.ts's Payment Options step will silently skip (not fail) for this brand rather than actually verify the link. Known gap, not blocking — same class of issue documented for PC DE's footer text mismatches.
+      paymentMethodsPath: 'payment-options/', // confirmed live: real slug is /payment-options/ (200); common 'payment-methods/' default 404s here. NOTE: the footer LINK TEXT itself reads "Secure Banking", not "Payment Options" — locale-strings.ts's shared EN footerPaymentOptionsText (/^payment options$/i) won't match it, so footer-navigation.spec.ts's Payment Options step will silently skip (not fail) for this brand rather than actually verify the link. Known gap, not blocking — same class of footer-text-mismatch issue documented elsewhere in this file.
       socialMedia: { twitter: 'LordPingUK', facebook: 'LordPingUK', instagram: 'lordpinguk' }, // confirmed live homepage-wide
       hasSocialMedia: true,
       searchTerm: 'Book', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/casino-games/'], // confirmed live via real in-app search: real results (Sticky Diamonds, 88 Fortunes, etc.)
@@ -1329,6 +1214,126 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPaymentMethodsPage: true, // confirmed live: /payment-options/ returns 200 (see paymentMethodsPath)
       hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
       hasBlogSearch: true, // unconfirmed — same as above
+    },
+
+    // ES — onboarding started 2026-07-29, confirmed live against
+    // www.lordping.es. Real UI is genuinely localized (Spanish) — unlike UK,
+    // needs uiLocalized: true / locale: 'es'. Uses the same shared platform-
+    // wide ES test account as SC/SNG/GC/PC (noemsisters@hotmail.com).
+    //
+    // Real sub-category structure is DIFFERENT from LP UK, confirmed live via
+    // the sidebar's own DOM (hamburger -> MainMenu_main-menu):
+    // - Slots (main_1_slots): All Slots (/tragaperras/), Jackpots
+    //   (/tragaperras/bote/), Megaways (/tragaperras/megaways/), Temáticas
+    //   (/tragaperras/tematicas/), Proveedores (/tragaperras/proveedores/) —
+    //   NO Daily Jackpots sub-item (UK has one, ES doesn't).
+    // - Live Casino (main_2_live) is a FLAT single link
+    //   (/ruleta-en-vivo/) — no expandable accordion at all, no
+    //   Roulette/Blackjack/Baccarat/Game Shows breakdown like UK.
+    // - Casino Games (main_3_casino): All Casino Games (/juegos-casino/),
+    //   Juegos de Mesa/Table Games (/juegos-casino/mesa/), Video Bingo
+    //   (/juegos-casino/video-bingo/) — no Poker, no Scratch Cards (UK has
+    //   both); Video Bingo replaces them. Bingo-titled games (e.g.
+    //   "bingo-billions", "caveman-bingo") live under this /juegos-casino/
+    //   taxonomy, not a separate Bingo vertical.
+    // See game-category-navigation.spec.ts's isLpEsFormat branch.
+    ES: {
+      locale: 'es', uiLocalized: true, // confirmed live: header reads "Iniciar sesión"/"Únete", not English — matches locale-strings.ts's shared 'es' block
+      hasBlog: false, blogPath: null, // confirmed live: zero blog-related links found anywhere on the homepage
+      hasPromotionsPage: true, promotionsPath: 'promociones-casino/', // confirmed live: real "Promociones" link in both header and sidebar, 200
+      hasPromotionsIconInHeader: true, // confirmed live: real "Promociones" link inside <header>, same shape as LP UK
+      featuresPath: 'funciones-casino/', // confirmed live: real "Funciones" sidebar link, 200 (NOT the English 'casino-features/' slug, which 404s)
+      mobileAppPath: 'mobile-app/', // confirmed live: both 'mobile-app/' and the ES slug 'app-casino-movil/' 404, and no footer/sidebar link to either — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live: 404s, no link either — skips cleanly
+      currencySymbol: '€', // confirmed live via bonus copy ("Depósito mínimo: €10, Bonificación máx. €100")
+      contactEmail: 'soporte@lordping.es', // confirmed live: real mailto link on /contact/
+      paymentMethodsPath: 'payment-options/', // confirmed live: same English slug as LP UK (NOT the Spanish 'metodos-de-pago/', which 404s) — real footer/sidebar link found via homepage crawl
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social media links found anywhere on the homepage
+      hasSocialMedia: false, // confirmed live: no social icon strip at all, unlike LP UK
+      searchTerm: 'Bingo', searchResultHrefSubstrings: ['/tragaperras/', '/ruleta-en-vivo/', '/juegos-casino/'], // confirmed live via real in-app search scoped to the GameSearchPopup container: "Bingo" returns real bingo-titled results under /juegos-casino/ (bingo-billions, caveman-bingo, mariachis-bingo, etc.)
+      gameTileHrefSubstrings: ['/tragaperras/', '/ruleta-en-vivo/', '/juegos-casino/'], // confirmed live via homepage crawl — this brand's own ES-locale taxonomy (Spanish slugs, not LP UK's English online-slots/live-casino/casino-games)
+      hasGameFilterCarousel: false, // confirmed live: 0 GamesSlider-style elements found on homepage, same as LP UK
+      hasFeedbackForm: false, // confirmed live: after a failed login attempt, the widget's error state shows the real error text but NO "Report a problem"/"Reportar un problema" link at all — unlike LP UK, where it's present. Skips FF-01 entirely and login-widget/registration-widget's own "Report a Problem" steps. See hasContactPageFeedbackLink below — the contact page's OWN version of this link works fine, a genuine first-time divergence between the two.
+      hasContactPageFeedbackLink: true, // confirmed live: /contact/'s "Report a problem" link is present and works (real a[href*="#account/feedback"], opens the same feedback iframe) — see the field's own doc comment for why this needs to be set separately from hasFeedbackForm here
+      hasGameCategoryNav: true, // confirmed live: real 3-category sidebar taxonomy, see top-of-block comment
+      hasLoginRegistration: true, // confirmed live: "Iniciar sesión"/"Únete" buttons present in header
+      hasTestAccount: true, // shared platform-wide ES test account (noemsisters@hotmail.com) — confirmed already working on SC/SNG/GC/PC's ES markets; not yet independently re-confirmed via a real login on LP ES specifically, verify on first full run
+      hasAccountModal: true, // carried over from LP UK pending first real run confirmation
+      hasPaymentMethodsPage: true, // confirmed live: /payment-options/ real link found via homepage crawl (see paymentMethodsPath)
+      hasBlogDesktopSearch: false, // N/A — hasBlog is false for this GEO
+      hasBlogSearch: false, // N/A — hasBlog is false for this GEO
+    },
+
+    // IE — onboarding started 2026-07-29 against www.lordping.com/en-IE/.
+    // Confirmed live via sidebar DOM crawl: taxonomy is IDENTICAL to LP UK's
+    // (Online Slots with Jackpots/Daily Jackpots/Megaways/Themes/Providers,
+    // Live Casino with Roulette/Blackjack/Baccarat/Game Shows, Casino Games
+    // with Table Games/Poker/Scratch Cards) — same English URL slugs
+    // (/online-slots/, /live-casino/, /casino-games/), just prefixed with
+    // /en-IE/ by baseURL. See game-category-navigation.spec.ts's
+    // isLpUkFormat branch, widened to also cover IE rather than adding a
+    // near-duplicate branch. Real differences from UK: no Blog, no social
+    // media strip, Euro instead of Sterling, and the login/registration
+    // widget's full flow (login, registration, feedback form) all confirmed
+    // working live via the shared credentials — no per-widget gaps found.
+    IE: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live: zero blog-related links found anywhere on the homepage, unlike LP UK
+      hasPromotionsPage: true, promotionsPath: 'casino-promotions/', // confirmed live 200 — same slug as LP UK
+      hasPromotionsIconInHeader: true, // confirmed live via sidebar dump: real "Promotions" link present in nav, same LP-brand-wide pattern as UK/ES
+      featuresPath: 'casino-features/', // confirmed live 200 — same slug as LP UK
+      mobileAppPath: 'mobile-app/', // no footer/sidebar link found — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // no footer/sidebar link found — skips cleanly
+      currencySymbol: '€', // confirmed live via bonus copy ("€10"/"€100") — Ireland uses Euro, unlike UK's Sterling
+      contactEmail: 'support@lordping.com', // confirmed live on /contact/ — real mailto link, the SAME shared address as LP UK (not its own domain)
+      paymentMethodsPath: 'payment-options/', // confirmed live: real slug is /payment-options/ (200); common 'payment-methods/' default 404s here, same override as LP UK/ES
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social media links found anywhere on the homepage, unlike LP UK
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/casino-games/'], // confirmed live via real in-app search: "Casino" returns real results under this brand's own taxonomy
+      gameTileHrefSubstrings: ['/online-slots/', '/live-casino/', '/casino-games/'], // confirmed live via sidebar accordion crawl — same taxonomy as LP UK
+      hasGameFilterCarousel: false, // confirmed live: 0 GamesSlider-style elements found on homepage, same as LP UK
+      hasFeedbackForm: true, // confirmed live: full FF-01 flow (failed-login error -> Report a problem -> feedback form) works end to end, same as LP UK — unlike LP ES's gap
+      hasGameCategoryNav: true, // confirmed live: identical rich taxonomy to LP UK, see top-of-block comment
+      hasLoginRegistration: true, // confirmed live: real Log in/Join buttons, full login.spec.ts and registration.spec.ts flows pass end to end
+      hasTestAccount: true, // real test account confirmed working live 2026-07-29 (bamloharki@vusra.com)
+      hasAccountModal: true, // confirmed live: login.spec.ts/registration.spec.ts both advance to /#account and complete
+      hasPaymentMethodsPage: true, // confirmed live: /payment-options/ returns 200 (see paymentMethodsPath)
+      hasBlogDesktopSearch: false, // N/A — hasBlog is false for this GEO
+      hasBlogSearch: false, // N/A — hasBlog is false for this GEO
+    },
+
+    // CA — onboarding started 2026-07-29 against www.lordping.com/en-CA/.
+    // Confirmed live via sidebar DOM crawl: taxonomy is IDENTICAL to LP
+    // UK/IE's (same English URL slugs, just /en-CA/ prefixed) — same
+    // isLpUkFormat GCN branch applies, widen its scope like IE's rather than
+    // adding a new branch. Real differences from UK: no Blog, no social
+    // media strip, CAD instead of Sterling (same shape as LP IE, different
+    // currency).
+    CA: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live: zero blog-related links found anywhere on the homepage
+      hasPromotionsPage: true, promotionsPath: 'casino-promotions/', // confirmed live 200 — same slug as LP UK/IE
+      hasPromotionsIconInHeader: true, // confirmed live via sidebar dump: real "Promotions" link present in nav, same LP-brand-wide pattern as UK/ES/IE
+      featuresPath: 'casino-features/', // confirmed live 200 — same slug as LP UK/IE
+      mobileAppPath: 'mobile-app/', // no footer/sidebar link found — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // no footer/sidebar link found — skips cleanly
+      currencySymbol: '$', // confirmed live via bonus copy ("$10"/"$100") and an explicit "CAD" currency-code mention on the page — Canadian Dollar, not USD
+      contactEmail: 'support@lordping.com', // confirmed live on /contact/ — real mailto link, the SAME shared address as LP UK/IE
+      paymentMethodsPath: 'payment-options/', // confirmed live: real slug is /payment-options/ (200); common 'payment-methods/' default 404s here, same override as LP UK/ES/IE
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social media links found anywhere on the homepage
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/casino-games/'], // carried over from LP IE (same brand, same taxonomy) — verify on first full run
+      gameTileHrefSubstrings: ['/online-slots/', '/live-casino/', '/casino-games/'], // confirmed live via sidebar accordion crawl — identical taxonomy to LP UK/IE
+      hasGameFilterCarousel: false, // confirmed live: 0 GamesSlider-style elements found on homepage, same as LP UK/IE
+      hasFeedbackForm: false, // confirmed live 2026-07-29: after a failed login attempt, the widget's error state shows the real error text but NO "Report a problem" link at all — same gap as LP ES, unlike LP UK/IE where it's present. Skips FF-01 entirely and login-widget/registration-widget's own "Report a Problem" steps. See hasContactPageFeedbackLink below.
+      hasContactPageFeedbackLink: true, // confirmed live 2026-07-29: /contact/'s "Report a problem" link is present and works (CU-01 passes cleanly) — same divergence pattern as LP ES, see that field's own doc comment
+      hasGameCategoryNav: true, // confirmed live: identical rich taxonomy to LP UK/IE, see top-of-block comment
+      hasLoginRegistration: true, // confirmed live: real Log in/Join buttons present in header
+      hasTestAccount: true, // real test account provided 2026-07-29 (larzimukno@vusra.com)
+      hasAccountModal: true, // carried over from LP UK/IE pending first clean run confirmation
+      hasPaymentMethodsPage: true, // confirmed live: /payment-options/ returns 200 (see paymentMethodsPath)
+      hasBlogDesktopSearch: false, // N/A — hasBlog is false for this GEO
+      hasBlogSearch: false, // N/A — hasBlog is false for this GEO
     },
   },
 
@@ -1349,7 +1354,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live: sidebar + footer link, 200
       featuresPath: null, // confirmed live: /features/ 404s, no Features link anywhere in sidebar or footer
       mobileAppPath: 'mobile-app/', // confirmed live 200 via direct path check, but NO footer/sidebar link to it at all (unlike most brands) — kept as the common placeholder since the field isn't nullable; footer-navigation.spec.ts's Mobile App step should skip cleanly since no link exists to find
-      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 404, no footer/sidebar link either — skips cleanly like SC's DE/SE
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 404, no footer/sidebar link either — skips cleanly like SC's SE
       currencySymbol: '£', // confirmed via homepage bonus copy ("£10"/"£20"/"£100")
       contactEmail: 'support@zingobingo.co.uk', // confirmed live: real mailto link on /contact/
       aboutUsPath: 'about/', // confirmed live: sidebar + footer "About us" link is /about/, NOT the default 'about-us/'
