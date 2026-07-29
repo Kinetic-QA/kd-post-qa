@@ -77,7 +77,7 @@ test.describe('P2 - Registration Widget', () => {
     await runStep('Step 1: "Members Login" link opens the login form', async () => {
       await openRegistrationWidget();
       const membersLoginLink = page.getByText(strings.membersLoginText).first();
-      // Confirmed live on MC/DE: the widget's own content (mobile number/DOB
+      // Confirmed live on MC: the widget's own content (mobile number/DOB
       // fields, Members Login link) can take 8-12s to actually render after
       // the URL already shows #account — same "URL advances well before the
       // widget content is ready" gap already documented for MC/CA's Altcha

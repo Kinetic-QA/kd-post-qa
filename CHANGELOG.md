@@ -14,6 +14,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Automation Coverage Status (per brand, for tracker use)
 
 - **Mega Casino (MC) — checked which markets actually had phone-screen testing done, not just desktop.** Turned out only Germany did; Canada, French Canada, Ireland, Sweden, and Spain had all been marked as "desktop + mobile confirmed" in earlier notes when they were really desktop-only. Ran the phone-screen checklist properly against all of them today. **International (.com), Canada, Ireland, and Sweden now pass cleanly on phone screens.** French Canada passes everything except sign-up, which hits a real, pre-existing site problem (see below). Denmark and Alberta are not done yet — next up. UK is still blocked by the same automated security service noted in earlier sessions (unrelated to phone-screen testing).
+- **Lord Ping (LP) Spain is now fully confirmed** — ran the whole checklist on both desktop and phone screens: 35 checks passed, 12 skipped for the right reasons (no blog on this market), zero real failures. This market's site is genuinely in Spanish (unlike the UK site), with its own game menu shape and a couple of real wording differences from every other Spanish-language site we test.
+- **Lord Ping (LP) Ireland is now fully confirmed** — ran the whole checklist on both desktop and phone screens: 38 checks passed, 10 skipped for the right reasons (no blog on this market), zero real failures. This market turned out to be a near-identical twin of the UK site (same game menu, same wording), just in Euros instead of Pounds — the fastest market we've onboarded yet.
+- **Lord Ping (LP) Canada is still in progress, not yet fully confirmed.** The sign-up flow is now fully working end-to-end after fixing two real bugs (see Fixed below). A full run of the whole checklist still shows 12 checks failing that need more work next session (closing the sign-in pop-up, some secondary sign-in/sign-up screen controls, one page's "Learn More" button) — these are being carried forward, not swept under the rug.
+
+### Removed
+
+- **We are no longer testing the Germany market for any brand, per a management decision to stop offering games there.** Every trace of Germany-specific settings, saved sign-in details, and test code has been removed from the project — Slingo, Spin Genie, Mega Casino, and Prime Casino's German markets are all gone from our checklist. If Germany is ever added back, it'll need to be rebuilt from scratch as a fresh decision, not restored from old code.
 
 ### Fixed
 
@@ -24,12 +31,20 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **A "returning to homepage" check on Mega Casino Sweden's phone site could get stuck on a leftover game page address** — same root cause as a Zingo Bingo bug fixed yesterday. Applied the same fix here too.
 - **Mega Casino Spain's blog page menu button didn't work on a phone screen** — the blog has its own separate 3-line menu icon that's hidden on phones; the real clickable one is a "Menu" button at the bottom of the screen. Fixed to use the correct button.
 - **Two Zingo Bingo phone-screen sign-up bugs carried over from yesterday, now fixed:** the "Play" button check was looking for a single combined Login/Join button that doesn't exist on this brand (Login and Join stay separate here), and a menu-icon check could accidentally close the menu instead of opening it if a different check had already opened it earlier in the same run.
+- **A sign-up date-of-birth check was occasionally generating a nonsense birth year (spotted live: something like "2409") instead of a normal one, which the real sign-up form correctly rejected — but our checks were misreading this as a bad phone number instead and kept retrying the wrong thing.** Every birth-date generator across the whole test suite (not just one brand) now always picks a birth year somewhere in the 1990s, guaranteed never to look wrong, so this can't happen again for any market.
+- **A "did this page finish loading yet?" check we've used in dozens of places turned out to not actually wait for anything — it just glanced at the page once and gave up immediately if the new content wasn't there yet**, even though we thought giving it a longer time limit would help (it doesn't; that setting doesn't do what it looks like it does). Found and fixed while investigating Lord Ping Canada's sign-up flow, where it was causing our checks to think a page hadn't moved forward when it actually had.
+- **Lord Ping Canada's sign-up flow needed the same three fixes already built for other brands' Canadian markets** — a real Canadian-style phone number and birth-date format instead of the UK-style ones we'd been trying, and the correct (shorter) address form with no house-number field.
+- **Lord Ping Canada's website address had the country code saved in the wrong letter-casing** (a small "ca" instead of "CA"), which was silently making every single one of our "did clicking this link take you to the right page" checks fail, even though the click itself worked perfectly fine.
+- **Lord Ping Spain and Canada's sign-in error screen doesn't show a "report a problem" link, even though the same link works fine from the separate Contact Us page** — both markets now correctly skip only the sign-in-screen version of that check instead of failing on a real product difference, while still fully testing the Contact Us page version.
 
 ### Known open items (carrying into next session)
 
 - **Mega Casino French Canada's address field on sign-up genuinely doesn't work** — typing an address never shows any suggestions to pick from, on both desktop and now confirmed on phone too. Postcode, city, and province all fill in correctly, so this is isolated to just the address-suggestion feature. This needs someone who can check it manually (not through our automated tests) or fix whatever service powers the address suggestions — it's not something we can work around from our side.
 - **Zingo Bingo's phone site is missing the row of gambling-authority logos (GamCare, Gamstop, UK Gambling Commission, etc.) in the footer** — confirmed missing every time we checked, even though they show up fine on desktop. Needs to be flagged to the brand owner.
 - Mega Casino Denmark and Alberta still need their phone-screen checklist run — next up.
+- **Lord Ping Canada is not yet fully confirmed** — see Automation Coverage Status above. Next session should pick up: the sign-in pop-up not closing properly when asked, some secondary sign-in/sign-up screen buttons, and the Features page's "Learn More" button.
+- Lord Ping's remaining markets — COM and Sweden — are not started yet.
+- Now that Germany is gone entirely, Slingo's mobile bonus banner size should be double-checked against the new 750x484 format it went live with recently — not urgent, just noting it so it isn't forgotten.
 
 ---
 

@@ -350,8 +350,8 @@ test.describe('P2 - Sidebar Navigation', () => {
       await navStepIfExists('Live Casino link -> /live-casino/', '/live-casino/', '/live-casino/');
     } else {
       // Same reasoning as the Promotions/Features branches above — soft skip,
-      // not a test-aborting test.skip(). Confirmed live (DE): no Slingo/Slots/
-      // Bingo/Casino category nav links exist in the sidebar at all.
+      // not a test-aborting test.skip(). Confirmed live: no Slingo/Slots/
+      // Bingo/Casino category nav links exist in the sidebar at all for this GEO.
       record('Slingo/Slots/Casino links (skipped — no category nav for this GEO)', true);
       console.log('SN-01 Slingo/Slots/Casino skipped — no category nav for this GEO');
     }

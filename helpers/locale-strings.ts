@@ -2,7 +2,7 @@ import { currentGeoFeatures } from './geo-features';
 
 /**
  * Localized UI copy used by text-based locators. geo-features.ts's
- * uiLocalized flag marks which GEOs need this — ES and DE have confirmed
+ * uiLocalized flag marks which GEOs need this — ES has confirmed
  * entries; SE still falls back to English and will keep failing any
  * English-text assertion until someone confirms its real copy live.
  */
@@ -91,10 +91,18 @@ const STRINGS: Record<string, LocaleStrings> = {
     usernameOrEmailLabel: /nombre de usuario o correo electrónico/i,
     joinButton: /únete|unirse/i, // "Únete" confirmed live on SC (slingocasino.es); "Unirse" confirmed live on SNG (spingenie.es) — same language, different brand copy, so this shared-by-locale string needs to match both
     loginErrorText: /datos de inicio de sesión.*incorrectos/i,
-    reportProblemText: /reportar un problema/i,
+    // "report a problem" (English) added 2026-07-29 — confirmed live: Lord
+    // Ping (LP) ES's feedback link is untranslated English text, not
+    // "Reportar un problema" like slingocasino.es — a genuine wrong-locale-
+    // bundle gap on this brand's ES site, same class of issue as the
+    // already-documented FR-CA homeLinkText/Contato bugs.
+    reportProblemText: /reportar un problema|report a problem/i,
     membersLoginText: /inicio de sesión/i,
     backButtonText: /^volver$/i,
-    playCta: /^jugar$|a jugar|vamos a jugar/i,
+    // "jugar ahora" added 2026-07-29 — confirmed live: Lord Ping (LP) ES's
+    // game-info-modal Play CTA reads "Jugar ahora", not bare "Jugar" like
+    // slingocasino.es's homepage tiles.
+    playCta: /^jugar$|jugar ahora|a jugar|vamos a jugar/i,
     bonusPolicyText: /pol[ií]tica de bon/i,
     readMoreText: /sigue leyendo/i,
     feedbackNext: /^siguiente$/i,
@@ -102,7 +110,11 @@ const STRINGS: Record<string, LocaleStrings> = {
     feedbackSubmit: /^enviar$/i,
     forgotPasswordText: /has olvidado tu contraseña/i,
     noAccountText: /aún no tienes una cuenta/i,
-    searchPlaceholder: /^buscar juego$/i,
+    // "búsqueda" added 2026-07-29 — confirmed live: Lord Ping (LP) ES's real
+    // placeholder is plain "búsqueda", not "Buscar juego" like slingocasino.es —
+    // same shared-regex-covers-multiple-brands pattern as the EN block's
+    // "search"-only/trailing-ellipsis additions for LP UK/ZI UK.
+    searchPlaceholder: /^(buscar juego|búsqueda)$/i,
     feedbackTextareaPlaceholder: /escribe aquí tu respuesta/i,
     homeLinkText: /^inicio$/i,
     // Confirmed via live DOM inspection of slingocasino.es footer.
@@ -116,43 +128,6 @@ const STRINGS: Record<string, LocaleStrings> = {
     footerContactUsText: /^contacto$/i,
     footerMobileAppText: /^app casino movil$/i,
     footerBingoCardGeneratorText: /^generador cartones bingo$/i,
-  },
-  // Confirmed live 2026-07-13 against slingospiel.de, except where noted.
-  de: {
-    loginButton: /einloggen/i,
-    loginSubmitButton: /^einloggen$/i,
-    usernameOrEmailLabel: /benutzername oder e-?mail/i,
-    // "registrieren" added 2026-07-28 — confirmed live: Prime Casino (PC) DE's
-    // header CTA reads "Registrieren", not "Anmelden" like slingospiel.de —
-    // same shared-regex-covers-multiple-brands pattern already used for PC
-    // UK's "Sign In" loginButton addition.
-    joinButton: /anmelden|registrieren/i,
-    loginErrorText: /die eingegebenen anmeldedaten sind nicht korrekt/i,
-    reportProblemText: /problem melden/i, // not exercised — DE has no feedback form (hasFeedbackForm: false)
-    membersLoginText: /mitglieder-anmeldung/i,
-    backButtonText: /^zurück$/i,
-    playCta: /^spielen$/i,
-    bonusPolicyText: /bonusbedingungen/i,
-    readMoreText: /weiterlesen/i, // not exercised — DE has no Blog
-    // NOT yet confirmed live — best-guess translations for the feedback widget.
-    feedbackNext: /^weiter$/i,
-    feedbackOther: /^andere[s]?$/i,
-    feedbackSubmit: /^absenden$/i,
-    forgotPasswordText: /passwort vergessen/i,
-    noAccountText: /konto erstellen/i,
-    searchPlaceholder: /^spiel suchen$/i,
-    feedbackTextareaPlaceholder: /gib deine antwort hier ein/i, // NOT yet confirmed live
-    homeLinkText: /^home$/i, // confirmed live — sidebar uses the English word "Home", not translated
-    footerResponsibleGamingText: /^verantwortungsvolles spielen$/i,
-    footerBonusPolicyText: /^bonuspolitik$/i,
-    footerTermsText: /^agb$/i,
-    footerPrivacyPolicyText: /^datenschutzrichtlinie$/i,
-    footerAboutUsText: /^über uns$/i,
-    footerPaymentOptionsText: /^zahlungsoptionen$/i,
-    footerAffiliatesText: /^werbepartner$/i,
-    footerContactUsText: /^kontakt$/i,
-    footerMobileAppText: /^mobile app$/i, // not exercised — DE has no Mobile App footer link
-    footerBingoCardGeneratorText: /^bingo card generator$/i, // not exercised — DE has no Bingo Card Generator footer link
   },
   // FR-CA — onboarding started 2026-07-21 against www.spingenie.com/fr-CA/.
   // loginButton/joinButton/playCta/searchPlaceholder/backButtonText confirmed

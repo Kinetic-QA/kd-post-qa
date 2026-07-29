@@ -65,6 +65,11 @@ test.describe('P3 - Contact Us Page', () => {
     const geoFeatures = currentGeoFeatures();
     const GEO_EMAIL = geoFeatures.contactEmail;
     const contactPath = geoFeatures.contactPath ?? 'contact/';
+    // Distinct from the login/registration widget's own embedded link
+    // (hasFeedbackForm) — see that field's doc comment in geo-features.ts.
+    // Defaults to hasFeedbackForm's value since every GEO except LP ES has
+    // the two coincide.
+    const hasContactPageFeedbackLink = geoFeatures.hasContactPageFeedbackLink ?? geoFeatures.hasFeedbackForm;
     const isMobile = test.info().project.name.endsWith('-mobile');
 
     // Mobile's login/feedback widget is a fullscreen takeover with its own
@@ -157,7 +162,7 @@ test.describe('P3 - Contact Us Page', () => {
 
     // ── Step 6: "Report a problem" link present ───────────────────────────
     await runStep('Step 6: "Report a problem" link present', async () => {
-      if (!geoFeatures.hasFeedbackForm) { console.log('CU-01 Step 6 skipped — no feedback form for this GEO'); return; }
+      if (!hasContactPageFeedbackLink) { console.log('CU-01 Step 6 skipped — no feedback form for this GEO'); return; }
       const reportLink = page.getByText(strings.reportProblemText, { exact: true }).first();
       await expect(reportLink).toBeVisible({ timeout: 8_000 });
     });
@@ -214,7 +219,7 @@ test.describe('P3 - Contact Us Page', () => {
 
     // ── Steps 13-14: Click "Report a problem" -> feedback form ───────────
     await runStep('Steps 13-14: "Report a problem" -> feedback form appears', async () => {
-      if (!geoFeatures.hasFeedbackForm) { console.log('CU-01 Steps 13-14 skipped — no feedback form for this GEO'); return; }
+      if (!hasContactPageFeedbackLink) { console.log('CU-01 Steps 13-14 skipped — no feedback form for this GEO'); return; }
       const reportLink = page.getByText(strings.reportProblemText, { exact: true }).first();
       await reportLink.click();
       await page.waitForTimeout(2_000);

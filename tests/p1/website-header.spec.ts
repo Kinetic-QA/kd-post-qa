@@ -146,7 +146,7 @@ test.describe('P1 - Website Header', () => {
       // Login/Join — per live confirmation, which widget it opens can
       // depend on whichever was last used in the session, so this only
       // asserts the widget opens, not which specific form it lands on.
-      // Confirmed live on MC/DE: the mobile hamburger menu's Play entry is a
+      // Confirmed live on MC: the mobile hamburger menu's Play entry is a
       // plain <li> (icon + "Play" span), not a <button> descendant like
       // every other GEO onboarded so far — same gap as registration.spec.ts.
       const playBtn = page.locator('[class*="MobileFooter"] button.play, [class*="MobileMenu_play-but"]').first();
@@ -254,9 +254,9 @@ test.describe('P1 - Website Header', () => {
       // also a real (but off-screen unless scrolled) footer link with the
       // same href, so an unscoped .first() picks the wrong one on mobile.
       // Desktop scope changed from getByRole('banner') to the MainMenu_
-      // container — confirmed live on PC DE (the first GEO with
-      // hasPromotionsIconInHeader: true): its "Aktionen" link sits inside a
-      // separate <nav role="navigation"> landmark, a SIBLING of the small
+      // container — confirmed live on a brand with hasPromotionsIconInHeader:
+      // true: its Promotions link sits inside a separate
+      // <nav role="navigation"> landmark, a SIBLING of the small
       // <header role="banner"> strip (logo/search/login/register only), not
       // nested inside it — getByRole('banner') never found it. This code
       // path was never exercised against a true case before, so widening it
@@ -276,7 +276,7 @@ test.describe('P1 - Website Header', () => {
         console.log(`WH-01 Step 4 skipped — no ${isMobile ? 'mobile bottom-nav' : 'header'} Promotions icon for this GEO`);
         return;
       }
-      // Confirmed live on PC DE: the MainMenu_ container is a hamburger-
+      // Confirmed live: the MainMenu_ container is a hamburger-
       // triggered off-canvas sidebar that's off-screen by default even on
       // DESKTOP (x: -271px), not just mobile — genuinely different from
       // every other GEO's directly-visible header nav. isVisible() reports

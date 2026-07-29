@@ -54,13 +54,12 @@ async function tryClickCookieConsent(page: Page): Promise<boolean> {
       const sr = (consentEl as any).shadowRoot as ShadowRoot | null;
       if (sr) allButtons.push(...Array.from(sr.querySelectorAll('button')) as HTMLButtonElement[]);
     }
-    // English (UK/ROW/IE/...), Spanish (ES), German (DE), Swedish (SE), and
+    // English (UK/ROW/IE/...), Spanish (ES), Swedish (SE), and
     // Danish (MC/DK) confirmed live; add more locales here as they're
     // confirmed rather than guessing translations.
     const KNOWN_ACCEPT_TEXTS = [
       'allow all cookies', 'allow all',
       'permitir todas las cookies', 'permitir todas', 'aceptar todas',
-      'alle cookies zulassen',
       'tillåt alla cookies',
       'tillad alle cookies', // Danish — confirmed live on both GC DK and MC DK 2026-07-24; wasn't being dismissed at all before this, silently blocking every subsequent click for the rest of each test
     ];

@@ -272,13 +272,23 @@ test.describe('P1 - Game Category Navigation', () => {
     // link exists ONLY inside the hamburger sidebar's per-category
     // accordion (each of the 3 top-level items independently toggles a
     // collapsed <ul>, maxHeight 0 -> ~410px on click) — and that sidebar
-    // itself is off-canvas by default even on desktop (same pattern already
-    // confirmed on Prime Casino Germany), so it must be opened via the
-    // hamburger first. Top-level categories ARE reachable via Nav_nav__, so
+    // itself is off-canvas by default even on desktop, so it must be opened
+    // via the hamburger first. Top-level categories ARE reachable via Nav_nav__, so
     // those reuse clickNavAndVerify unchanged; only sub-categories need the
     // dedicated helper below.
+    // IE and CA both confirmed live 2026-07-29 to share UK's exact taxonomy
+    // and English URL slugs (just prefixed with /en-IE/ or /en-CA/ by
+    // baseURL) — widened to cover all three rather than adding near-
+    // duplicate branches.
     const isLpUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
-      && test.info().project.name.replace(/-mobile$/, '') === 'UK';
+      && ['UK', 'IE', 'CA'].includes(test.info().project.name.replace(/-mobile$/, ''));
+    // ES has its own real taxonomy, confirmed live 2026-07-29 via the
+    // sidebar's own DOM — different sub-categories than UK (no Daily
+    // Jackpots, no Live Casino sub-breakdown at all, Video Bingo instead of
+    // Poker/Scratch Cards) and Spanish URL slugs. See geo-features.ts's
+    // LP.ES block for the full confirmed structure.
+    const isLpEsFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
+      && test.info().project.name.replace(/-mobile$/, '') === 'ES';
 
     async function clickSidebarSubCategoryAndVerify(categoryClass: string, hrefPart: string, label: string) {
       await page.evaluate(() => (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click());
@@ -429,6 +439,45 @@ test.describe('P1 - Game Category Navigation', () => {
       await test.step('Casino Games > Scratch Cards → /casino-games/scratch-cards/', async () => {
         await clickSidebarSubCategoryAndVerify('MainMenu_main_3_casino', '/casino-games/scratch-cards/', 'Scratch Cards');
       });
+    }
+
+    if (isLpEsFormat) {
+      await test.step('Online Slots category → /tragaperras/', async () => {
+        await clickNavAndVerify('/tragaperras/', 'Online Slots');
+      });
+      await test.step('Online Slots > Jackpots → /tragaperras/bote/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_1_slots', '/tragaperras/bote/', 'Jackpots');
+      });
+      await test.step('Online Slots > Megaways → /tragaperras/megaways/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_1_slots', '/tragaperras/megaways/', 'Megaways');
+      });
+      await test.step('Online Slots > Providers → /tragaperras/proveedores/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_1_slots', '/tragaperras/proveedores/', 'Proveedores');
+      });
+      await test.step('Online Slots > Themes → /tragaperras/tematicas/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_1_slots', '/tragaperras/tematicas/', 'Temáticas');
+      });
+
+      // No Daily Jackpots sub-item on ES (confirmed live — UK has one, ES doesn't).
+
+      // Live Casino has NO sub-category accordion on ES at all — confirmed
+      // live: main_2_live is a flat single link, not an expandable toggle
+      // like main_1_slots/main_3_casino. Only the top-level check applies.
+      await test.step('Live Casino category → /ruleta-en-vivo/', async () => {
+        await clickNavAndVerify('/ruleta-en-vivo/', 'Live Casino');
+      });
+
+      await test.step('Casino Games category → /juegos-casino/', async () => {
+        await clickNavAndVerify('/juegos-casino/', 'Casino Games');
+      });
+      await test.step('Casino Games > Table Games → /juegos-casino/mesa/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_3_casino', '/juegos-casino/mesa/', 'Juegos de Mesa');
+      });
+      await test.step('Casino Games > Video Bingo → /juegos-casino/video-bingo/', async () => {
+        await clickSidebarSubCategoryAndVerify('MainMenu_main_3_casino', '/juegos-casino/video-bingo/', 'Video Bingo');
+      });
+
+      // No Poker/Scratch Cards sub-items on ES (confirmed live — UK has both, ES has Video Bingo instead).
     }
 
     printSummary();
