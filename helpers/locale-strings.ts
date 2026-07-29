@@ -64,8 +64,10 @@ const EN: LocaleStrings = {
   noAccountText: /don'?t have an account/i,
   // "search"-only added 2026-07-28 — confirmed live: Lord Ping (LP) UK's
   // real placeholder is plain "Search" (id="search-game"), not "Search
-  // game" like every other brand onboarded so far.
-  searchPlaceholder: /^search( game)?$/i,
+  // game" like every other brand onboarded so far. Trailing \.* added same
+  // day for ZI UK — its real placeholder is "Search game..." (with an
+  // ellipsis), which the old exact anchor never matched either.
+  searchPlaceholder: /^search( game)?\.*$/i,
   feedbackTextareaPlaceholder: /type your answer here/i,
   homeLinkText: /^home$/i,
   footerResponsibleGamingText: /^responsible gaming$/i,

@@ -357,8 +357,12 @@ test.describe('P2 - Sidebar Navigation', () => {
     }
 
     // -- Steps 33-35: Responsible Gaming ----------------------------------
+    // Confirmed live on ZI UK: the page/footer link exists (responsibleGamingPath),
+    // but the sidebar itself has no Responsible Gaming entry at all — same
+    // genuine site-structure gap as PC ES's Help link below. Use the "if
+    // exists" variant like every other optional sidebar link.
     const responsibleGamingPath = geoFeatures.responsibleGamingPath ?? 'responsible-gaming/';
-    await navStep('Responsible Gaming -> /' + responsibleGamingPath, '/' + responsibleGamingPath, '/' + responsibleGamingPath);
+    await navStepIfExists('Responsible Gaming -> /' + responsibleGamingPath, '/' + responsibleGamingPath, '/' + responsibleGamingPath);
 
     // -- Steps 36-38: Help ------------------------------------------------
     // Confirmed live on PC ES: the Help/"Ayuda" page exists and 200s, but

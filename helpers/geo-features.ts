@@ -58,6 +58,7 @@ export interface GeoFeatureConfig {
   gameTileHrefSubstrings?: string[]; // optional — substrings identifying a real game-tile link (as opposed to a bare category nav link) in game-filter.spec.ts and game-info-modal.spec.ts. Defaults to the classic Slingo-family taxonomy (/slingo/, /slots/, /casino/, /bingo/) when omitted, so existing GEOs need no change. Set this when a brand's game category taxonomy differs (e.g. MC's /online-slots/, /casino-games/, /live-casino/).
   paymentMethodsPath?: string; // optional — baseURL-relative path for the footer's Payment Options link. Defaults to 'payment-methods/' when omitted (the common case); set when a brand uses a different slug (e.g. MC's /payment-options/).
   hasPromotionsIconInHeader?: boolean; // optional — false means the header/banner has no dedicated Promotions icon linking to the promotions page, even though the page itself exists (hasPromotionsPage/promotionsPath). Distinct from those: this is specifically about a header entry point. Defaults to true when omitted, so existing GEOs need no change.
+  searchRequiresSidebarOpen?: boolean; // optional — true means this brand's only a[href="#search"] element lives inside the closed hamburger sidebar drawer (translated off-canvas, e.g. left: -418px) with NO separate always-visible header search icon elsewhere on the page — confirmed live on ZI UK 2026-07-28 (the DOM has exactly one #search link, and it's the sidebar's "Search game" item). Every other brand onboarded so far has a real header-level search icon that's directly clickable without opening the sidebar first. When true, search.spec.ts's Step 1 and website-header.spec.ts's Step 3 open the hamburger sidebar before clicking the #search link, instead of clicking it directly. Defaults to false/undefined when omitted, so existing GEOs need no change.
   hasHelpFaqAccordion?: boolean; // optional — false means the Help page has no real FAQ accordion content at all (confirmed live on MC AB 2026-07-27: 'accordion-button' only appears inside a <style> block's CSS rule, no actual <button class="accordion-button"> element renders) — a real content gap on a not-yet-live QA-only market, not a selector issue. Defaults to true when omitted, so existing GEOs need no change.
   hasRegulationLogos?: boolean; // optional — false means the footer has no <son-license-logos> regulation/compliance logo row at all (confirmed live: 0 occurrences in the homepage HTML). Confirmed on MC AB 2026-07-27 — a not-yet-live QA-only market missing this component entirely, a real environment gap not a shadow-DOM timing issue. Defaults to true when omitted, so existing GEOs need no change.
   hasBonusPolicyBanner?: boolean; // optional — false means the Promotions page has no visible bonus T&C/policy banner text at all, even though the page itself exists (hasPromotionsPage/promotionsPath). Confirmed live on MC SE 2026-07-27: page loads fine (real campaign content, real Play CTA), but no text matching locale-strings.ts's bonusPolicyText pattern ever appears — consistent with the already-documented Nordic BankID pattern (SE's homepage banner has no visible T&C/bonus disclaimer either, see locale-strings.ts's 'sv' bonusPolicyText comment); this is the first SE GEO in the project with hasPromotionsPage: true, so promotions-page.spec.ts's Step 4 had never actually exercised this code path for a Nordic market before. Defaults to true when omitted, so existing GEOs need no change.
@@ -1328,6 +1329,47 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPaymentMethodsPage: true, // confirmed live: /payment-options/ returns 200 (see paymentMethodsPath)
       hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
       hasBlogSearch: true, // unconfirmed — same as above
+    },
+  },
+
+  // ── Zingo Bingo (ZI) ─────────────────────────────────────────────────────
+  ZI: {
+    // UK — first ZI onboarding, confirmed live 2026-07-28 against
+    // www.zingobingo.co.uk. Same underlying SkillOnNet/SON platform family as
+    // SNG/MC (son-cookie-consent, MainMenu_main-menu CSS conventions), but a
+    // bingo-first taxonomy with its own category set (Bingo Rooms/Slots/
+    // Slingo/Jackpots/Instant Win/Crash Games/Keno/Casino) — no Slingo-style
+    // /slots//casino//bingo/ generic paths, see gameTileHrefSubstrings. No
+    // real test account exists yet (per Reeve/session context) —
+    // hasTestAccount: false, TEST_CREDENTIALS_ZI_UK_USERNAME/PASSWORD not
+    // needed until one is provided.
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed live: sidebar + footer "Blog"/"Read Our Blog" link, 200
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live: sidebar + footer link, 200
+      featuresPath: null, // confirmed live: /features/ 404s, no Features link anywhere in sidebar or footer
+      mobileAppPath: 'mobile-app/', // confirmed live 200 via direct path check, but NO footer/sidebar link to it at all (unlike most brands) — kept as the common placeholder since the field isn't nullable; footer-navigation.spec.ts's Mobile App step should skip cleanly since no link exists to find
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 404, no footer/sidebar link either — skips cleanly like SC's DE/SE
+      currencySymbol: '£', // confirmed via homepage bonus copy ("£10"/"£20"/"£100")
+      contactEmail: 'support@zingobingo.co.uk', // confirmed live: real mailto link on /contact/
+      aboutUsPath: 'about/', // confirmed live: sidebar + footer "About us" link is /about/, NOT the default 'about-us/'
+      helpPath: 'faqs/', // confirmed live: sidebar "Help" link is /faqs/, NOT the default 'help/'
+      casinoPath: 'casino-games/', // confirmed live: sidebar/footer "Casino"/"Casino Games" link is /casino-games/, NOT the default 'casino/'
+      slotsPath: 'online-slots/', // confirmed live: sidebar/footer "Slots" link is /online-slots/, NOT the default 'slots/'
+      socialMedia: { twitter: 'UKZingoBingo', facebook: null, instagram: 'zingobingouk' }, // confirmed live: facebook link is a numeric profile.php?id= URL with no name-based substring to match, so left null; twitter/x confirmed at x.com/UKZingoBingo, instagram confirmed at instagram.com/zingobingouk
+      hasSocialMedia: true, // confirmed live: 3 real social links found homepage-wide (facebook, x/twitter, instagram) plus a youtube link not modeled in SocialMediaHandles
+      searchTerm: 'Bingo', searchResultHrefSubstrings: ['/bingo-rooms/', '/online-slots/', '/slingo/', '/casino-games/'], // NOT independently confirmed via a completed in-app search this session — this is a bingo-first brand, "Casino" (the common default term used by other brands) may return few/no results here; verify on first real run and correct if GS-01 fails
+      gameTileHrefSubstrings: ['/bingo-rooms/', '/online-slots/', '/slingo/', '/casino-games/', '/instant-win-games/', '/jackpots/', '/crash-games/'], // confirmed live via homepage crawl — real game tile links (e.g. /bingo-rooms/deal-or-no-deal/, /online-slots/dragon-power-10000-ways/) all fall under this brand's own category taxonomy, not Slingo's/SNG's/MC's
+      hasGameFilterCarousel: false, // confirmed live: zero [class*="GamesSlider_wrapper"] elements — this brand's homepage carousels use different class names entirely (MainBannerSlider_slider, Slider_slider + BingoTilesContainer_wrapper) — a real naming difference the shared GF-01 spec's hardcoded selector can't match, not an absence of carousels altogether (28 slider-like elements do exist). Skip GF-01 rather than false-fail on this brand's own component naming.
+      hasFeedbackForm: true, // confirmed live: "Report a problem"-style feedback link present on /contact/ (a[href*="#account/feedback"])
+      hasGameCategoryNav: true, // confirmed live: sidebar nav is Home/Promotions/Bingo Rooms/Slots/Slingo/Jackpots/Instant Win/Crash Games/Keno/Casino — a richer, bingo-first taxonomy unlike any brand onboarded so far (see gameTileHrefSubstrings); game-category-navigation.spec.ts's hardcoded category list will need brand-specific handling when that spec runs
+      hasLoginRegistration: true, // confirmed live: "Log in"/"Join" buttons present in header (2 login-labeled elements, 1 join-labeled element found)
+      hasTestAccount: false, // confirmed: no TEST_CREDENTIALS_ZI_UK_USERNAME/PASSWORD exists in .env and none was provided this session — skip only login.spec.ts's real successful-login test
+      hasAccountModal: true, // confirmed live: clicking "Log in" reliably advances the URL to /#account
+      hasPaymentMethodsPage: true, // confirmed live: sidebar + footer "Payment Methods"/"Our Payment Methods" link, 200 (default 'payment-methods/' path, no override needed)
+      hasBlogDesktopSearch: true, // confirmed live: a real, visible blog search icon exists at desktop width ([data-tk-value="blogSearch"]/[class*="BlogHeader_search"])
+      hasBlogSearch: false, // confirmed live: clicking the blog search icon does not reveal a working search input — consistent with the same platform-wide non-functional blog search already confirmed on SNG UK/CA and MC UK
+      searchRequiresSidebarOpen: true, // confirmed live: the page's only a[href="#search"] element is the sidebar's "Search game" item, sitting off-canvas (left: -418px) until the hamburger is opened — no separate header search icon exists at all, unlike every other brand onboarded so far
     },
   },
 };

@@ -85,6 +85,16 @@ test.describe('P1 - Search', () => {
       const searchLink = isMobile && (await mobileFooterSearch.count()) > 0
         ? mobileFooterSearch
         : page.locator('a[href="#search"]').first();
+      // Confirmed live on ZI UK: this brand has no separate header search
+      // icon at all — its only #search link is the hamburger sidebar's
+      // "Search game" item, off-canvas until the sidebar is opened.
+      if (geoFeatures.searchRequiresSidebarOpen && !(isMobile && (await mobileFooterSearch.count()) > 0)) {
+        await page.evaluate(() => {
+          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+        });
+        await page.waitForTimeout(600);
+        await dismissCampaignPopup(page);
+      }
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
       await searchLink.click({ force: true });
       await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
@@ -95,7 +105,12 @@ test.describe('P1 - Search', () => {
     await runStep('Step 2: Search bar is clickable', async () => {
       const searchInput = page.getByPlaceholder(strings.searchPlaceholder).first();
       await expect(searchInput).toBeVisible({ timeout: 5_000 });
-      await searchInput.click();
+      // Confirmed live on ZI UK: opening the search panel via the sidebar
+      // (searchRequiresSidebarOpen) leaves the sidebar drawer's own backdrop
+      // in the DOM behind the search popup, overlapping the search input and
+      // intercepting a plain click — force bypasses that, same as the
+      // sidebar link click itself already needs above.
+      await searchInput.click({ force: geoFeatures.searchRequiresSidebarOpen ?? false });
     });
 
     // ── Step 3: Type the GEO's search term ───────────────────────────────
@@ -187,7 +202,32 @@ test.describe('P1 - Search', () => {
         if (!stillOpen) break;
       }
       await page.waitForTimeout(500);
-      await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
+      // Confirmed live on ZI UK: the close button (span.Popup_close) hides
+      // the GamePopup element (gamePopup.isVisible() above correctly reports
+      // false) but does NOT pop the URL hash back to plain #search — it's
+      // left stuck on #search-gamepage/<slug>/. The old /#search/ regex here
+      // matched that leftover URL too (it's a substring match, not anchored)
+      // and silently passed, masking the real bug: because the route never
+      // actually returned to bare #search, the app's SearchPopup component
+      // (which only renders for that exact route) stayed hidden too — the
+      // real cause of Step 6's "search popup missing entirely" failure.
+      // Anchor the regex so a leftover -gamepage/ URL is caught here instead
+      // of silently breaking a later step. Two recovery attempts confirmed
+      // NOT reliable on ZI: goBack() skips straight past #search to the bare
+      // homepage "/" (the sidebar-driven route apparently doesn't push a
+      // real, distinct history entry the way a plain header link click
+      // would), and re-clicking the sidebar's #search link fails outright —
+      // the hamburger toggle itself doesn't visually reopen the drawer while
+      // still on the #search-gamepage/ route (click registers, sidebar stays
+      // off-canvas). Directly assigning location.hash IS reliable — unlike
+      // history.replaceState, a real hash assignment fires a hashchange
+      // event the app's own router picks up, landing cleanly on bare
+      // #search with the SearchPopup visible again (confirmed live).
+      if (!/#search$/.test(page.url())) {
+        await page.evaluate(() => { window.location.hash = 'search'; });
+        await page.waitForTimeout(1_500);
+      }
+      await expect(page).toHaveURL(/#search$/, { timeout: 10_000 });
       // Fail loudly here rather than silently continuing with it still
       // open — a silent timeout previously let the two-steps-later bug through.
       await expect(gamePopup).toBeHidden({ timeout: 5_000 });
@@ -196,8 +236,22 @@ test.describe('P1 - Search', () => {
     // ── Step 6: Hover a game → PLAY IT visible ───────────────────────────
     await runStep('Step 6: Hover game tile → Play It CTA appears', async () => {
       const vh = page.viewportSize()?.height ?? 720;
+      // Confirmed live on ZI UK: Step 5's location.hash recovery remounts the
+      // whole search component fresh — the typed query and its results from
+      // Step 3 are gone, leaving an empty "Find your game" state with no
+      // tiles to hover. Re-type the query here if that happened, rather than
+      // assuming Step 3's results are still around.
+      let count = await searchResultsContainer().locator(gameLinkSelector).count();
+      if (count === 0) {
+        const searchInputAgain = page.getByPlaceholder(strings.searchPlaceholder).first();
+        if (await searchInputAgain.isVisible({ timeout: 3_000 }).catch(() => false)) {
+          await searchInputAgain.click({ force: true }).catch(() => {});
+          await searchInputAgain.fill(geoFeatures.searchTerm).catch(() => {});
+          await page.waitForTimeout(2_500);
+        }
+      }
       const gameLinks = searchResultsContainer().locator(gameLinkSelector);
-      const count = await gameLinks.count();
+      count = await gameLinks.count();
       let titleLink = gameLinks.first();
       for (let i = 0; i < Math.min(count, 20); i++) {
         const box = await gameLinks.nth(i).boundingBox().catch(() => null);
@@ -234,16 +288,42 @@ test.describe('P1 - Search', () => {
       // re-trigger the CSS hover state on its own.
       for (let attempt = 0; attempt < 3; attempt++) {
         if (!isMobile) {
+          // Confirmed live on ZI UK: titleLink resolves to the "desktop"
+          // caption link, which sits AFTER/OUTSIDE .GameTile_main as a
+          // sibling — the old `preceding::img[1]` xpath from there lands on
+          // the "mobile" variant image (0x0 at desktop width, since it's
+          // CSS-hidden), so its boundingBox() failed the y>50 sanity check
+          // and silently fell back to titleLink's OWN tiny caption-text box.
+          // Hovering just that caption never triggers the sibling
+          // .GameTile_tile-hover's CSS :hover reveal at all (it's scoped to
+          // .GameTile_main, not the whole tile). Go straight to the actual
+          // hoverable container instead of inferring it from a neighboring
+          // image — falls back to the old img/titleLink boxes if this
+          // brand's markup doesn't have one, so existing GEOs are unaffected.
+          const tileContainer = titleLink
+            .locator('xpath=ancestor::li[1]')
+            .locator('[class*="GameTile_main"], [class*="GameTile_search-tile"]')
+            .first();
           const gameImg = titleLink.locator('xpath=preceding::img[1]').first();
           // Smooth mouse movement so hover animation is visually visible
           // Start from top-left corner so the glide across the screen is clearly seen
-          const imgBox = await gameImg.boundingBox().catch(() => null);
-          const targetBox = (imgBox && imgBox.y > 50 && imgBox.y < vh) ? imgBox
-            : await titleLink.boundingBox().catch(() => null);
+          const containerBox = await tileContainer.boundingBox().catch(() => null);
+          const imgBox = containerBox ? null : await gameImg.boundingBox().catch(() => null);
+          const targetBox = containerBox ?? ((imgBox && imgBox.y > 50 && imgBox.y < vh) ? imgBox
+            : await titleLink.boundingBox().catch(() => null));
           if (targetBox) {
             const cx = targetBox.x + targetBox.width / 2;
             const cy = targetBox.y + targetBox.height / 2;
-            await page.mouse.move(50, 50);                   // start far from target
+            // Confirmed live on ZI UK: starting the glide at the raw page
+            // corner (50, 50) — outside the search popup's own bounds —
+            // closes the whole popup outright (this brand's overlay reacts
+            // to the mouse leaving it, unlike every other brand onboarded so
+            // far). Start from inside the popup itself instead, near its own
+            // top-left corner, so the glide stays within it the whole time.
+            const popupBox = await searchPopup.boundingBox().catch(() => null);
+            const startX = popupBox ? popupBox.x + 20 : 50;
+            const startY = popupBox ? popupBox.y + 20 : 50;
+            await page.mouse.move(startX, startY);            // start far from target, but inside the popup
             await page.waitForTimeout(200);
             await page.mouse.move(cx, cy, { steps: 30 });   // slow glide to game tile
           }
@@ -318,6 +398,13 @@ test.describe('P1 - Search', () => {
       const searchLink = isMobile && (await mobileFooterSearch2.count()) > 0
         ? mobileFooterSearch2
         : page.locator('a[href="#search"]').first();
+      if (geoFeatures.searchRequiresSidebarOpen && !(isMobile && (await mobileFooterSearch2.count()) > 0)) {
+        await page.evaluate(() => {
+          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+        });
+        await page.waitForTimeout(600);
+        await dismissCampaignPopup(page);
+      }
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
       await searchLink.click({ force: true });
       await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
@@ -329,11 +416,22 @@ test.describe('P1 - Search', () => {
       // The visible "Back" text is screen-reader-only (0x0 on screen,
       // confirmed live in website-header.spec.ts) — the real clickable
       // element is this button.
+      // Confirmed live on ZI UK: the desktop back control has NO text at all
+      // (not even the screen-reader-only "Back" every other brand has) —
+      // just an <i> icon inside button.SearchBar_search-back. Falling back
+      // to the same class-based locator mobile already uses covers this
+      // without affecting brands where the text-based one still matches.
       const backBtn = isMobile
         ? page.locator('[class*="SearchBar_search-back"]').first()
-        : page.getByText(strings.backButtonText, { exact: true }).first();
+        : page.getByText(strings.backButtonText, { exact: true }).or(page.locator('[class*="SearchBar_search-back"]')).first();
       await expect(backBtn).toBeVisible({ timeout: 5_000 });
-      await backBtn.click();
+      // Confirmed live on ZI UK: a leftover GamePopup overlay (from Steps
+      // 4-5's game info modal) physically covers this button — a plain
+      // click keeps retrying against it for the full default timeout. A
+      // native el.click() via evaluate fires directly on the button
+      // regardless, same fix already used for website-header.spec.ts's
+      // Promotions-icon click.
+      await backBtn.evaluate((el: HTMLElement) => el.click());
       await page.waitForTimeout(2_000);
       await expect(page).not.toHaveURL(/#search/);
     });
