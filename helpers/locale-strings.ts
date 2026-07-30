@@ -54,7 +54,7 @@ const EN: LocaleStrings = {
   reportProblemText: /report a problem/i,
   membersLoginText: /members login/i,
   backButtonText: /^back$/i,
-  playCta: /play it|play now/i,
+  playCta: /play it|play now|^play$/i, // confirmed live on PSL UK 2026-07-30: this brand's real hover/game-page CTA reads bare "Play", not "Play It"/"Play Now" — anchored so it doesn't loosely match unrelated text elsewhere
   bonusPolicyText: /bonus policy applies|terms\s*(?:and|&)\s*conditions apply/i,
   readMoreText: /read more/i,
   feedbackNext: /^next$/i,
@@ -199,13 +199,13 @@ const STRINGS: Record<string, LocaleStrings> = {
     feedbackSubmit: /^skicka$/i,
     forgotPasswordText: /glömt lösenordet/i, // not exercised
     noAccountText: /skapa konto/i, // not exercised
-    searchPlaceholder: /^sök spel$/i,
+    searchPlaceholder: /^sök( spel)?$/i, // confirmed live on LP SE 2026-07-30: real placeholder is just "Sök", not "Sök spel" — widened to accept both rather than assume every sv brand phrases it identically
     feedbackTextareaPlaceholder: /skriv ditt svar här/i, // not exercised
     homeLinkText: /^hem$/i,
     footerResponsibleGamingText: /^ansvarsfullt spelande$/i,
     footerBonusPolicyText: /^bonuspolicy$/i, // NOT confirmed live — no such footer link found (SE's footer has no separate Bonus Policy link)
     footerTermsText: /^regler och villkor$/i,
-    footerPrivacyPolicyText: /^integritet$/i,
+    footerPrivacyPolicyText: /^integritet$|^privatpolicy\s*$/i, // confirmed live on LP SE 2026-07-30: real footer link text is "Privatpolicy " (with a trailing space in the DOM), not "Integritet" — widened rather than assume every sv brand uses the same word
     footerAboutUsText: /^om oss$/i,
     footerPaymentOptionsText: /^betalningsalternativ$/i, // not exercised — SE has no Payment Options page (404, hasPaymentMethodsPage: false)
     footerAffiliatesText: /^affiliateprogram$/i,

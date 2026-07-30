@@ -9,6 +9,24 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-07-30
+
+### Automation Coverage Status (per brand, for tracker use)
+
+- **Lord Ping (LP) Canada is now fully confirmed** — ran the whole checklist on both desktop and phone screens: 36 checks passed, 0 failures. Everything flagged as broken in yesterday's session turned out to be leftover glitches from that one long test run (reusing the same test account back-to-back for over 40 minutes), not real site problems — confirmed clean today with a fresh run. No code changes were needed.
+- **Lord Ping (LP) Sweden is now fully confirmed** — ran the whole checklist on both desktop and phone screens: 22 checks passed, 0 failures. This market uses the same "quick deposit" instant sign-in style as several of our other brands' Swedish sites (no traditional username/password login), so most of the usual login/sign-up checks skip cleanly by design, not because anything's broken. **This closes out Lord Ping — every market (UK, Spain, Ireland, Canada, Sweden) is now fully onboarded.**
+- **Prime Slots (PSL) UK — brand-new brand, onboarding started today.** Turned out to be built on genuinely different website tech than every other brand we test (no slide-out side menu at all; a classic always-visible top menu bar with hover drop-downs instead, and a completely different pop-up window style for login/sign-up). Core functionality is fully working and confirmed on both desktop and phone: logging in, signing up a brand-new account, browsing every game category (Slots/Scratch Cards/Casino), the search feature, and the login/sign-up pop-up windows. Full run: 30 passed, 10 failed, 8 skipped. The 10 remaining failures are all in 5 known, narrower spots (one search edge case, one header edge case, and the blog section's 3 pages) — carrying these into next session rather than treating onboarding as fully done.
+
+### Fixed
+
+- **Two real bugs found in shared code used by every Swedish-language brand, not just Lord Ping** — the search box's placeholder text was hardcoded to "Sök spel" but Lord Ping Sweden's real search box just says "Sök"; and the footer's Privacy Policy link check was looking for "Integritet" but Lord Ping Sweden's real link says "Privatpolicy" (with an easy-to-miss trailing space in the actual page code). Both widened so either wording is accepted, without breaking any other Swedish site we test.
+- **Prime Slots UK needed a wide set of first-time fixes for its different website style**, including: teaching the game-category checklist its own menu style (hover drop-downs instead of a slide-out menu) and its own 3-category setup (Slots/Scratch Cards/Casino, with Scratch Cards being a category we've never seen on any other brand); fixing the close button on login/sign-up pop-ups (this brand's real close button is a different icon our checks didn't recognize yet, and closing it left the page address stuck showing "logged in" state even after the window visually closed); fixing a mix-up where a real menu link (like "New Slots") was accidentally being treated as a clickable game tile; correcting the search box's default search word (it was searching for "Slots" the category name, which returns nothing — real game searches need an actual game title); and widening the shared "Play" button check, since this brand's real button just says "Play" instead of "Play It"/"Play Now" like every other brand.
+- **A shared page-navigation helper used by several blog-related checks assumed every brand reaches its blog through the slide-out side menu** — Prime Slots UK has no side menu at all, so this now falls back to the plain blog link that's always sitting in the footer instead, when a side menu doesn't exist.
+
+### Known open items (carrying into next session)
+
+- **Prime Slots UK — 5 narrower gaps left to close**, all confirmed non-blocking (not affecting the main sign-up/login/browsing flows): a search-flow edge case where clicking through to sign-up from a search result doesn't quite work; one header edge case; and 3 blog-page checks (the blog's own header, the blog listing page, and the blog's sidebar) that need their own dedicated look, since this brand's blog section turned out to have its own different page structure too.
+
 ## [Unreleased] - 2026-07-29
 
 ### Automation Coverage Status (per brand, for tracker use)

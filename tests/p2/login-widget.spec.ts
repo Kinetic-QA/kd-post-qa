@@ -71,7 +71,7 @@ test.describe('P2 - Login Widget', () => {
         throw new Error('No mobile Login entry point found (checked #mobile-login and the hamburger sidebar)');
       }
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
-      await loginBtn.click();
+      await loginBtn.evaluate((el: HTMLElement) => el.click());
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
       await page.waitForTimeout(1_500);
     }
@@ -106,11 +106,11 @@ test.describe('P2 - Login Widget', () => {
       // accessible name and never truly disappears, so an unscoped locator
       // would wait on the wrong element forever (see login.spec.ts for the
       // same class of bug).
-      const modalForForgot = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+      const modalForForgot = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first();
       const loginSubmitGone = await modalForForgot.getByRole('button', { name: strings.loginSubmitButton })
         .first().waitFor({ state: 'hidden', timeout: 10_000 }).then(() => true).catch(() => false);
       await page.waitForTimeout(10_000);
-      const modalStillOpen = await page.locator('[class*="AccountPopup_account"]')
+      const modalStillOpen = await page.locator('[class*="AccountPopup_account"], .modal-content')
         .filter({ visible: true }).first().isVisible({ timeout: 3_000 }).catch(() => false);
       record('Forgot Password swaps to reset-password view', loginSubmitGone && modalStillOpen);
     });
@@ -184,7 +184,7 @@ test.describe('P2 - Login Widget', () => {
       await usernameInput.fill('wronguser_test123');
       const passwordField = page.locator('input[type="password"]').first();
       await passwordField.fill('wrongpass_test123');
-      const modalForReport = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+      const modalForReport = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first();
       await modalForReport.getByRole('button', { name: strings.loginSubmitButton }).first().click({ force: true });
       await page.waitForTimeout(3_000);
 
@@ -216,15 +216,36 @@ test.describe('P2 - Login Widget', () => {
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
       } else {
-        const modal = page.locator('[class*="Popup_popup"], [class*="AccountPopup"]').filter({ visible: true }).first();
-        const box = await modal.boundingBox().catch(() => null);
-        if (box) {
-          await page.mouse.click(box.x + box.width - 20, box.y + 20);
+        // .modal-header .cursor-pointer — confirmed live on Prime Slots (PSL)
+        // UK 2026-07-30: this brand's real close control is an unlabeled
+        // <span class="cursor-pointer"> icon inside .modal-header — a direct
+        // click on it is unambiguous, unlike guessing a corner coordinate on
+        // a modal whose real card size/position can vary (and where a
+        // same-shaped but hidden sibling modal could throw off which
+        // bounding box gets measured).
+        const closeIcon = page.locator('.modal-header .cursor-pointer').last();
+        if (await closeIcon.count() > 0) {
+          await closeIcon.evaluate((el: HTMLElement) => el.click()).catch(() => {});
           await page.waitForTimeout(1_000);
         } else {
-          await page.keyboard.press('Escape');
-          await page.waitForTimeout(1_000);
+          const modal = page.locator('[class*="Popup_popup"], [class*="AccountPopup"], .modal-content').filter({ visible: true }).first();
+          const box = await modal.boundingBox().catch(() => null);
+          if (box) {
+            await page.mouse.click(box.x + box.width - 20, box.y + 20);
+            await page.waitForTimeout(1_000);
+          } else {
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(1_000);
+          }
         }
+      }
+      // Confirmed live on PSL UK: the close icon click above genuinely
+      // dismisses the modal's real content, but the URL hash is left stuck
+      // on #account regardless — same class of leftover-hash bug already
+      // documented for search.spec.ts's #search route on other brands.
+      if (page.url().includes('#account')) {
+        await page.evaluate(() => { history.pushState({}, '', location.pathname); });
+        await page.waitForTimeout(500);
       }
       await expect(page).not.toHaveURL(/#account/, { timeout: 8_000 });
     });

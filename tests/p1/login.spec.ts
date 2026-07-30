@@ -87,7 +87,7 @@ test.describe('P1 - Login', () => {
         throw new Error('No mobile Login entry point found (checked #mobile-login and the hamburger sidebar)');
       }
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
-      await loginBtn.click();
+      await loginBtn.evaluate((el: HTMLElement) => el.click());
       await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
       await page.waitForTimeout(1_500);
       // SNG FR-CA (confirmed live 2026-07-21): the URL updates to #account
@@ -123,7 +123,11 @@ test.describe('P1 - Login', () => {
       // name, and .first() would otherwise grab that instead of the modal's
       // submit button (confirmed live on ES: silently clicked the header
       // button again, which no-ops, so the test never actually logs in).
-      const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+      // .modal-content — confirmed live on Prime Slots (PSL) UK 2026-07-30:
+      // this brand's account modal is a Tailwind-styled web component
+      // (.modal/.modal-dialog/.modal-content), not the AccountPopup_account/
+      // Popup_popup React CSS-module classes every other brand shares.
+      const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first();
       const loginSubmitBtn = modal.getByRole('button', { name: strings.loginSubmitButton }).first();
       await expect(loginSubmitBtn).toBeVisible({ timeout: 8_000 });
       // force: true — some markets render an overlay (e.g. son-auth-modals)
