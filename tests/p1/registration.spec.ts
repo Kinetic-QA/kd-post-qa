@@ -211,6 +211,10 @@ test.describe('Registration Flow', () => {
     const isMcFrCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC'
       && test.info().project.name.replace(/-mobile$/, '') === 'FR-CA';
     const mcFrCaStep0Labels = { mobile: 'Numéro de téléphone cellulaire', dob: 'Quelle est votre date de naissance?', continue: 'Continuer' };
+    // I36 — onboarding started 2026-07-30: confirmed via homepage/nav crawl
+    // this brand has no Bingo vertical anywhere (same brand-wide fact as MC)
+    // — no gdprBingo checkbox exists, same 3-checkbox set as MC/CA/COM.
+    const isI36NoBingoFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'I36';
     // MC/DK — onboarding started 2026-07-24: confirmed live via real browser
     // probe that this market's registration widget is NOT the usual mobile
     // number + DOB shape at all — Step 0 asks for a Danish CPR number
@@ -687,7 +691,7 @@ test.describe('Registration Flow', () => {
           : (isCanadianMobileFormat || isMcFrCaFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'], false,
               (isFrCaFormat || isMcFrCaFormat) ? 'Non' : 'No')
-          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat)
+          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat || isI36NoBingoFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
           : fillMobileStep5Final(page, scope));
       });
@@ -844,7 +848,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat)
           : isMcFrCaFormat
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'], /nom d.utilisateur/i, /mot de passe/i, true)
-          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat)
+          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat || isI36NoBingoFormat)
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
       });

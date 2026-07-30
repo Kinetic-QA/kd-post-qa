@@ -47,7 +47,7 @@ export interface GeoFeatureConfig {
   searchResultHrefSubstrings: string[]; // substrings used to identify a real game result link in the search panel for this GEO's searchTerm
   hasGameFilterCarousel: boolean; // false = confirmed live homepage has no [class*="GamesSlider_wrapper"] slider at all (games shown as a plain grid instead) — skip GF-01 entirely, not a broken selector
   hasFeedbackForm: boolean;   // false = confirmed live no "Report a problem"/feedback link anywhere in the login flow for this GEO — skip FF-01 entirely
-  hasContactPageFeedbackLink?: boolean; // optional — the Contact Us page's OWN "Report a problem" link (contact-us-page.spec.ts's Steps 6/13-14), distinct from the login/registration WIDGET's embedded one that hasFeedbackForm covers. Confirmed live on Lord Ping (LP) ES 2026-07-29: the contact page's link works fine (real a[href*="#account/feedback"], opens the same feedback iframe), but the login widget's failed-login error state shows no such link at all — the first brand/GEO where these two genuinely diverge (every other GEO has them coincide, hence this defaulting to hasFeedbackForm's value when omitted). Set explicitly only when they differ.
+  hasContactPageFeedbackLink?: boolean; // optional — the Contact Us page's OWN "Report a problem" link (contact-us-page.spec.ts's Steps 6/13-14), distinct from the login/registration WIDGET's embedded one that hasFeedbackForm covers. Confirmed live on Lord Ping (LP) ES 2026-07-29: the contact page's link works fine (real a[href*="#account/feedback"], opens the same feedback iframe), but the login widget's failed-login error state shows no such link at all — the first brand/GEO where these two genuinely diverge (every other GEO has them coincide, hence this defaulting to hasFeedbackForm's value when omitted). Set explicitly only when they differ. Confirmed live on I36 UK 2026-07-30: same divergence, same direction (widget has none, contact page does).
   hasGameCategoryNav: boolean; // false = confirmed live no Slingo/Slots/Bingo/Casino category nav links anywhere on the homepage (no exact "/slots/" link exists at all, only individual game tiles) — skip GCN entirely, not a broken selector
   hasLoginRegistration: boolean; // false = this GEO has no traditional username/password login+registration widget to test (e.g. SE's Pay N Play/Trustly-based deposit flow, no test account exists) — skip login/registration specs entirely
   hasTestAccount?: boolean;  // false = the login/registration WIDGET exists and is safe to inspect (registration.spec.ts never submits; login-widget.spec.ts only ever uses a deliberately wrong username/password), but no real, working test ACCOUNT exists yet to actually log in with — skip only login.spec.ts's real successful-login test. Distinct from hasLoginRegistration: a brand can have the widget worth inspecting (true) while having no usable account yet (hasTestAccount: false), e.g. a pre-live brand where registration itself is still broken/unsubmittable. Defaults to true (has a working account) when omitted, so existing GEOs need no change.
@@ -1375,6 +1375,49 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogDesktopSearch: true, // confirmed live: a real, visible blog search icon exists at desktop width ([data-tk-value="blogSearch"]/[class*="BlogHeader_search"])
       hasBlogSearch: false, // confirmed live: clicking the blog search icon does not reveal a working search input — consistent with the same platform-wide non-functional blog search already confirmed on SNG UK/CA and MC UK
       searchRequiresSidebarOpen: true, // confirmed live: the page's only a[href="#search"] element is the sidebar's "Search game" item, sitting off-canvas (left: -418px) until the hamburger is opened — no separate header search icon exists at all, unlike every other brand onboarded so far
+    },
+  },
+
+  // ── Ice36 (I36) ────────────────────────────────────────────────────────────
+  I36: {
+    // UK — first I36 onboarding, started 2026-07-30 against www.ice36.co.uk.
+    // Same underlying SkillOnNet/"son" platform family as MC (son-config,
+    // son-webcomponents), but its own category taxonomy — no /online-slots/
+    // like MC, real path is /slots-jackpots/ (confirmed via homepage href
+    // crawl). No Bingo vertical anywhere in the nav (same brand-wide fact as
+    // MC) — registration.spec.ts's isI36NoBingoFormat flag routes this brand
+    // to the 3-checkbox consent set (over_18/gdpr/terms_accept), no
+    // gdprBingo. Real test account provided this session
+    // (TEST_CREDENTIALS_I36_UK_USERNAME/PASSWORD) — hasTestAccount: true,
+    // not yet independently confirmed via a completed real login this
+    // session; correct via real failures if wrong. DE explicitly excluded
+    // from this onboarding per instruction — do not add an I36/DE entry
+    // without checking with the user first.
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed live via curl: real /blog/ link in footer/nav
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via curl: real /promotions/ link
+      featuresPath: null, // confirmed live via curl: /features/ 404s, no such link anywhere
+      mobileAppPath: 'mobile-app/', // confirmed live via curl: 404s (SON_CONFIG shows apps.enabled:false) — kept as the common placeholder since the field isn't nullable; footer-navigation.spec.ts's Mobile App step should skip cleanly since no link exists to find
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live via curl: 404, no such link anywhere — skips cleanly like other non-Bingo brands
+      currencySymbol: '£', // confirmed via SON_CONFIG currency.symbol
+      contactEmail: 'support@ice36.com', // confirmed via SON_CONFIG support_email exposed on /contact/ — not yet independently confirmed as a real clickable mailto link this session, verify on first real run
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live via curl: zero facebook/twitter/instagram links found homepage-wide
+      hasSocialMedia: false,
+      searchTerm: 'Slots', searchResultHrefSubstrings: ['/slots-jackpots/'], // NOT independently confirmed via a completed in-app search this session — verify on first real run and correct if GS-01 fails
+      gameTileHrefSubstrings: ['/slots-jackpots/', '/casino/', '/live-casino/'], // confirmed live via homepage href crawl — real game tile links (e.g. /slots-jackpots/book-of-dead/, /casino/bucking-rider/) fall under this taxonomy, not Slingo's/MC's /online-slots/
+      hasGameFilterCarousel: true, // confirmed live via curl: 1 [class*="GamesSlider_wrapper"] element found on homepage
+      hasFeedbackForm: false, // confirmed live 2026-07-30 via a real failed-login attempt: the login widget shows "Forgot your password?"/"Don't have an account yet?" but no "Report a problem" link at all
+      hasContactPageFeedbackLink: true, // confirmed live via curl: real a[href="#account/feedback"] "Report a problem" link on /contact/ works fine, despite the widget above having none — same divergence direction already seen on LP ES
+      hasGameCategoryNav: true, // confirmed live via curl: real Slots-Jackpots/Casino/Live Casino/Roulette/Blackjack/Megaways/New Slots/Scratch Cards/Jackpots/Slingo nav links found
+      hasLoginRegistration: true, // confirmed live via curl: real "Login"/"Log in"/"Join" text found in homepage markup
+      hasTestAccount: true, // real test account provided this session (venn@test.com) — not yet independently confirmed via a completed real login
+      hasAccountModal: true, // unconfirmed via real click this session — carried over from the MC/ZI precedent on the same platform family; verify on first real run
+      hasPaymentMethodsPage: true, paymentMethodsPath: 'payment-options/', // confirmed live via curl: /payment-options/ returns 200, /payment-methods/ 404s
+      hasBlogDesktopSearch: true, // unconfirmed — carried over as the common default pending a dedicated blog-page check; verify on first real run
+      hasBlogSearch: true, // unconfirmed — same as above
+      hasRegulationLogos: false, // confirmed live via curl: zero <son-license-logos> occurrences anywhere in the homepage HTML
+      slotsPath: 'slots-jackpots/', // confirmed live via curl: footer/nav "Slots" link is /slots-jackpots/, NOT the default 'slots/'
     },
   },
 };

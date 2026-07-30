@@ -9,6 +9,29 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-07-30
+
+### Automation Coverage Status (per brand, for tracker use)
+
+- **Mega Casino (MC) Denmark and Alberta are now fully checked on phone screens, closing out yesterday's to-do list.** Denmark came back completely clean — no problems found at all, other than the sign-up step correctly skipping itself because it needs a real Danish ID number we don't have yet (same known limit as the desktop version). Alberta also came back clean overall; a few checks looked like failures at first but all traced back to one already-known issue — this pre-launch test site's sign-in/sign-up pop-up window can be unreliable (opens and closes inconsistently), not a new problem. With both done, Mega Casino now has full phone-screen coverage on every market except the UK, which remains blocked by the site's own bot-blocking service (unrelated to phone-screen testing, still waiting on a dev-side fix).
+- **Ice36 (I36) is a brand-new brand — first time we've ever tested it — and today's session started with the UK market, both desktop and phone screens together.** Desktop: 18 of 24 checks passed clean. Phone: 20 of 24 passed clean. Two real, still-open items were found (see below); everything else either passed or correctly skipped for real reasons (no Bingo games on this brand, etc.).
+
+### Added
+
+- **New standing rule: going forward, every new market gets tested on both desktop and phone screens in the same session**, instead of doing phone as a separate catch-up pass later (which is what caused yesterday's Mega Casino cleanup work in the first place).
+
+### Fixed
+
+- **Ice36's sign-up form was checking for a "no Bingo games" tick-box that doesn't exist on this brand** — same fix already made for Mega Casino previously, since neither brand offers Bingo anywhere.
+- **Ice36's "Slots" footer link goes to a different web address than most brands use** (`/slots-jackpots/` instead of the usual `/slots/`) — fixed the settings to match the real link.
+- **Ice36's search results and game-tile checks were looking for the wrong page-address patterns** — rebuilt from the real site structure (`/slots-jackpots/`, `/casino/`, `/live-casino/`).
+
+### Known open items (carrying into next session)
+
+- **Ice36 UK: clicking on a game sometimes shows the site's own generic "Something went wrong" error screen instead of the game details**, and it kept happening even on repeated, isolated re-runs today — worth a second look rather than assuming bad luck.
+- **Ice36 UK: the real sign-in test doesn't reliably open the sign-in pop-up** — matches the same known pop-up reliability issue already logged on Mega Casino, now confirmed on Ice36 too (both desktop and phone). Looks like a shared platform issue across brands, not specific to Ice36.
+- Remaining Ice36 markets to onboard: COM, Ireland, Canada, Spain, Denmark. Germany is being intentionally skipped for this brand per instruction.
+
 ## [Unreleased] - 2026-07-29
 
 ### Automation Coverage Status (per brand, for tracker use)
