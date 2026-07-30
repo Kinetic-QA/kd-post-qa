@@ -30,6 +30,7 @@ test.describe('P2 - Sidebar Navigation', () => {
   test.setTimeout(180_000);
 
   test('SN-01: Sidebar navigation full flow', async ({ page }) => {
+    test.skip(currentGeoFeatures().hasSidebarMenu === false, `No hamburger/sidebar menu exists for this GEO (${test.info().project.name}) — nav lives directly in an always-visible top bar instead`);
 
     const strings = currentLocaleStrings();
     const geoFeatures = currentGeoFeatures();
@@ -113,10 +114,26 @@ test.describe('P2 - Sidebar Navigation', () => {
         return;
       }
       await page.keyboard.press('Escape');
-      await page.locator('[class*="AccountPopup_account"]').waitFor({ state: 'detached', timeout: 5_000 }).catch(async () => {
-        const modal = page.locator('[class*="AccountPopup_account"]').first();
-        const box = await modal.boundingBox().catch(() => null);
-        if (box) await page.mouse.click(box.x + box.width - 20, box.y + 20);
+      // :is(..., .modal-content) — confirmed live on Prime Slots (PSL) UK
+      // 2026-07-30: this brand's account modal is a Tailwind-styled web
+      // component (.modal/.modal-content/.modal-content), not the
+      // AccountPopup_account React CSS-module class every other brand
+      // shares, and Escape does NOT close it — falls through to the
+      // top-right-corner click below, which needs a real bounding box to
+      // find in the first place.
+      await page.locator(':is([class*="AccountPopup_account"], .modal-content)').waitFor({ state: 'detached', timeout: 5_000 }).catch(async () => {
+        // .modal-header .cursor-pointer — confirmed live on PSL UK: this
+        // brand's real close control is an unlabeled icon inside
+        // .modal-header — a direct click on it is unambiguous, unlike
+        // guessing a corner coordinate on the modal card.
+        const closeIcon = page.locator('.modal-header .cursor-pointer').last();
+        if (await closeIcon.count() > 0) {
+          await closeIcon.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+        } else {
+          const modal = page.locator(':is([class*="AccountPopup_account"], .modal-content)').first();
+          const box = await modal.boundingBox().catch(() => null);
+          if (box) await page.mouse.click(box.x + box.width - 20, box.y + 20);
+        }
         await page.waitForTimeout(800);
       });
       await page.waitForTimeout(300);

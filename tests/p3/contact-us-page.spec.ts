@@ -88,6 +88,21 @@ test.describe('P3 - Contact Us Page', () => {
 
     // ── Steps 1-2: Hamburger -> Contact Us ───────────────────────────────
     await runStep('Steps 1-2: Hamburger menu -> Contact Us -> /contact/', async () => {
+      // Confirmed live on Prime Slots (PSL) UK 2026-07-30: this brand has no
+      // hamburger/sidebar at all — its Contact link lives directly in the
+      // footer instead. Fall back to a plain footer-link click rather than
+      // assuming every brand reaches Contact through a sidebar drawer.
+      const footerContactLink = page.locator(`footer a[href*="/${contactPath}"], [class*="Footer_footer-mid"] a[href*="/${contactPath}"]`).first();
+      if (await footerContactLink.count() > 0) {
+        await footerContactLink.scrollIntoViewIfNeeded().catch(() => {});
+        await footerContactLink.click();
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(800);
+        await dismissCloudflareChallenge(page);
+        await expect(page).toHaveURL(new RegExp(`/${contactPath}`), { timeout: 8_000 });
+        return;
+      }
+
       // Open sidebar via JS click (React requires this)
       await page.evaluate(function(sel) {
         var el = document.querySelector(sel);

@@ -128,15 +128,37 @@ test.describe('P1 - Search', () => {
     // behind the search overlay (not a descendant of the results container
     // at all), which silently no-ops when clicked instead of opening the
     // info modal.
-    const searchResultsContainer = () => page.locator('[class*="GameSearchPopup"]').filter({ visible: true }).first();
+    // body.searching — confirmed live on Prime Slots (PSL) UK 2026-07-30:
+    // this brand has no GameSearchPopup class at all (0 found); its real
+    // search-open state is a plain `search-open` class on <body> with the
+    // results rendered in the normal page flow, not a dedicated popup
+    // container — scope to body.search-open instead when GameSearchPopup
+    // doesn't exist.
+    const searchResultsContainer = () => page.locator('[class*="GameSearchPopup"], body.search-open').filter({ visible: true }).first();
+
+    // .main-tabs/.header-menu-dropdown — confirmed live on Prime Slots (PSL)
+    // UK 2026-07-30: this brand's search results container (body.search-open)
+    // includes the whole page, header nav included, and its dropdown-child
+    // nav links (e.g. "/slots/new/") sit well below y=50 once their parent
+    // panel is revealed, so the plain y-based heuristic below isn't enough
+    // to skip them — exclude by real href instead, same fix already applied
+    // in game-info-modal.spec.ts.
+    async function realNavHrefs(): Promise<Set<string>> {
+      const navHrefList = await page.locator('[class*="Nav_nav__"] a[href], [class*="MainMenu_main-menu"] a[href], .main-tabs a[href], .header-menu-dropdown a[href]')
+        .evaluateAll(els => els.map(el => (el as HTMLAnchorElement).href));
+      return new Set(navHrefList);
+    }
 
     let gameTitle = '';
     await runStep('Step 4: Click game title → info modal appears', async () => {
       const vh = page.viewportSize()?.height ?? 720;
+      const navHrefs = await realNavHrefs();
       const gameLinks = searchResultsContainer().locator(gameLinkSelector);
       const count = await gameLinks.count();
       let titleLink = gameLinks.first();
       for (let i = 0; i < Math.min(count, 20); i++) {
+        const href = await gameLinks.nth(i).getAttribute('href').catch(() => null);
+        if (href && navHrefs.has(new URL(href, page.url()).href)) continue;
         const box = await gameLinks.nth(i).boundingBox().catch(() => null);
         if (box && box.y > 50 && box.y < vh && box.width > 30) {
           titleLink = gameLinks.nth(i);
@@ -164,7 +186,12 @@ test.describe('P1 - Search', () => {
       // used for this exact class of issue elsewhere in the project.
       await titleLink.evaluate((el: HTMLElement) => el.click());
       await page.waitForTimeout(2_000);
-      await expect(page).toHaveURL(/#search-gamepage\//, { timeout: 10_000 });
+      // Confirmed live on Prime Slots (PSL) UK 2026-07-30: this brand's
+      // search-result tile click opens the SAME plain #gamepage/<slug> hash
+      // as a regular homepage tile click, not a distinct #search-gamepage/
+      // hash like every other brand — widened rather than assume every
+      // brand's search results use their own separate route.
+      await expect(page).toHaveURL(/#(search-)?gamepage\//, { timeout: 10_000 });
       console.log('GS-01 modal opened for: ' + gameTitle);
     });
 
@@ -252,8 +279,11 @@ test.describe('P1 - Search', () => {
       }
       const gameLinks = searchResultsContainer().locator(gameLinkSelector);
       count = await gameLinks.count();
+      const navHrefsStep6 = await realNavHrefs();
       let titleLink = gameLinks.first();
       for (let i = 0; i < Math.min(count, 20); i++) {
+        const href = await gameLinks.nth(i).getAttribute('href').catch(() => null);
+        if (href && navHrefsStep6.has(new URL(href, page.url()).href)) continue;
         const box = await gameLinks.nth(i).boundingBox().catch(() => null);
         if (box && box.y > 50 && box.y < vh && box.width > 30) {
           titleLink = gameLinks.nth(i);
@@ -276,7 +306,7 @@ test.describe('P1 - Search', () => {
       // Scoped to the search popup — an unscoped page-wide search for this
       // CTA text can match unrelated content-block buttons elsewhere on the
       // page (confirmed live: a promo tile also says "A JUGAR" on ES).
-      const searchPopup = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
+      const searchPopup = page.locator('[class*="Popup_popup"], body.search-open').filter({ visible: true }).first();
       const playItBtn = playCtaLocator(searchPopup, strings.playCta).filter({ visible: true }).first();
 
       // Confirmed live on ROW: a single hover-then-check can miss if the
@@ -349,7 +379,7 @@ test.describe('P1 - Search', () => {
       // Scoped to the search popup — an unscoped page-wide search for this
       // CTA text can match unrelated content-block buttons elsewhere on the
       // page (confirmed live: a promo tile also says "A JUGAR" on ES).
-      const searchPopup = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
+      const searchPopup = page.locator('[class*="Popup_popup"], body.search-open').filter({ visible: true }).first();
       const playItBtn = playCtaLocator(searchPopup, strings.playCta).filter({ visible: true }).first();
       await playItBtn.click({ force: true });
       await page.waitForTimeout(3_000);

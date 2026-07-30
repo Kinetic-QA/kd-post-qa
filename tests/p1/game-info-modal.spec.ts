@@ -96,7 +96,13 @@ test.describe('P1 - Game Information Modal', () => {
       // (MainMenu_main-menu__, a completely separate container) duplicates
       // the same sub-category links on every page including the homepage,
       // which is what was actually being matched here — include it too.
-      const navHrefList = await page.locator('[class*="Nav_nav__"] a[href], [class*="MainMenu_main-menu"] a[href]')
+      // .main-tabs/.header-menu-dropdown — confirmed live on Prime Slots
+      // (PSL) UK 2026-07-30: this brand's nav uses plain always-visible tabs
+      // + CSS hover-dropdowns, not the Nav_nav__/MainMenu_main-menu React
+      // CSS-module classes every other brand shares, so without these the
+      // exclusion set stayed empty and a real dropdown-child nav link
+      // (e.g. "/slots/new/") got treated as a game tile.
+      const navHrefList = await page.locator('[class*="Nav_nav__"] a[href], [class*="MainMenu_main-menu"] a[href], .main-tabs a[href], .header-menu-dropdown a[href]')
         .evaluateAll(els => els.map(el => (el as HTMLAnchorElement).href));
       const navHrefs = new Set(navHrefList);
       const count = await links.count();
@@ -191,7 +197,7 @@ test.describe('P1 - Game Information Modal', () => {
     });
 
     await runStep('Step 2: Game information modal is visible', async () => {
-      const modal = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
+      const modal = page.locator('[class*="Popup_popup"], .game-popup').filter({ visible: true }).first();
       await expect(modal).toBeVisible({ timeout: 8_000 });
     });
 
@@ -222,7 +228,7 @@ test.describe('P1 - Game Information Modal', () => {
       // for this CTA text can match unrelated content-block buttons
       // elsewhere on the page (confirmed live: a "Content_block-center"
       // promo tile also says "A JUGAR" on ES).
-      const modal = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
+      const modal = page.locator('[class*="Popup_popup"], .game-popup').filter({ visible: true }).first();
       const playItBtn = playCtaLocator(modal, strings.playCta).first();
       // Confirmed count 1 in the modal, so it's the right element — but on
       // SNG AB mobile it has a genuine 0×0 bounding box (a desktop-only
@@ -340,7 +346,7 @@ test.describe('P1 - Game Information Modal', () => {
     });
 
     await runStep('Step 11: Currency in modal matches geo (' + EXPECTED_CURRENCY + ')', async () => {
-      const modalText = await page.locator('[class*="Popup_popup"]')
+      const modalText = await page.locator('[class*="Popup_popup"], .game-popup')
         .filter({ visible: true }).first().textContent().catch(() => '');
       const currencyFound = (modalText ?? '').includes(EXPECTED_CURRENCY);
       if (!currencyFound) {
@@ -368,7 +374,7 @@ test.describe('P1 - Game Information Modal', () => {
 
       // Keep pressing Escape until no Popup_popup element is visible (max 5 attempts)
       for (let i = 0; i < 5; i++) {
-        const popupVisible = await page.locator('[class*="Popup_popup"]')
+        const popupVisible = await page.locator('[class*="Popup_popup"], .game-popup')
           .filter({ visible: true }).isVisible({ timeout: 500 }).catch(() => false);
         if (!popupVisible) break;
         await page.keyboard.press('Escape');
@@ -459,7 +465,7 @@ test.describe('P1 - Game Information Modal', () => {
       await page.waitForTimeout(2_000);
 
       if (page.url().includes('#gamepage/')) {
-        const modal = page.locator('[class*="Popup_popup"]').filter({ visible: true }).first();
+        const modal = page.locator('[class*="Popup_popup"], .game-popup').filter({ visible: true }).first();
         const modalPlayCta = playCtaLocator(modal, strings.playCta).first();
         if (await modalPlayCta.count() > 0) {
           await modalPlayCta.evaluate((el: HTMLElement) => el.click());

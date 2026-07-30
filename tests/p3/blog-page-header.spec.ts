@@ -91,11 +91,27 @@ test.describe('P3 - Blog Page Header', () => {
         return;
       }
       await page.keyboard.press('Escape');
-      await page.locator('[class*="AccountPopup_account"]')
+      // :is(..., .modal-content) — confirmed live on Prime Slots (PSL) UK
+      // 2026-07-30: this brand's account modal is a Tailwind-styled web
+      // component (.modal/.modal-content/.modal-content), not the
+      // AccountPopup_account React CSS-module class every other brand
+      // shares, and Escape does NOT close it — falls through to the
+      // top-right-corner click below, which needs a real bounding box to
+      // find in the first place.
+      await page.locator(':is([class*="AccountPopup_account"], .modal-content)')
         .waitFor({ state: 'detached', timeout: 5_000 }).catch(async () => {
-          const modal = page.locator('[class*="AccountPopup_account"]').first();
-          const box = await modal.boundingBox().catch(() => null);
-          if (box) await page.mouse.click(box.x + box.width - 20, box.y + 20);
+          // .modal-header .cursor-pointer — confirmed live on PSL UK: this
+          // brand's real close control is an unlabeled icon inside
+          // .modal-header — a direct click on it is unambiguous, unlike
+          // guessing a corner coordinate on the modal card.
+          const closeIcon = page.locator('.modal-header .cursor-pointer').last();
+          if (await closeIcon.count() > 0) {
+            await closeIcon.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+          } else {
+            const modal = page.locator(':is([class*="AccountPopup_account"], .modal-content)').first();
+            const box = await modal.boundingBox().catch(() => null);
+            if (box) await page.mouse.click(box.x + box.width - 20, box.y + 20);
+          }
           await page.waitForTimeout(800);
         });
       await expect(page).not.toHaveURL(/#account/, { timeout: 8_000 });
@@ -180,7 +196,10 @@ test.describe('P3 - Blog Page Header', () => {
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
-      const logo = page.locator('a[class*="Header_logo"]').first();
+      // .logo — confirmed live on Prime Slots (PSL) UK 2026-07-30: this
+      // brand's logo link is a plain <a class="logo">, not the Header_logo
+      // React CSS-module class every other brand shares.
+      const logo = page.locator('a[class*="Header_logo"], a.logo').first();
       await expect(logo).toBeVisible({ timeout: 10_000 });
       await logo.click();
       await page.waitForLoadState('domcontentloaded');

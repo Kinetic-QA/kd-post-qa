@@ -67,7 +67,7 @@ test.describe('P2 - Registration Widget', () => {
         throw new Error('No mobile Join entry point found (checked #mobile-join and the hamburger sidebar)');
       }
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
-      await joinBtn.click();
+      await joinBtn.evaluate((el: HTMLElement) => el.click());
       await expect(page).toHaveURL(/#account/, { timeout: 15_000 });
       await page.waitForTimeout(1_500);
     }
@@ -124,7 +124,7 @@ test.describe('P2 - Registration Widget', () => {
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
       } else {
-        const modal = page.locator('[class*="Popup_popup"], [class*="AccountPopup"]').filter({ visible: true }).first();
+        const modal = page.locator('[class*="Popup_popup"], [class*="AccountPopup"], .modal-content').filter({ visible: true }).first();
         const box = await modal.boundingBox().catch(() => null);
         if (box) {
           await page.mouse.click(box.x + box.width - 20, box.y + 20);
