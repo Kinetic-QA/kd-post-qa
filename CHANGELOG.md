@@ -9,6 +9,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-07-31
+
+### Fixed
+
+- **Fixed a merge conflict blocking PR #41 (Ice36 UK onboarding) from being merged.** Another PR had landed on `main` first and touched some of the same settings files (adding Prime Slots UK's own settings right next to Ice36's), which is normal when two brands get onboarded around the same time — nothing was actually broken, the two sets of changes just needed to be combined by hand instead of automatically. Combined both sets of changes (test account settings, sign-up form checks, and today's written notes) so nothing from either brand was lost. Full write-up in `docs/reports/2026-07-31-pr-41-merge-conflict-resolution.md`.
+
 ## [Unreleased] - 2026-07-30
 
 ### Automation Coverage Status (per brand, for tracker use)
