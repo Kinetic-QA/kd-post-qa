@@ -198,6 +198,13 @@ test.describe('Registration Flow', () => {
     // here either, same 3-checkbox set.
     const isLpUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
       && test.info().project.name.replace(/-mobile$/, '') === 'UK';
+    // Prime Slots (PSL) UK — onboarded 2026-07-30, brand-new brand. Same
+    // no-Bingo-vertical reasoning as MC/PC/LP (PSL's taxonomy is Slots/
+    // Scratch Cards/Casino — confirmed live via header-menu-dropdown crawl,
+    // no Bingo category anywhere) — no gdprBingo checkbox exists here
+    // either, same 3-checkbox set.
+    const isPslUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PSL'
+      && test.info().project.name.replace(/-mobile$/, '') === 'UK';
     // MC/FR-CA — onboarding started 2026-07-23, tested from a confirmed
     // Montreal VPN. Same underlying platform as MC/CA but genuinely
     // translated field labels — confirmed live via DOM snapshot: mobile
@@ -271,7 +278,7 @@ test.describe('Registration Flow', () => {
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
       await dismissCampaignPopup(page);
       await joinBtn.scrollIntoViewIfNeeded();
-      await joinBtn.click();
+      await joinBtn.evaluate((el: HTMLElement) => el.click());
       await expect(page).toHaveURL(/#account/, { timeout: 15_000 });
       await waitForPageReady(page);
       await page.waitForTimeout(2_000);
@@ -324,7 +331,7 @@ test.describe('Registration Flow', () => {
       await runStep('JUGAR button visible and enabled', async () => {
         // Scoped to the modal — same per-game-tile "Jugar" ambiguity as
         // fillEsMobileStep5Credentials above.
-        const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+        const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first();
         const jugarBtn = modal.getByRole('button', { name: /^jugar$/i }).first();
         await expect(jugarBtn).toBeVisible({ timeout: 15_000 });
         await expect(jugarBtn).toBeEnabled({ timeout: 5_000 });
@@ -360,7 +367,7 @@ test.describe('Registration Flow', () => {
         // buttons on every game tile (hidden until hover), and .first() on
         // an unscoped locator grabs one of those instead of the modal's
         // actual submit button (confirmed live).
-        const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+        const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first();
         const jugarBtn = modal.getByRole('button', { name: /^jugar$/i }).first();
         await expect(jugarBtn).toBeVisible({ timeout: 15_000 });
         await expect(jugarBtn).toBeEnabled({ timeout: 5_000 });
@@ -691,7 +698,7 @@ test.describe('Registration Flow', () => {
           : (isCanadianMobileFormat || isMcFrCaFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'], false,
               (isFrCaFormat || isMcFrCaFormat) ? 'Non' : 'No')
-          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat || isI36NoBingoFormat)
+          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat || isI36NoBingoFormat || isPslUkFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
           : fillMobileStep5Final(page, scope));
       });
@@ -704,7 +711,7 @@ test.describe('Registration Flow', () => {
         // MC FR-CA's own game tiles read "JOUER MAINTENANT" (confirmed live
         // 2026-07-23) — the unanchored /jouer/i regex already matches both.
         const goPlayBtn = ((isFrCaFormat || isMcFrCaFormat)
-          ? page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first().getByRole('button', { name: /jouer/i })
+          ? page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first().getByRole('button', { name: /jouer/i })
           : scope.getByRole('button', { name: /go play/i })).first();
         await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
         await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
@@ -848,7 +855,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat)
           : isMcFrCaFormat
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'], /nom d.utilisateur/i, /mot de passe/i, true)
-          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat || isI36NoBingoFormat)
+          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat || isI36NoBingoFormat || isPslUkFormat)
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
       });
@@ -862,7 +869,7 @@ test.describe('Registration Flow', () => {
         // MC FR-CA's own game tiles read "JOUER MAINTENANT" (confirmed live
         // 2026-07-23) — the unanchored /jouer/i regex already matches both.
         const goPlayBtn = ((isFrCaFormat || isMcFrCaFormat)
-          ? page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first().getByRole('button', { name: /jouer/i })
+          ? page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first().getByRole('button', { name: /jouer/i })
           : scope.getByRole('button', { name: /go play/i })).first();
         await expect(goPlayBtn).toBeVisible({ timeout: 15_000 });
         await expect(goPlayBtn).toBeEnabled({ timeout: 5_000 });
@@ -1210,7 +1217,7 @@ async function fillEsMobileStep5Credentials(page: Page, scope: Scope, data: EsRe
   // buttons on every game tile (hidden until hover), and an unscoped
   // locator grabs one of those instead of the modal's actual JUGAR button
   // (confirmed live: same ambiguity as the desktop ES functions below).
-  const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+  const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first();
   const jugarBtn = modal.getByRole('button', { name: /^jugar$/i }).first();
   const advanced = await jugarBtn
     .waitFor({ state: 'visible', timeout: 4_000 }).then(() => true).catch(() => false);

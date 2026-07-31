@@ -26,6 +26,7 @@ const KNOWN_GEOS_BY_BRAND: Record<string, string[]> = {
   LP: ['UK', 'ES', 'IE', 'CA'],
   ZI: ['UK'],
   I36: ['UK', 'COM', 'IE', 'CA', 'ES', 'DK'],
+  PSL: ['UK'],
 };
 
 function credentialsFor(brand: string, geo: string): { username: string; password: string } {

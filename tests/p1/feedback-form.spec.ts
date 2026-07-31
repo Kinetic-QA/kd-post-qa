@@ -79,7 +79,7 @@ test.describe('P1 - Feedback Form', () => {
         throw new Error('No mobile Login entry point found (checked #mobile-login and the hamburger sidebar)');
       }
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
-      await loginBtn.click();
+      await loginBtn.evaluate((el: HTMLElement) => el.click());
       await expect(page).toHaveURL(/#account/, { timeout: 15_000 });
       await page.waitForTimeout(2_000);
     });
@@ -95,7 +95,7 @@ test.describe('P1 - Feedback Form', () => {
       await passwordInput.fill('wrongpass_test123');
       // Scoped to the modal — the header has its own login button sharing
       // the exact same accessible name (see login.spec.ts for the same fix).
-      const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"]').filter({ visible: true }).first();
+      const modal = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first();
       const loginSubmitBtn = modal.getByRole('button', { name: strings.loginSubmitButton }).first();
       await loginSubmitBtn.click({ force: true });
       await page.waitForTimeout(3_000);

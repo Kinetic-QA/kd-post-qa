@@ -49,6 +49,7 @@ export interface GeoFeatureConfig {
   hasFeedbackForm: boolean;   // false = confirmed live no "Report a problem"/feedback link anywhere in the login flow for this GEO — skip FF-01 entirely
   hasContactPageFeedbackLink?: boolean; // optional — the Contact Us page's OWN "Report a problem" link (contact-us-page.spec.ts's Steps 6/13-14), distinct from the login/registration WIDGET's embedded one that hasFeedbackForm covers. Confirmed live on Lord Ping (LP) ES 2026-07-29: the contact page's link works fine (real a[href*="#account/feedback"], opens the same feedback iframe), but the login widget's failed-login error state shows no such link at all — the first brand/GEO where these two genuinely diverge (every other GEO has them coincide, hence this defaulting to hasFeedbackForm's value when omitted). Set explicitly only when they differ. Confirmed live on I36 UK 2026-07-30: same divergence, same direction (widget has none, contact page does).
   hasGameCategoryNav: boolean; // false = confirmed live no Slingo/Slots/Bingo/Casino category nav links anywhere on the homepage (no exact "/slots/" link exists at all, only individual game tiles) — skip GCN entirely, not a broken selector
+  hasSidebarMenu?: boolean; // optional, defaults to true. false = confirmed live this brand has NO hamburger/off-canvas sidebar drawer at all (0 found, desktop AND mobile) — nav lives directly in an always-visible top bar instead (e.g. Prime Slots (PSL) UK's .main-tabs + CSS hover-dropdowns). Skips sidebar-navigation.spec.ts entirely, since every one of its steps opens the sidebar first — not a broken selector, a genuinely different platform.
   hasLoginRegistration: boolean; // false = this GEO has no traditional username/password login+registration widget to test (e.g. SE's Pay N Play/Trustly-based deposit flow, no test account exists) — skip login/registration specs entirely
   hasTestAccount?: boolean;  // false = the login/registration WIDGET exists and is safe to inspect (registration.spec.ts never submits; login-widget.spec.ts only ever uses a deliberately wrong username/password), but no real, working test ACCOUNT exists yet to actually log in with — skip only login.spec.ts's real successful-login test. Distinct from hasLoginRegistration: a brand can have the widget worth inspecting (true) while having no usable account yet (hasTestAccount: false), e.g. a pre-live brand where registration itself is still broken/unsubmittable. Defaults to true (has a working account) when omitted, so existing GEOs need no change.
   extraPageSettleMs?: number; // confirmed live 2026-07-21 on SNG FR-CA: the header Log In/Join buttons render visible+clickable well before their click handlers are actually wired up — clicking immediately after the standard load wait is silently a no-op (button click succeeds, but no navigation to #account, no error either). A real user's slower manual click never hits this; only fast automated clicks do. Extends the post-load settle wait in specs that click login/join/search shortly after page load. Defaults to 0 (no extra wait) when omitted.
@@ -1334,6 +1335,117 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPaymentMethodsPage: true, // confirmed live: /payment-options/ returns 200 (see paymentMethodsPath)
       hasBlogDesktopSearch: false, // N/A — hasBlog is false for this GEO
       hasBlogSearch: false, // N/A — hasBlog is false for this GEO
+    },
+
+    // SE — onboarded 2026-07-30 against www.lordping.se, live-inspected
+    // before writing this config. Same Pay N Play/Trustly instant-deposit
+    // model as every other brand's SE market (SC SE, SNG SE, MC SE, PC SE):
+    // header shows "Fortsätt spela" (Continue playing) / "Insättning"
+    // (Deposit) instead of Log in/Join, and clicking either does advance the
+    // URL to /#account but the modal itself is a real, confirmed-empty
+    // <son-auth-modals> web component (only empty append-slots, no real
+    // login/registration form) — same dead-shell pattern as SNG SE, not a
+    // genuine account modal to test against. Taxonomy is Online Slots ONLY
+    // (Jackpots/Megaways/Themes/Providers sub-items) — no Live Casino, no
+    // Casino Games vertical at all, confirmed live via sidebar crawl and
+    // direct 404 checks on both /live-casino/ and /casino-games/.
+    SE: {
+      locale: 'sv', uiLocalized: true, // confirmed live: header/sidebar text is genuinely Swedish ("Fortsätt spela", "Sök", "Hjälp", "Kontakt")
+      hasBlog: false, blogPath: null, // confirmed live: no Blog link anywhere in sidebar or footer
+      hasPromotionsPage: false, promotionsPath: null, // confirmed live: no Promotions/Kampanjer link anywhere in sidebar or footer, despite /promotions/ and /casino-promotions/ both returning 200 as orphaned pages with no real in-site entry point
+      hasPromotionsIconInHeader: false, // N/A — hasPromotionsPage is false for this GEO
+      featuresPath: null, // confirmed live: /casino-features/ 404s, no Features link anywhere
+      mobileAppPath: 'mobile-app/', // confirmed live: 404s, no footer/sidebar link — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live: 404s, no link either — skips cleanly
+      currencySymbol: 'kr', // Swedish Krona — no bonus/promo banner exists on this GEO to confirm copy against, carried over from SC/SNG SE's confirmed value
+      contactEmail: 'support@lordping.com', // confirmed live on /contact/ — real mailto link, same shared address as LP UK/IE/CA
+      paymentMethodsPath: 'payment-options/', // confirmed live: 404s (same as /payment-methods/) — no payment methods page exists for this GEO, "Insättning" is a direct deposit CTA not an info page
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social media links found anywhere on the homepage
+      hasSocialMedia: false,
+      searchTerm: 'Book', searchResultHrefSubstrings: ['/online-slots/'], // unconfirmed — a quick live check found the in-app search input (SearchBar_search-input) but couldn't confirm it actually filters results via a scripted .fill(); verify on first real run and adjust if GS-01 fails
+      gameTileHrefSubstrings: ['/online-slots/'], // confirmed live via homepage crawl — this GEO's ONLY vertical, no /live-casino/ or /casino-games/ tiles exist at all
+      hasGameFilterCarousel: false, // confirmed live: 0 GamesSlider-style elements found on homepage
+      hasFeedbackForm: false, // confirmed live: after a failed login attempt there's no real widget to fail into (see hasAccountModal) — no "Report a problem" link found on /contact/ either
+      hasContactPageFeedbackLink: false, // confirmed live: /contact/ has a real "LOGGA IN" link (a[href="#account/"]) but no feedback/report-a-problem link
+      hasGameCategoryNav: true, // confirmed live: sidebar has a real Online Slots category with Jackpots/Megaways/Themes/Providers sub-items, plus a Pay N Play link — game-category-navigation.spec.ts's per-link check-and-skip already handles a single-category subset
+      hasLoginRegistration: false, // confirmed live: header shows "Fortsätt spela" (Continue playing)/"Insättning" (Deposit) instead of Log in/Join — Pay N Play/Trustly instant-deposit model, same as SC/SNG/MC/PC's SE markets
+      hasTestAccount: false, // Pay N Play model has no traditional username/password test account — no TEST_CREDENTIALS_LP_SE_* needed
+      hasAccountModal: false, // confirmed live: clicking the header's "Fortsätt spela" button does advance the URL to /#account, but the modal itself is a real, confirmed-empty <son-auth-modals> shell (only empty append-slots, 0 real form fields) — not a genuine modal to test against, same dead-shell pattern as SNG SE
+      hasPaymentMethodsPage: false, // confirmed live: /payment-options/ and /payment-methods/ both 404, no in-site link either
+      hasBlogDesktopSearch: false, // N/A — hasBlog is false for this GEO
+      hasBlogSearch: false, // N/A — hasBlog is false for this GEO
+    },
+  },
+
+  // ── Prime Slots (PSL) ────────────────────────────────────────────────────
+  PSL: {
+    // UK — onboarding started 2026-07-30, brand-new brand, confirmed live
+    // against www.primeslots.co.uk. IMPORTANT: this brand is NOT built on
+    // the same SkillOnNet/SON React platform as SC/SNG/MC/GC/LP/ZI —
+    // confirmed live via 3 separate structural differences:
+    // 1. NO hamburger/off-canvas sidebar exists at all (0 found, desktop AND
+    //    mobile) — nav is a classic always-visible top tab bar
+    //    (`.main-tabs`) with CSS hover-dropdown sub-categories
+    //    (`.header-menu-dropdown`/`.header-menu-child`), not an accordion.
+    //    Mobile reuses the exact same header markup as desktop — Login/Join
+    //    buttons stay directly visible in the header at every viewport
+    //    width, never hidden behind a hamburger/MobileFooter like every
+    //    other brand onboarded so far.
+    // 2. The account modal is a native web component with real Shadow-DOM
+    //    slots (`<slot name="login-header-append">` etc., `part="login-
+    //    modal-dialog"` attributes) styled with plain Tailwind utility
+    //    classes (`.modal`/`.modal-dialog`/`.modal-content`/`.modal-header`/
+    //    `.modal-body`) — NOT the `AccountPopup_account`/`Popup_content`
+    //    React CSS-module classes every other brand shares. The close
+    //    control is an unlabeled `<span class="cursor-pointer">` icon inside
+    //    `.modal-header`, and confirmed live that pressing Escape does NOT
+    //    close it (URL stays on `/#account`) — the shared per-file
+    //    `closeAccountModal()` helpers (website-header/sidebar-navigation/
+    //    game-info-modal/blog-page-header specs) had their locator widened
+    //    from `[class*="AccountPopup_account"]` to also match `.modal-
+    //    dialog` so the existing top-right-corner-click fallback still
+    //    finds a real bounding box to click on this brand.
+    // 3. Own taxonomy, confirmed live via the header-menu-dropdown DOM:
+    //    Slots (New Slots/Best Slots/Jackpots/Daily Jackpots/Jackpot King/
+    //    Megaways/Other Slots/All Slots), Scratch Cards (Classic Scratch
+    //    Cards/All Scratch Cards — a whole new top-level category not seen
+    //    on any other brand onboarded so far), Casino (Roulette/BlackJack/
+    //    Special games/All Casino games). NO Bingo, NO Live Casino, NO
+    //    Slingo. `game-category-navigation.spec.ts`'s shared `NAV =
+    //    [class*="Nav_nav__"]` locator doesn't match this brand's plain
+    //    `.main-tabs`/`.header-menu-dropdown` markup at all — needed its own
+    //    dedicated `isPslUkFormat` branch, same pattern as LP's.
+    // Footer, by contrast, matches the common Slingo/SC-shaped defaults
+    // exactly: About us (/about-us/), Help (/help/), Contact (/contact/),
+    // Secure Banking → /payment-methods/ (the common default, no override
+    // needed), Bonus Policy/Terms/Privacy/Responsible Gaming/Affiliates all
+    // at their default paths — confirmed live via full footer crawl, zero
+    // path overrides needed there.
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed live 200, real footer "Blog" link
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200 (NOT 'casino-promotions/', which 404s)
+      hasPromotionsIconInHeader: false, // confirmed live: header-line only has logo/search/login/join, no Promotions link anywhere in the header
+      featuresPath: null, // confirmed live: both 'casino-features/' and 'features/' 404, no Features link anywhere
+      mobileAppPath: 'mobile-app/', // confirmed live: 404s, no footer link either — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no Bingo vertical on this brand at all, kept as the common placeholder
+      currencySymbol: '£',
+      contactEmail: 'support@primeslots.com', // confirmed live on /contact/ — real mailto link
+      paymentMethodsPath: 'payment-methods/', // confirmed live: real footer "Secure Banking" link is /payment-methods/ — the common default, no override needed, listed explicitly for clarity
+      socialMedia: { twitter: null, facebook: 'primeslots', instagram: null }, // confirmed live: exactly one facebook.com/primeslots/ link found homepage-wide, no twitter/instagram
+      hasSocialMedia: true,
+      searchTerm: 'Wild', searchResultHrefSubstrings: ['/slots/', '/scratch-cards/', '/casino/'], // confirmed live 2026-07-30: the category-name guess "Slots" returned zero real game-tile results (GS-01 Step 4 timed out with no clickable tile) — this brand's search wants a real game-TITLE substring, not a category word. "Wild" matches at least 2 confirmed real titles (Wild Calacas, Wild Tomb)
+      gameTileHrefSubstrings: ['/slots/', '/scratch-cards/', '/casino/'], // confirmed live via header-menu-dropdown DOM crawl — this brand's own 3-category taxonomy
+      hasGameFilterCarousel: false, // confirmed live 2026-07-30: 0 GamesSlider_wrapper elements (GF-01's real selector) — this brand's homepage uses its own carousel/grid markup (a generic "slider" class match found 4 elements, but not the specific class GF-01 checks for), same as LP UK's static-grid finding
+      hasFeedbackForm: false, // unconfirmed — not independently exercised this session; verify on first real run (FF-01/login-widget/registration-widget's own "Report a Problem" steps)
+      hasGameCategoryNav: true, // confirmed live: real 3-category taxonomy (Slots/Scratch Cards/Casino), see top-of-block comment — needs game-category-navigation.spec.ts's isPslUkFormat branch, not the shared NAV-scoped default
+      hasSidebarMenu: false, // confirmed live: NO hamburger/off-canvas sidebar exists at all (0 found, desktop AND mobile) — skips sidebar-navigation.spec.ts entirely, see top-of-block comment
+      hasLoginRegistration: true, // confirmed live: real "Log in"/"Join" buttons in header, both open a real #account modal with a genuine username/password form (not a dead shell)
+      hasTestAccount: true, // real test account provided by Reeve 2026-07-30 (raltudukka@vusra.com)
+      hasAccountModal: true, // confirmed live: clicking Log in advances the URL to /#account with a real, fillable login form (username + password inputs, labeled "Username Or Email"/"Password")
+      hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (see paymentMethodsPath)
+      hasBlogDesktopSearch: false, // confirmed live 2026-07-30: this brand has no sidebar, and no separate blog-specific search entry point was found either — see hasBlogSearch
+      hasBlogSearch: false, // confirmed live 2026-07-30: blog-search.spec.ts's whole flow assumes a sidebar-driven entry point this brand doesn't have (no hamburger/toggle found at all) — same conservative default as other blogs whose search widget doesn't independently work; skip cleanly rather than force-fitting the sidebar-based flow onto a brand with a different footer-only nav
     },
   },
 

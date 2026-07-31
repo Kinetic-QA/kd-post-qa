@@ -480,6 +480,127 @@ test.describe('P1 - Game Category Navigation', () => {
       // No Poker/Scratch Cards sub-items on ES (confirmed live — UK has both, ES has Video Bingo instead).
     }
 
+    // ── Prime Slots (PSL) UK — brand-new brand, onboarded 2026-07-30 ──────
+    // Confirmed live: NOT built on the LP/SNG sidebar-accordion platform at
+    // all — this brand has no hamburger/off-canvas sidebar whatsoever. Real
+    // nav is a classic always-visible top tab bar (`.main-tabs`) with CSS
+    // hover-dropdown sub-categories (`.header-menu-dropdown`/`.header-menu-
+    // child`) — neither the shared `NAV` locator above (scoped to
+    // `[class*="Nav_nav__"]`, which this brand's plain markup never
+    // matches) nor LP's `clickSidebarSubCategoryAndVerify` (which expects a
+    // click-toggle accordion, not a CSS :hover reveal) apply here. Own
+    // taxonomy, confirmed live via the header-menu-dropdown DOM: Slots (New
+    // Slots/Best Slots/Jackpots/Daily Jackpots/Jackpot King/Megaways/Other
+    // Slots/All Slots), Scratch Cards (Classic Scratch Cards/All Scratch
+    // Cards — a whole new top-level category not seen on any other brand
+    // onboarded so far), Casino (Roulette/BlackJack/Special games/All
+    // Casino games). No Bingo, no Live Casino, no Slingo.
+    const isPslUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PSL';
+
+    async function clickTopTabAndVerify(hrefPart: string, label: string) {
+      const expectedUrl = siteUrl(hrefPart);
+      const link = page.locator('.main-tabs a[href$="' + hrefPart + '"]').first();
+      const exists = await link.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!exists) {
+        results.push({ label: `${label} (skipped — not offered for this GEO)`, status: 'Pass' });
+        console.log('SKIP | ' + label + ' | link not found for this GEO');
+        return;
+      }
+      await link.evaluate((el: HTMLElement) => el.click());
+      await page.waitForLoadState('domcontentloaded');
+      await dismissCampaignPopup(page);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 8_000 }).then(() => true).catch(() => false);
+      const actualUrl = page.url();
+      const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
+      results.push({ label, status: passed ? 'Pass' : 'Fail' });
+      console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+    }
+
+    // Sub-category links are real anchors always present in the DOM, just
+    // CSS-hidden until the parent .header-menu-dropdown is hovered (a plain
+    // CSS :hover reveal, not a click-toggle like LP's sidebar accordion) —
+    // hovering the parent <li> first, then firing the child's native
+    // .click() via evaluate (bypassing Playwright's own visibility/
+    // actionability wait, same pattern used elsewhere in this file for
+    // hover-reveal targets), lands reliably regardless of the reveal
+    // animation's exact timing.
+    async function clickDropdownChildAndVerify(categoryLabel: string, hrefPart: string, label: string) {
+      const expectedUrl = siteUrl(hrefPart);
+      const parent = page.locator('.header-menu-dropdown', { hasText: categoryLabel }).first();
+      const parentExists = await parent.count() > 0;
+      if (!parentExists) {
+        results.push({ label: `${label} (skipped — not offered for this GEO)`, status: 'Pass' });
+        console.log('SKIP | ' + label + ' | category not found for this GEO');
+        return;
+      }
+      await parent.hover().catch(() => {});
+      await page.waitForTimeout(400);
+      const link = parent.locator(`a[href$="${hrefPart}"]`).first();
+      const linkExists = await link.count() > 0;
+      if (!linkExists) {
+        results.push({ label: `${label} (skipped — not offered for this GEO)`, status: 'Pass' });
+        console.log('SKIP | ' + label + ' | link not found for this GEO');
+        return;
+      }
+      await link.evaluate((el: HTMLElement) => el.click());
+      await page.waitForLoadState('domcontentloaded');
+      await dismissCampaignPopup(page);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 8_000 }).then(() => true).catch(() => false);
+      const actualUrl = page.url();
+      const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
+      results.push({ label, status: passed ? 'Pass' : 'Fail' });
+      console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+    }
+
+    if (isPslUkFormat) {
+      await test.step('Slots category → /slots/', async () => {
+        await clickTopTabAndVerify('/slots/', 'Slots');
+      });
+      await test.step('Slots > New Slots → /slots/new/', async () => {
+        await clickDropdownChildAndVerify('Slots', '/slots/new/', 'New Slots');
+      });
+      await test.step('Slots > Best Slots → /slots/best/', async () => {
+        await clickDropdownChildAndVerify('Slots', '/slots/best/', 'Best Slots');
+      });
+      await test.step('Slots > Jackpots → /slots/jackpots/', async () => {
+        await clickDropdownChildAndVerify('Slots', '/slots/jackpots/', 'Jackpots');
+      });
+      await test.step('Slots > Daily Jackpots → /slots/daily-jackpots/', async () => {
+        await clickDropdownChildAndVerify('Slots', '/slots/daily-jackpots/', 'Daily Jackpots');
+      });
+      await test.step('Slots > Jackpot King → /slots/jackpot-king/', async () => {
+        await clickDropdownChildAndVerify('Slots', '/slots/jackpot-king/', 'Jackpot King');
+      });
+      await test.step('Slots > Megaways → /slots/megaways/', async () => {
+        await clickDropdownChildAndVerify('Slots', '/slots/megaways/', 'Megaways');
+      });
+      await test.step('Slots > Other Slots → /slots/other-slots/', async () => {
+        await clickDropdownChildAndVerify('Slots', '/slots/other-slots/', 'Other Slots');
+      });
+
+      await test.step('Scratch Cards category → /scratch-cards/', async () => {
+        await clickTopTabAndVerify('/scratch-cards/', 'Scratch Cards');
+      });
+      await test.step('Scratch Cards > Classic Scratch Cards → /scratch-cards/classic/', async () => {
+        await clickDropdownChildAndVerify('Scratch Cards', '/scratch-cards/classic/', 'Classic Scratch Cards');
+      });
+
+      await test.step('Casino category → /casino/', async () => {
+        await clickTopTabAndVerify('/casino/', 'Casino');
+      });
+      await test.step('Casino > Roulette → /casino/roulette/', async () => {
+        await clickDropdownChildAndVerify('Casino', '/casino/roulette/', 'Roulette');
+      });
+      await test.step('Casino > BlackJack → /casino/blackjack/', async () => {
+        await clickDropdownChildAndVerify('Casino', '/casino/blackjack/', 'BlackJack');
+      });
+      await test.step('Casino > Special games → /casino/special/', async () => {
+        await clickDropdownChildAndVerify('Casino', '/casino/special/', 'Special games');
+      });
+    }
+
     printSummary();
   });
 

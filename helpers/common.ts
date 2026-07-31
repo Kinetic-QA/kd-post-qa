@@ -149,6 +149,19 @@ export async function resolveMobileAccountButton(
   }
   const sidebarBtn = page.locator('[class*="MainMenu_main-menu"]').getByRole('button', { name: textMatcher }).first();
   if (await sidebarBtn.count() > 0) return sidebarBtn;
+  // Confirmed live on Prime Slots (PSL) UK 2026-07-30: this brand has no
+  // hamburger/sidebar at all on mobile, but its desktop-shaped #login-
+  // header/#join-header buttons are CSS-hidden at mobile widths — a
+  // SEPARATE pair (#nav-login-header/#nav-join-header, same accessible
+  // name) is the real visible mobile entry point instead. Try the banner
+  // scope first (works for brands whose desktop buttons stay visible on
+  // mobile), then fall back to an unscoped page-wide match by accessible
+  // name for brands like this one where the real mobile button isn't
+  // nested inside the banner landmark at all.
+  const bannerBtn = page.getByRole('banner').getByRole('button', { name: textMatcher }).first();
+  if (await bannerBtn.count() > 0) return bannerBtn;
+  const pageWideBtn = page.getByRole('button', { name: textMatcher }).first();
+  if (await pageWideBtn.count() > 0) return pageWideBtn;
   return null;
 }
 
@@ -406,6 +419,20 @@ export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Pr
   await dismissCookieConsent(page);
   await page.waitForTimeout(2_000);
   await dismissCampaignPopup(page);
+
+  // Confirmed live on Prime Slots (PSL) UK 2026-07-30: this brand has no
+  // hamburger/sidebar at all — its Blog link lives directly in the footer
+  // instead. Fall back to a plain footer-link click rather than assuming
+  // every brand reaches the blog through a sidebar drawer.
+  const footerBlogLink = page.locator(`footer a[href*="${blogPath}"], [class*="Footer_footer-mid"] a[href*="${blogPath}"]`).first();
+  if (await footerBlogLink.count() > 0) {
+    await footerBlogLink.scrollIntoViewIfNeeded().catch(() => {});
+    await footerBlogLink.click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1_000);
+    await dismissCampaignPopup(page);
+    return;
+  }
 
   // Hamburger toggle — React requires a JS click, same as sidebar-navigation.spec.ts.
   await page.evaluate((sel) => {
