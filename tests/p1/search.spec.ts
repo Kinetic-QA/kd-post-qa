@@ -82,9 +82,17 @@ test.describe('P1 - Search', () => {
       // width), so fall back to the plain header link when the
       // MobileFooter-scoped one genuinely doesn't exist for this brand.
       const mobileFooterSearch = page.locator('[class*="MobileFooter"] a[href="#search"]').first();
+      // Confirmed live on Prime Slots (PSL) UK 2026-07-31: this brand
+      // renders TWO a[href="#search"] elements on mobile — the desktop
+      // header's own (now CSS-hidden at mobile width) and a second, real
+      // "Search game" one inside its own mobile menu drawer. An unscoped
+      // `.first()` picks whichever is first in DOM order regardless of
+      // which one is actually visible — filter to the genuinely visible
+      // copy instead, same fix already needed for other GEOs' duplicate
+      // hidden/visible pairs.
       const searchLink = isMobile && (await mobileFooterSearch.count()) > 0
         ? mobileFooterSearch
-        : page.locator('a[href="#search"]').first();
+        : page.locator('a[href="#search"]').filter({ visible: true }).first();
       // Confirmed live on ZI UK: this brand has no separate header search
       // icon at all — its only #search link is the hamburger sidebar's
       // "Search game" item, off-canvas until the sidebar is opened.
@@ -381,7 +389,21 @@ test.describe('P1 - Search', () => {
       // page (confirmed live: a promo tile also says "A JUGAR" on ES).
       const searchPopup = page.locator('[class*="Popup_popup"], body.search-open').filter({ visible: true }).first();
       const playItBtn = playCtaLocator(searchPopup, strings.playCta).filter({ visible: true }).first();
-      await playItBtn.click({ force: true });
+      // Confirmed live on Prime Slots (PSL) UK 2026-07-31: this brand's real
+      // tile markup renders TWO "Play" buttons per game (a hover-reveal one
+      // under .game-up, and a second one nested in the .game-link span) that
+      // share the same (invalid, duplicate) id — each is a real, functional
+      // 0×0-sized element outside its own CSS :hover state, only gaining a
+      // real bounding box while actively hovered. A real `.click({force:
+      // true})` still needs genuine screen coordinates even with force, so it
+      // can silently misfire if Step 6's hover has lapsed by the time this
+      // click fires (mouse movement, a re-render, timing). A native
+      // `el.click()` sidesteps hover/coordinates entirely — confirmed live
+      // this reaches #account reliably regardless of which of the two
+      // duplicate buttons is currently hover-visible — same pattern already
+      // used for this exact class of issue elsewhere in this project (see
+      // Step 4's titleLink click above).
+      await playItBtn.evaluate((el: HTMLElement) => el.click());
       await page.waitForTimeout(3_000);
     });
 
@@ -414,6 +436,34 @@ test.describe('P1 - Search', () => {
         await page.waitForTimeout(1_000);
       }
 
+      // Confirmed live on Prime Slots (PSL) UK 2026-07-31: this brand's
+      // account modal is a Tailwind-styled web component (.modal-content),
+      // not the AccountPopup_account/Popup_popup React CSS-module class
+      // every other brand shares — the corner-click above never finds a
+      // real bounding box (modal locator matches 0 elements), and Escape
+      // confirmed does NOT close it either. Same closeAccountModal() fallback
+      // already used in website-header/sidebar-navigation/blog-page-header/
+      // game-info-modal specs: a direct click on the real close icon, a
+      // hash reset (fires a real hashchange the app's router picks up,
+      // unlike history.pushState), and force-hiding the still-mounted
+      // <son-auth-modals> element so it stops intercepting later clicks.
+      if (page.url().includes('#account')) {
+        const closeIcon = page.locator('.modal-header .cursor-pointer').last();
+        if (await closeIcon.count() > 0) {
+          await closeIcon.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+          await page.waitForTimeout(800);
+        }
+        if (page.url().includes('#account')) {
+          await page.evaluate(() => { history.pushState({}, '', location.pathname); });
+          await page.waitForTimeout(500);
+        }
+        await page.evaluate(() => {
+          document.querySelectorAll('son-auth-modals').forEach(el => {
+            (el as HTMLElement).style.pointerEvents = 'none';
+          });
+        }).catch(() => {});
+      }
+
       // After closing, URL should no longer have #account
       // Step 10 will re-open the search panel
       await expect(page).not.toHaveURL(/#account/, { timeout: 8_000 });
@@ -424,10 +474,12 @@ test.describe('P1 - Search', () => {
       await dismissCampaignPopup(page);
       // Same MobileFooter-vs-plain-header fallback as Step 1 — see that
       // step's comment (GC doesn't hide its header search on mobile).
+      // Same PSL UK duplicate-element fix as Step 1: filter to the
+      // genuinely visible copy instead of an unscoped `.first()`.
       const mobileFooterSearch2 = page.locator('[class*="MobileFooter"] a[href="#search"]').first();
       const searchLink = isMobile && (await mobileFooterSearch2.count()) > 0
         ? mobileFooterSearch2
-        : page.locator('a[href="#search"]').first();
+        : page.locator('a[href="#search"]').filter({ visible: true }).first();
       if (geoFeatures.searchRequiresSidebarOpen && !(isMobile && (await mobileFooterSearch2.count()) > 0)) {
         await page.evaluate(() => {
           (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
@@ -451,9 +503,13 @@ test.describe('P1 - Search', () => {
       // just an <i> icon inside button.SearchBar_search-back. Falling back
       // to the same class-based locator mobile already uses covers this
       // without affecting brands where the text-based one still matches.
+      // Confirmed live on Prime Slots (PSL) UK 2026-07-31: this brand's real
+      // mobile back control is `button.search-back` (plain Tailwind-style
+      // class, no `SearchBar_` CSS-module prefix like every other brand) —
+      // widened the class selector to match both.
       const backBtn = isMobile
-        ? page.locator('[class*="SearchBar_search-back"]').first()
-        : page.getByText(strings.backButtonText, { exact: true }).or(page.locator('[class*="SearchBar_search-back"]')).first();
+        ? page.locator('[class*="SearchBar_search-back"], button.search-back').first()
+        : page.getByText(strings.backButtonText, { exact: true }).or(page.locator('[class*="SearchBar_search-back"], button.search-back')).first();
       await expect(backBtn).toBeVisible({ timeout: 5_000 });
       // Confirmed live on ZI UK: a leftover GamePopup overlay (from Steps
       // 4-5's game info modal) physically covers this button — a plain

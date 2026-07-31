@@ -70,12 +70,19 @@ test.describe('P3 - Blog Page', () => {
         await readMore.click();
         return;
       }
-      const postHrefs = await page.locator(`a[href*="/${geoFeatures.blogPath}"]`)
-        .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
-      const postHref = [...new Set(postHrefs)].find(h => {
-        const path = h.split(geoFeatures.blogPath!)[1] ?? '';
-        return path && !path.startsWith('search') && /^[a-z0-9-]+\/[a-z0-9-]+\/?$/.test(path);
-      });
+      // Same poll-for-a-few-seconds fix as Step 1's category scan above —
+      // confirmed live on PSL UK 2026-07-31, a one-shot scan can race the
+      // blog page's own content still hydrating.
+      let postHref: string | undefined;
+      for (let attempt = 0; attempt < 6 && !postHref; attempt++) {
+        const postHrefs = await page.locator(`a[href*="/${geoFeatures.blogPath}"]`)
+          .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
+        postHref = [...new Set(postHrefs)].find(h => {
+          const path = h.split(geoFeatures.blogPath!)[1] ?? '';
+          return path && !path.startsWith('search') && /^[a-z0-9-]+\/[a-z0-9-]+\/?$/.test(path);
+        });
+        if (!postHref) await page.waitForTimeout(1_000);
+      }
       if (!postHref) throw new Error('BP-01: no "Read More" link and no real blog post link found on the listing page');
       await page.locator(`a[href="${postHref}"]`).first().click();
     }
@@ -88,12 +95,25 @@ test.describe('P3 - Blog Page', () => {
       // Slingo/Slots/Lifestyle) — pick whichever real category link exists
       // instead of hardcoding one, since the behavior under test is "clicking
       // a category leads to that category's listing," not a specific slug.
-      const categoryHrefs = await page.locator(`a[href*="/${geoFeatures.blogPath}"]`)
-        .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
-      const categoryHref = [...new Set(categoryHrefs)].find(h => {
-        const path = h.split(geoFeatures.blogPath!)[1] ?? '';
-        return path && !path.startsWith('search') && /^[a-z0-9-]+\/?$/.test(path);
-      });
+      //
+      // Confirmed live on Prime Slots (PSL) UK 2026-07-31: a single
+      // evaluateAll right after navigation can genuinely race the blog
+      // page's own content still hydrating — the real category links are
+      // there moments later, but a one-shot scan right after
+      // navigateToBlogViaSidebar's fixed wait can catch it too early,
+      // especially deep into a long sequential suite run (same class of
+      // under-load timing issue as dismissCookieConsent's poll loop). Poll
+      // for a few seconds rather than trusting a single fixed-wait snapshot.
+      let categoryHref: string | undefined;
+      for (let attempt = 0; attempt < 6 && !categoryHref; attempt++) {
+        const categoryHrefs = await page.locator(`a[href*="/${geoFeatures.blogPath}"]`)
+          .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
+        categoryHref = [...new Set(categoryHrefs)].find(h => {
+          const path = h.split(geoFeatures.blogPath!)[1] ?? '';
+          return path && !path.startsWith('search') && /^[a-z0-9-]+\/?$/.test(path);
+        });
+        if (!categoryHref) await page.waitForTimeout(1_000);
+      }
       if (!categoryHref) throw new Error('BP-01: no blog category link found on the listing page');
       const categoryLink = page.locator(`a[href="${categoryHref}"]`).first();
       await categoryLink.click();
@@ -101,6 +121,11 @@ test.describe('P3 - Blog Page', () => {
       await expect(page).toHaveURL(new RegExp(categoryHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), { timeout: 10_000 });
       await page.goBack({ waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
+      // Same hydration-race mitigation as navigateToBlogViaSidebar and the
+      // category-link poll above — confirmed live on PSL UK 2026-07-31 that
+      // Step 2's post-link scan can occasionally race the listing's own
+      // content still hydrating right after this goBack.
+      await page.waitForLoadState('networkidle').catch(() => {});
       await dismissCampaignPopup(page);
     });
 

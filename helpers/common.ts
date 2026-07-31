@@ -413,7 +413,12 @@ const HAMBURGER_SELECTOR = '[class*="hamburger"]';
  * that doesn't reflect how the page is actually navigated to.
  */
 export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Promise<void> {
-  await page.goto('');
+  // Confirmed live on Prime Slots (PSL) UK 2026-07-31: an unqualified
+  // page.goto() defaults to waitUntil: 'load' (waits for every homepage
+  // image/resource to finish), which occasionally exceeds the 15s
+  // navigationTimeout on this brand's image-heavy homepage — every other
+  // navigation in this codebase already uses 'domcontentloaded' instead.
+  await page.goto('', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(1_000);
   await dismissCookieConsent(page);
@@ -429,6 +434,12 @@ export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Pr
     await footerBlogLink.scrollIntoViewIfNeeded().catch(() => {});
     await footerBlogLink.click();
     await page.waitForLoadState('domcontentloaded');
+    // Confirmed live on PSL UK 2026-07-31: the blog listing's category links
+    // are client-rendered and can still be hydrating right after
+    // domcontentloaded, especially deep into a long sequential run —
+    // networkidle gives them a real chance to finish before callers
+    // (blog-page.spec.ts's own poll loop) start scanning for them.
+    await page.waitForLoadState('networkidle').catch(() => {});
     await page.waitForTimeout(1_000);
     await dismissCampaignPopup(page);
     return;

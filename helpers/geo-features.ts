@@ -76,6 +76,7 @@ export interface GeoFeatureConfig {
   privacyPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'privacy/' when omitted. Confirmed live: PC SE's real slug is "privacy-policy/" — a genuinely different (not translated, just longer) English slug than every other GEO onboarded so far
   termsPath?: string; // optional — baseURL-relative, no leading slash. Defaults to 'terms/' when omitted. Confirmed live: PC SE's real slug is "terms-conditions/" — same longer-English-slug pattern as privacyPath above
   needsStealthLaunch?: boolean; // optional — true means this GEO's site sits behind Cloudflare bot-detection that blocks/challenges a plain automated Chromium (confirmed on GC UK and MC UK — see helpers/stealth-fixtures.ts). When true, tests/p1|p2|p3 specs (which import `test`/`expect` from stealth-fixtures, not '@playwright/test' directly) launch via playwright-extra + puppeteer-extra-plugin-stealth instead of Playwright's default launcher. Defaults to false/undefined — every other GEO's launch is completely unchanged. Set this the moment a NEW GEO is confirmed to hit the same Cloudflare wall; no other wiring is needed, the fixture reads this flag automatically.
+  hasFunctionalBlogLogin?: boolean; // optional — false means the blog section's own Login/Join buttons change the URL hash to #account (so a plain URL check would falsely pass) but no real modal/form ever renders there — confirmed live on Prime Slots (PSL) UK 2026-07-31: clicking Login on /blog/ leaves 0 real `.modal-content` elements in the DOM, while the exact same button on the main site opens a real, working modal (1 `.modal-content` found) — a genuine gap isolated to the blog's own (separate) platform, not a selector bug or a brand-wide login issue. Defaults to true when omitted, so existing GEOs need no change. blog-page-header.spec.ts's Steps 1/2 skip cleanly when false rather than asserting a hash change that doesn't reflect a real working form.
 }
 
 export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
@@ -1446,6 +1447,47 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasPaymentMethodsPage: true, // confirmed live: /payment-methods/ returns 200 (see paymentMethodsPath)
       hasBlogDesktopSearch: false, // confirmed live 2026-07-30: this brand has no sidebar, and no separate blog-specific search entry point was found either — see hasBlogSearch
       hasBlogSearch: false, // confirmed live 2026-07-30: blog-search.spec.ts's whole flow assumes a sidebar-driven entry point this brand doesn't have (no hamburger/toggle found at all) — same conservative default as other blogs whose search widget doesn't independently work; skip cleanly rather than force-fitting the sidebar-based flow onto a brand with a different footer-only nav
+      hasFunctionalBlogLogin: false, // confirmed live 2026-07-31: clicking Login/Join on /blog/ changes the URL hash to #account but renders 0 real .modal-content elements — the exact same button on the main site opens a real, working modal (1 found) — a genuine gap isolated to the blog's own separate platform, not a login-wide issue
+    },
+    // CA (English Canada) — onboarding started 2026-07-31, confirmed live
+    // against www.primeslots.com/en-CA/. Same underlying PSL platform as UK
+    // (non-SkillOnNet, native web-component account modal, 3-category
+    // taxonomy) — only the market-specific facts below were independently
+    // re-verified; everything else is inherited from UK's confirmed platform
+    // behavior and needs its own live confirmation if it turns out different.
+    CA: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-07-31: /en-CA/blog/ 404s
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-07-31: /en-CA/promotions/ returns 200
+      hasPromotionsIconInHeader: false, // cloned from UK's confirmed header crawl — CA's own header nav text (Search game/Home/Slots/Scratch Cards/Casino) shows no separate Promotions entry either, consistent with UK
+      featuresPath: null, // confirmed live 2026-07-31: /en-CA/features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-07-31: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-07-31: 404s — no Bingo vertical on this brand at all, kept as the common placeholder
+      currencySymbol: '$', // confirmed live 2026-07-31: real prices shown in $ (CAD), not £
+      contactEmail: 'support@primeslots.com', // confirmed live 2026-07-31: same shared support address as UK, real mailto link on /en-CA/contact/
+      aboutUsPath: 'about-us/', // confirmed live 2026-07-31: /en-CA/about-us/ returns 200, same slug as UK
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-07-31: /en-CA/payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-07-31: zero facebook/twitter/instagram links found homepage-wide, unlike UK's single facebook.com/primeslots link
+      hasSocialMedia: false,
+      // Not independently verified live this session — "Casino" is on the
+      // approved 4-word list (see feedback_search_term_wordlist memory) and
+      // matches one of this brand's own taxonomy categories; UK's "Wild"
+      // choice predates that policy. Verify live on first real run and swap
+      // if it returns zero real game-tile results, same caveat as any other
+      // freshly-onboarded GEO's searchTerm.
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots/', '/scratch-cards/', '/casino/'],
+      gameTileHrefSubstrings: ['/slots/', '/scratch-cards/', '/casino/'], // same 3-category taxonomy confirmed live via header nav text (Slots/Scratch Cards/Casino)
+      hasGameFilterCarousel: false, // cloned from UK's confirmed finding — not independently re-verified this session, same platform/homepage template expected
+      hasFeedbackForm: true, // confirmed live 2026-07-31: /en-CA/contact/ has a real "Report a problem"-style feedback link, unlike UK (which confirmed false) — a genuine per-market divergence, not a clone
+      hasGameCategoryNav: true, // confirmed live 2026-07-31: same 3-category taxonomy as UK (Slots/Scratch Cards/Casino) via header nav text — needs the same isPslUkFormat branch in game-category-navigation.spec.ts
+      hasSidebarMenu: false, // cloned from UK's confirmed finding (no hamburger/off-canvas sidebar at all) — same platform, not independently re-verified this session
+      hasLoginRegistration: true, // confirmed live 2026-07-31: real Log in button present in header
+      hasTestAccount: true, // real test account provided by Reeve 2026-07-31 (gowem54020@186site.com)
+      hasAccountModal: true, // cloned from UK's confirmed finding (same native web-component modal) — verify on first real login/registration run
+      hasPaymentMethodsPage: true, // confirmed live 2026-07-31: /en-CA/payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK's shape)
     },
   },
 

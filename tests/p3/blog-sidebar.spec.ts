@@ -28,6 +28,15 @@ test.describe('P3 - Blog Sidebar', () => {
   test.beforeEach(async ({ page }) => {
     geoFeatures = currentGeoFeatures();
     test.skip(!geoFeatures.hasBlog, `Blog does not exist for this GEO (${test.info().project.name})`);
+    // Confirmed live on Prime Slots (PSL) UK 2026-07-31: this brand has no
+    // hamburger/off-canvas sidebar anywhere on the site (confirmed already
+    // for the main site — see sidebar-navigation.spec.ts's identical skip),
+    // and the blog section is no exception — its own nav lives in a plain
+    // always-visible top bar instead. This whole spec's SIDEBAR/HAMBURGER
+    // selectors assume a sidebar drawer exists, so every step here would
+    // find nothing to open — not a broken selector, a genuinely different
+    // platform.
+    test.skip(geoFeatures.hasSidebarMenu === false, `No hamburger/sidebar menu exists for this GEO (${test.info().project.name}) — blog nav lives directly in an always-visible top bar instead`);
     await setupCampaignPopupWatcher(page);
     await navigateToBlogViaSidebar(page, geoFeatures.blogPath!);
   });
