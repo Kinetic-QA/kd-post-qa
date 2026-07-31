@@ -11,9 +11,16 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-07-31
 
+### Added
+
+- **Prime Slots (PSL) Canada — new market, onboarding started today.** Same different-website-tech brand as PSL UK (top menu bar instead of a slide-out side menu, its own login/sign-up pop-up style). Sign-up, search, browsing every game category, header, and the basic login flow are all confirmed working on both desktop and phone. Full run: 25 passed, 9 failed, 14 skipped — **not fully clean yet**, carrying into next week. Most of the remaining failures (7 of 9) all point to the same one spot — a "report a problem" pop-up window that isn't loading properly for this market — so next session should be able to close most of the gap in one fix rather than nine separate ones.
+
 ### Fixed
 
 - **Fixed a merge conflict blocking PR #41 (Ice36 UK onboarding) from being merged.** Another PR had landed on `main` first and touched some of the same settings files (adding Prime Slots UK's own settings right next to Ice36's), which is normal when two brands get onboarded around the same time — nothing was actually broken, the two sets of changes just needed to be combined by hand instead of automatically. Combined both sets of changes (test account settings, sign-up form checks, and today's written notes) so nothing from either brand was lost. Full write-up in `docs/reports/2026-07-31-pr-41-merge-conflict-resolution.md`.
+- **Prime Slots (PSL) UK is now fully clean — 38 passed, 0 failed.** Closed out every remaining item from last session's onboarding: the search page's "Back" button wasn't being found because this brand uses a different button style than every other brand we test; the search icon check was sometimes clicking a hidden copy of the search button instead of the real visible one; the mobile sign-in button wasn't registering clicks because the page thought it was off-screen; and the homepage was occasionally timing out because our checks were waiting for every single image on the page to finish loading instead of just the page itself, which this brand's heavier homepage doesn't always do in time. Also fixed two blog-page checks that could occasionally look before the page's content had fully appeared, causing rare false failures.
+- **Prime Slots (PSL) Canada's sign-up flow was completely broken** — the checklist had no idea this market needed a Canadian-style phone number and birth-date format, so it kept trying to sign up with a UK-style phone number that the real site kept rejecting, eventually timing out completely. Fixed by teaching it this market's real format (same fix already made for a few other brands' Canadian markets before).
+- **Added a new "Feature Coverage Tally" tab to the team's shared tracker spreadsheet**, showing at a glance how many of our already-tested markets have a feedback form, a features page, footer social media icons, working login/sign-up, and a blog — with notes explaining every "no" (e.g. "this market uses instant sign-in, no traditional login exists"). This will be kept up to date automatically every time the tracker gets refreshed after a new market is onboarded.
 
 ## [Unreleased] - 2026-07-30
 

@@ -205,6 +205,19 @@ test.describe('Registration Flow', () => {
     // either, same 3-checkbox set.
     const isPslUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PSL'
       && test.info().project.name.replace(/-mobile$/, '') === 'UK';
+    // Prime Slots (PSL) CA — onboarding started 2026-07-31, tested from a
+    // confirmed Canada VPN/IP. Same gap already documented for MC/PC/LP's CA
+    // markets: this brand had NO Canadian branch here at all, so Step 0 was
+    // silently falling through to the plain UK-shaped default mobile
+    // generator, which the real Canadian form rejected on every retry
+    // (confirmed reproducible — 10 attempts, all rejected, full test
+    // timeout). Confirmed live via shadow-DOM form inspection: DOB field id
+    // is `dateOfBirth` with a "Year-Month-Day" placeholder, same non-UK
+    // format as MC/PC/LP's CA markets — reuses generateCanadianDOB()
+    // unchanged. Same taxonomy as PSL UK (Slots/Scratch Cards/Casino, no
+    // Bingo) — no gdprBingo checkbox exists here either, same 3-checkbox set.
+    const isPslCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PSL'
+      && test.info().project.name.replace(/-mobile$/, '') === 'CA';
     // MC/FR-CA — onboarding started 2026-07-23, tested from a confirmed
     // Montreal VPN. Same underlying platform as MC/CA but genuinely
     // translated field labels — confirmed live via DOM snapshot: mobile
@@ -570,7 +583,12 @@ test.describe('Registration Flow', () => {
       // independently confirmed, so left as the generic default for now;
       // correct via a real failure if Step 2 turns out to need the
       // Canadian province/postal-code shape too.
-      if (isLpCaFormat) {
+      // PSL/CA — confirmed live 2026-07-31: same "Year-Month-Day"
+      // placeholder DOB shape via shadow-DOM form inspection — reuses
+      // generateCanadianDOB() unchanged. Address shape not independently
+      // confirmed this session either, same conservative default-and-fix-on-
+      // failure approach as LP/CA above.
+      if (isLpCaFormat || isPslCaFormat) {
         data.dob = generateCanadianDOB();
       }
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
@@ -602,7 +620,7 @@ test.describe('Registration Flow', () => {
         // MC/CA, no explicit "Canada" dropdown selection needed either.
         await ((isAlbertaFormat || isCanadianMobileFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
-          : (isPcCaFormat || isMcCaFormat || isLpCaFormat)
+          : (isPcCaFormat || isMcCaFormat || isLpCaFormat || isPslCaFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile)
           : isMcFrCaFormat
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, undefined, mcFrCaStep0Labels)
@@ -637,7 +655,7 @@ test.describe('Registration Flow', () => {
         // call, and mcFrCaStep0Labels.continue) that this brand's Continue
         // button is lowercase "Continuer" everywhere, NOT SNG FR-CA's
         // all-caps "CONTINUER" — kept distinct from isFrCaFormat below.
-        await ((isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat)
+        await ((isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat)
           ? fillMobileStep2GenderEmailCA(page, scope, data,
               (isFrCaFormat || isMcFrCaFormat) ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined,
               isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue', (isFrCaFormat || isMcFrCaFormat))
@@ -660,7 +678,7 @@ test.describe('Registration Flow', () => {
         // that's the same pre-existing site-side issue, not a new bug.
         await (usesAbAddressShape
           ? fillMobileStep3AddressAB(page, scope, data)
-          : (isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat)
+          : (isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat)
           ? fillMobileStep3AddressCA(page, scope, data,
               (isFrCaFormat || isMcFrCaFormat) ? 'Adresse' : 'Start typing your address',
               (isFrCaFormat || isMcFrCaFormat), isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue')
@@ -698,7 +716,7 @@ test.describe('Registration Flow', () => {
           : (isCanadianMobileFormat || isMcFrCaFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'], false,
               (isFrCaFormat || isMcFrCaFormat) ? 'Non' : 'No')
-          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat || isI36NoBingoFormat || isPslUkFormat)
+          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat || isI36NoBingoFormat || isPslUkFormat || isPslCaFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
           : fillMobileStep5Final(page, scope));
       });
@@ -735,7 +753,11 @@ test.describe('Registration Flow', () => {
       // the DOB needs overriding here, not the address (MC/CA's address step
       // uses the generic street/postcode/city shape via fillComAddress, not
       // SNG CA's province/postal-code shape).
-      if (isMcCaFormat || isPcCaFormat || isLpCaFormat) {
+      // PSL/CA — confirmed live 2026-07-31: same "Year-Month-Day" placeholder
+      // DOB shape via shadow-DOM form inspection — reuses generateCanadianDOB()
+      // unchanged, same conservative default-and-fix-on-failure address
+      // approach as LP/CA.
+      if (isMcCaFormat || isPcCaFormat || isLpCaFormat || isPslCaFormat) {
         data.dob = generateCanadianDOB();
       }
       // MC/FR-CA: same dash-separated YYYY-MM-DD format as SNG FR-CA
@@ -772,7 +794,7 @@ test.describe('Registration Flow', () => {
           // (genuinely translated, brand-specific) field labels.
           : isMcFrCaFormat
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, undefined, mcFrCaStep0Labels)
-          : (isMcCaFormat || isPcCaFormat || isLpCaFormat)
+          : (isMcCaFormat || isPcCaFormat || isLpCaFormat || isPslCaFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile)
           : fillStep0WithRetry(page, scope, data));
       });
@@ -791,7 +813,7 @@ test.describe('Registration Flow', () => {
         // firstName/lastName/email/gender labels NOT yet independently
         // confirmed for MC FR-CA, reusing SNG FR-CA's frCaStep1Labels as a
         // starting guess (same language, correct via real failures if wrong).
-        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat)
+        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat)
           ? ((isFrCaFormat || isMcFrCaFormat) ? scope.getByLabel('Adresse').first() : scope.getByPlaceholder('Start typing your address').first())
           : undefined, (isFrCaFormat || isMcFrCaFormat) ? frCaStep1Labels : undefined,
           (isFrCaFormat || isMcFrCaFormat) ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined);
@@ -827,7 +849,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue',
               isFrCaFormat ? /nom d'utilisateur/i : /username/i)
           : isMcFrCaFormat ? fillComAddress(page, scope, data, 'Adresse', true, 'Code postal', 'Ville', 'Continuer', /nom d.utilisateur/i, /saisir l.adresse manuellement/i)
-          : (isMcComFormat || isMcCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat) ? fillComAddress(page, scope, data)
+          : (isMcComFormat || isMcCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat) ? fillComAddress(page, scope, data)
           : fillStep2(page, scope, data));
       });
 
@@ -855,7 +877,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat)
           : isMcFrCaFormat
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'], /nom d.utilisateur/i, /mot de passe/i, true)
-          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat || isI36NoBingoFormat || isPslUkFormat)
+          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat || isI36NoBingoFormat || isPslUkFormat || isPslCaFormat)
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
       });

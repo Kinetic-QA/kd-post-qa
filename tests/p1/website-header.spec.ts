@@ -1,5 +1,5 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, siteUrl, resolveMobileAccountButton } from '../../helpers/common';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -200,11 +200,23 @@ test.describe('P1 - Website Header', () => {
       // to whichever of those the sidebar actually exposes instead of
       // assuming every brand collapses both into one Play button.
       if (await playBtn.count() === 0) {
-        await openMobileMenuIfNeeded();
-        const sidebarLoginBtn = page.locator('[class*="MainMenu_main-menu"]')
-          .getByRole('button', { name: strings.loginButton }).first();
-        await expect(sidebarLoginBtn).toBeVisible({ timeout: 10_000 });
-        await sidebarLoginBtn.click();
+        // Confirmed live on Prime Slots (PSL) UK 2026-07-31: this brand has
+        // no bottom-nav Play button AND no hamburger/sidebar at all
+        // (hasSidebarMenu: false) — its real mobile Login entry point is a
+        // separate #nav-login-header button in the always-visible top bar,
+        // CSS-hidden at desktop widths only. resolveMobileAccountButton()
+        // already covers exactly this shape (built for this same PSL gap
+        // elsewhere — see its own docstring) instead of assuming every
+        // sidebar-less brand still has one to open.
+        const mobileLoginBtn = await resolveMobileAccountButton(page, 'login', strings.loginButton);
+        if (!mobileLoginBtn) throw new Error('WH-01 Step 2b: no Play button, sidebar login, or mobile login button found for this GEO');
+        await expect(mobileLoginBtn).toBeVisible({ timeout: 10_000 });
+        // PSL UK's real mobile login button reports "outside of viewport"
+        // even to Playwright's own click (which still needs real screen
+        // coordinates) — same fix as helpers/common.ts's other
+        // resolveMobileAccountButton() callers: a native DOM click
+        // sidesteps viewport/coordinate math entirely.
+        await mobileLoginBtn.evaluate((el: HTMLElement) => el.click());
         await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
         await page.goto('', { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('domcontentloaded');
@@ -235,9 +247,14 @@ test.describe('P1 - Website Header', () => {
       // this brand), so fall back to the plain header link when the
       // MobileFooter-scoped one genuinely doesn't exist.
       const mobileFooterSearch = page.locator('[class*="MobileFooter"] a[href="#search"]').first();
+      // Confirmed live on Prime Slots (PSL) UK 2026-07-31: this brand
+      // renders TWO a[href="#search"] elements on mobile — the desktop
+      // header's own (now CSS-hidden at mobile width) and a second, real
+      // "Search game" one inside its own mobile menu drawer — same fix as
+      // search.spec.ts's Step 1.
       const searchLink = isMobile && (await mobileFooterSearch.count()) > 0
         ? mobileFooterSearch
-        : page.locator('a[href="#search"]').first();
+        : page.locator('a[href="#search"]').filter({ visible: true }).first();
       // Confirmed live on ZI UK: this brand has no separate header search
       // icon at all — its only #search link is the hamburger sidebar's
       // "Search game" item, off-canvas until the sidebar is opened.
@@ -400,7 +417,16 @@ test.describe('P1 - Website Header', () => {
       await page.goto(otherPagePath, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
-      const logo = page.getByRole('banner').locator(`a[href="${siteUrl('')}"]`).first();
+      // Confirmed live on Prime Slots (PSL) UK 2026-07-31: this brand's real
+      // logo anchor uses a bare root-relative href="/" attribute, not the
+      // full absolute URL every other brand onboarded so far renders — a
+      // CSS attribute selector matches the literal attribute, not the
+      // resolved .href property, so the absolute-only match below silently
+      // found 0 elements here. Also match the site's root PATH (not just "/"
+      // hardcoded, so GEO-specific base paths like Slingo ROW's /en-row/
+      // still resolve correctly) alongside the existing absolute form.
+      const rootPath = new URL(siteUrl('')).pathname;
+      const logo = page.getByRole('banner').locator(`a[href="${siteUrl('')}"], a[href="${rootPath}"]`).first();
       await expect(logo).toBeVisible({ timeout: 10_000 });
       await logo.click();
       await page.waitForLoadState('domcontentloaded');
