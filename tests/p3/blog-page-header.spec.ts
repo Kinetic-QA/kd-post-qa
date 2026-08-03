@@ -64,7 +64,7 @@ test.describe('P3 - Blog Page Header', () => {
     // open from closed — check the actual on-screen position instead.
     async function isMobileMenuOnScreen(): Promise<boolean> {
       return await page.evaluate(() => {
-        const el = document.querySelector('[class*="MainMenu_main-menu"]');
+        const el = document.querySelector('[class*="MainMenu_main-menu"], #top-nav');
         if (!el) return false;
         const rect = el.getBoundingClientRect();
         return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
@@ -75,7 +75,7 @@ test.describe('P3 - Blog Page Header', () => {
       if (!isMobile) return;
       if (await isMobileMenuOnScreen()) return;
       await page.evaluate(() => {
-        (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+        (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click();
       });
       await page.waitForTimeout(800);
     }
@@ -126,7 +126,7 @@ test.describe('P3 - Blog Page Header', () => {
       }
       await openMobileMenuIfNeeded();
       const loginBtn = isMobile
-        ? page.locator('[class*="MainMenu_main-menu"]').getByText(strings.loginButton).first()
+        ? page.locator('[class*="MainMenu_main-menu"], #top-nav').getByText(strings.loginButton).first()
         : page.getByRole('banner').getByText(strings.loginButton).first();
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.click();
@@ -143,7 +143,7 @@ test.describe('P3 - Blog Page Header', () => {
       await dismissCampaignPopup(page);
       await openMobileMenuIfNeeded();
       const joinBtn = isMobile
-        ? page.locator('[class*="MainMenu_main-menu"]').getByText(strings.joinButton).first()
+        ? page.locator('[class*="MainMenu_main-menu"], #top-nav').getByText(strings.joinButton).first()
         : page.getByRole('banner').getByText(strings.joinButton).first();
       await expect(joinBtn).toBeVisible({ timeout: 10_000 });
       await joinBtn.click();
@@ -229,11 +229,11 @@ test.describe('P3 - Blog Page Header', () => {
       // Buscar/Entra al casino.
       const hamburger = isMobile
         ? page.locator('[class*="MobileFooter"]').getByRole('button', { name: /menu/i }).first()
-        : page.locator('[class*="hamburger" i]').first();
+        : page.locator('[class*="hamburger" i], #menu-X').first();
       await expect(hamburger).toBeVisible({ timeout: 10_000 });
       await hamburger.evaluate((el: HTMLElement) => el.click());
       await page.waitForTimeout(800);
-      const sidebarVisible = await page.locator('[class*="MainMenu_main-menu"]').isVisible({ timeout: 5_000 }).catch(() => false);
+      const sidebarVisible = await page.locator('[class*="MainMenu_main-menu"], #top-nav').isVisible({ timeout: 5_000 }).catch(() => false);
       expect(sidebarVisible).toBe(true);
     });
 

@@ -9,7 +9,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased] - 2026-07-31
+## [Unreleased] - 2026-08-03
+
+### Added
+
+- **Prime Slots (PSL) Ireland — new market, fully clean on the first try.** Same look and feel as the Canada market (no Scratch Cards content, no Bingo, its own "report a problem" pop-up behaves correctly here too), but genuinely priced in euros with a real Irish jackpot ticker, not just a copy of the UK site. Full run: 34 passed, 0 failed. Closes out Prime Slots across all three of its markets (UK, Canada, Ireland).
+- **Prime Scratch Cards (PSC) — a brand-new brand, never tested before, now covering both its UK and Canada markets.** Shares some underlying tech with Prime Slots (same sign-in redirect behaviour), but is its own brand with its own layout: Scratch Cards comes first in the menu (not Slots), there are no drop-down sub-menus under each category, and there's no "report a problem" feedback form anywhere on the site. UK: 32 passed, 0 failed. Canada: 32 passed, 0 failed (after fixing the same Canadian phone/birth-date format issue seen on other brands' Canada markets, plus two small display-check fixes described below).
+- **Lucky Me Slots (LMS) — another brand-new brand, UK market, the biggest single piece of work today.** This one looked like it might share Prime Scratch Cards' layout, but turned out to have its own, different slide-out side menu, its own category list (Slots, Progressive Jackpots, Table Games, Live Casino, and a separate "Features" section), and its own quirks (the menu button doesn't even use a normal button style, it's a plain link). Getting this one fully working took real digging, including fixing a few slow-motion checks that were quietly timing out for minutes at a time (see Fixed section). Full run: 34 passed, 0 failed.
+
+### Fixed
+
+- **Found and fixed a real bug in the Prime Slots feedback pop-up that also affected Prime Slots UK, not just Canada** — the site's own pop-up window had been updated at some point and our check was still looking for its old name, so the check correctly reported it as broken. Now looks for the pop-up the way it actually loads today, on every Prime Slots market.
+- **Found and fixed two more small existing bugs that were silently marking themselves as "passed" even though they weren't really working** — a "does the bottom mobile bar stay in place while scrolling" check, and a "is the promotional banner the right size" check — both were quietly failing in the background on Prime Slots and Prime Scratch Cards without showing up as a real failure, because of how those particular checks are written. Both now report accurately.
+- **Fixed several checks that were timing out for minutes at a time on Lucky Me Slots** — most of Lucky Me Slots' game tiles only show their "Play Now" button when you hover over them, and the automated hover click was patiently waiting a full 30 seconds every time something else on the page got in the way, instead of just trying again quickly. That one fix alone cut some checks down from several minutes each to under a minute.
+- **Confirmed Lucky Me Slots genuinely has no "Play Now" pop-up button at all on phone screens** (not a bug — a real, deliberate difference in how the mobile site is built) and updated the relevant checks to skip that step cleanly on phones instead of failing on something that was never going to be there.
+
+
 
 ### Added
 

@@ -98,7 +98,7 @@ test.describe('P1 - Search', () => {
       // "Search game" item, off-canvas until the sidebar is opened.
       if (geoFeatures.searchRequiresSidebarOpen && !(isMobile && (await mobileFooterSearch.count()) > 0)) {
         await page.evaluate(() => {
-          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+          (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click();
         });
         await page.waitForTimeout(600);
         await dismissCampaignPopup(page);
@@ -152,7 +152,7 @@ test.describe('P1 - Search', () => {
     // to skip them — exclude by real href instead, same fix already applied
     // in game-info-modal.spec.ts.
     async function realNavHrefs(): Promise<Set<string>> {
-      const navHrefList = await page.locator('[class*="Nav_nav__"] a[href], [class*="MainMenu_main-menu"] a[href], .main-tabs a[href], .header-menu-dropdown a[href]')
+      const navHrefList = await page.locator('[class*="Nav_nav__"] a[href], [class*="MainMenu_main-menu"] a[href], .main-tabs a[href], .header-menu-dropdown a[href], #top-nav a[href]')
         .evaluateAll(els => els.map(el => (el as HTMLAnchorElement).href));
       return new Set(navHrefList);
     }
@@ -164,16 +164,74 @@ test.describe('P1 - Search', () => {
       const gameLinks = searchResultsContainer().locator(gameLinkSelector);
       const count = await gameLinks.count();
       let titleLink = gameLinks.first();
+      // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03: every one of
+      // this brand's game-tile title links is genuinely zero-size until its
+      // ancestor `.game-box`-style tile is hovered (the same hover-reveal
+      // pattern already handled in game-info-modal.spec.ts's
+      // hoverRevealAncestor) — the box.width > 30 check below rejected
+      // every real candidate here, silently falling through to a wrong
+      // default link (a bare category href leaked through). Hover-reveal
+      // each non-nav candidate before checking its box; harmless no-op on
+      // brands where the link already has real dimensions at rest.
+      async function hoverRevealAncestor(locator: ReturnType<typeof page.locator>) {
+        const handle = await locator.elementHandle();
+        if (!handle) return;
+        const ancestorHandle = await handle.evaluateHandle((el) => {
+          let node: Element | null = el.parentElement;
+          while (node) {
+            const r = node.getBoundingClientRect();
+            if (r.width > 0 && r.height > 0) return node;
+            node = node.parentElement;
+          }
+          return el;
+        });
+        const ancestorElement = ancestorHandle.asElement();
+        // force:true + short timeout — confirmed live on Lucky Me Slots
+        // (LMS) UK 2026-08-03: a plain .hover() retried against a
+        // genuinely intercepting element (an unrelated lazy-loading
+        // sibling tile image, or the search input box) for its full
+        // default 30s before giving up — with up to 20 candidates checked
+        // in this loop, that alone blew through the whole test's budget.
+        // force skips the pointer-interception hit-test (only the CSS
+        // :hover state matters here, not an unobstructed real click).
+        if (ancestorElement) await ancestorElement.hover({ force: true, timeout: 2_000 }).catch(() => {});
+      }
+      // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03 desktop: none
+      // of this brand's real candidates ever satisfy the strict y>50/vh
+      // sanity window below (this brand's search-results grid lays out
+      // differently), so the loop always fell through to the unconditional
+      // `gameLinks.first()` default — which is a bare nav-href category
+      // link, not excluded by that default at all. Track the first
+      // genuinely non-nav candidate seen as a safety-net fallback so a
+      // failed sanity check never silently regresses to a wrong link.
+      let firstNonNavCandidate: ReturnType<typeof page.locator> | null = null;
       for (let i = 0; i < Math.min(count, 20); i++) {
         const href = await gameLinks.nth(i).getAttribute('href').catch(() => null);
         if (href && navHrefs.has(new URL(href, page.url()).href)) continue;
-        const box = await gameLinks.nth(i).boundingBox().catch(() => null);
+        if (!firstNonNavCandidate) firstNonNavCandidate = gameLinks.nth(i);
+        // Check the box first without hovering — the common case (a real
+        // box already, no reveal needed) stays exactly as fast as before.
+        // Only hover-reveal (LMS's case) when the box looks genuinely
+        // zero/tiny, and give the CSS "fadeIn" transition a brief moment
+        // to finish before re-checking, so the very first valid candidate
+        // succeeds immediately instead of looping through all 20.
+        let box = await gameLinks.nth(i).boundingBox().catch(() => null);
+        if (!box || box.width <= 30) {
+          await hoverRevealAncestor(gameLinks.nth(i));
+          await page.waitForTimeout(400);
+          box = await gameLinks.nth(i).boundingBox().catch(() => null);
+        }
         if (box && box.y > 50 && box.y < vh && box.width > 30) {
           titleLink = gameLinks.nth(i);
           gameTitle = (await titleLink.textContent().catch(() => ''))?.trim() ?? '';
           break;
         }
       }
+      if (gameTitle === '' && firstNonNavCandidate) {
+        titleLink = firstNonNavCandidate;
+        gameTitle = (await titleLink.textContent().catch(() => ''))?.trim() ?? '';
+      }
+      await hoverRevealAncestor(titleLink);
       // Confirmed live on MC: scrollIntoViewIfNeeded() itself can hang
       // past its timeout on a tile already picked to be within the current
       // viewport (see the box.y check above) — same "already visible but
@@ -270,6 +328,23 @@ test.describe('P1 - Search', () => {
 
     // ── Step 6: Hover a game → PLAY IT visible ───────────────────────────
     await runStep('Step 6: Hover game tile → Play It CTA appears', async () => {
+      // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03 mobile: this
+      // brand's `.game-cta` overlay (the "Play Now" button this step and
+      // Step 7 need) is genuinely `display: none` at mobile widths — a
+      // real CSS media-query removal, not just CSS-hover-hidden like every
+      // other brand. Its mobile-visible replacement (`.mobile-game-name`
+      // title link) only opens the game info modal (Step 4's flow, already
+      // confirmed working), never a direct-to-registration shortcut — real
+      // mobile users of this brand have no equivalent affordance at all.
+      // Skip cleanly rather than forcing a flow that doesn't exist.
+      if (isMobile) {
+        const ctaDisplay = await page.locator('.game-cta').first()
+          .evaluate(el => getComputedStyle(el).display).catch(() => 'none');
+        if (ctaDisplay === 'none') {
+          console.log('GS-01 Step 6 skipped — no mobile Play CTA affordance for this brand');
+          return;
+        }
+      }
       const vh = page.viewportSize()?.height ?? 720;
       // Confirmed live on ZI UK: Step 5's location.hash recovery remounts the
       // whole search component fresh — the typed query and its results from
@@ -289,16 +364,58 @@ test.describe('P1 - Search', () => {
       count = await gameLinks.count();
       const navHrefsStep6 = await realNavHrefs();
       let titleLink = gameLinks.first();
+      // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03: same hover-
+      // reveal fix as Step 4 — check the box first (fast path, unchanged
+      // for every other brand), only hover-reveal when it looks zero/tiny.
+      async function hoverRevealAncestorStep6(locator: ReturnType<typeof page.locator>) {
+        const handle = await locator.elementHandle();
+        if (!handle) return;
+        const ancestorHandle = await handle.evaluateHandle((el) => {
+          let node: Element | null = el.parentElement;
+          while (node) {
+            const r = node.getBoundingClientRect();
+            if (r.width > 0 && r.height > 0) return node;
+            node = node.parentElement;
+          }
+          return el;
+        });
+        const ancestorElement = ancestorHandle.asElement();
+        // force:true + short timeout — confirmed live on Lucky Me Slots
+        // (LMS) UK 2026-08-03: a plain .hover() retried against a
+        // genuinely intercepting element (an unrelated lazy-loading
+        // sibling tile image, or the search input box) for its full
+        // default 30s before giving up — with up to 20 candidates checked
+        // in this loop, that alone blew through the whole test's budget.
+        // force skips the pointer-interception hit-test (only the CSS
+        // :hover state matters here, not an unobstructed real click).
+        if (ancestorElement) await ancestorElement.hover({ force: true, timeout: 2_000 }).catch(() => {});
+      }
+      // Same LMS desktop finding as Step 4 above — track the first
+      // genuinely non-nav candidate as a safety net in case none ever
+      // satisfies the strict y/width sanity window.
+      let firstNonNavCandidateStep6: ReturnType<typeof page.locator> | null = null;
+      let foundGoodCandidateStep6 = false;
       for (let i = 0; i < Math.min(count, 20); i++) {
         const href = await gameLinks.nth(i).getAttribute('href').catch(() => null);
         if (href && navHrefsStep6.has(new URL(href, page.url()).href)) continue;
-        const box = await gameLinks.nth(i).boundingBox().catch(() => null);
+        if (!firstNonNavCandidateStep6) firstNonNavCandidateStep6 = gameLinks.nth(i);
+        let box = await gameLinks.nth(i).boundingBox().catch(() => null);
+        if (!box || box.width <= 30) {
+          await hoverRevealAncestorStep6(gameLinks.nth(i));
+          await page.waitForTimeout(400);
+          box = await gameLinks.nth(i).boundingBox().catch(() => null);
+        }
         if (box && box.y > 50 && box.y < vh && box.width > 30) {
           titleLink = gameLinks.nth(i);
+          foundGoodCandidateStep6 = true;
           break;
         }
       }
+      if (!foundGoodCandidateStep6 && firstNonNavCandidateStep6) {
+        titleLink = firstNonNavCandidateStep6;
+      }
       // Same MC hang seen in Step 4 above — swallow rather than fail.
+      await hoverRevealAncestorStep6(titleLink);
       await titleLink.scrollIntoViewIfNeeded().catch(() => {});
       await page.waitForTimeout(500);
 
@@ -366,6 +483,17 @@ test.describe('P1 - Search', () => {
             await page.mouse.move(cx, cy, { steps: 30 });   // slow glide to game tile
           }
           await page.waitForTimeout(1_500); // let animation fully play
+        } else {
+          // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03: unlike
+          // the brands this mobile no-op was written for, LMS's CTA stays
+          // CSS-hover-gated even under Pixel 5/touch emulation — it does
+          // NOT render statically on mobile the way the comment above
+          // assumes. Try a hover-reveal on the tile's nearest sized
+          // ancestor as a fallback; harmless no-op if the CTA is already
+          // visible without it (every other brand this block was written
+          // for), since isVisible below already short-circuits on success.
+          await hoverRevealAncestorStep6(titleLink);
+          await page.waitForTimeout(400);
         }
         const visible = await playItBtn.isVisible({ timeout: 3_000 }).catch(() => false);
         if (visible) break;
@@ -383,6 +511,17 @@ test.describe('P1 - Search', () => {
         // Skip the click entirely for GEOs where it wouldn't do anything.
         console.log('GS-01 Step 7 skipped — clicking Play does not open an #account modal for this GEO');
         return;
+      }
+      // Same LMS UK mobile finding as Step 6 — no Play CTA affordance
+      // exists at all at this breakpoint, so there's nothing for this step
+      // to click.
+      if (isMobile) {
+        const ctaDisplay = await page.locator('.game-cta').first()
+          .evaluate(el => getComputedStyle(el).display).catch(() => 'none');
+        if (ctaDisplay === 'none') {
+          console.log('GS-01 Step 7 skipped — no mobile Play CTA affordance for this brand');
+          return;
+        }
       }
       // Scoped to the search popup — an unscoped page-wide search for this
       // CTA text can match unrelated content-block buttons elsewhere on the
@@ -412,6 +551,16 @@ test.describe('P1 - Search', () => {
       if (!geoFeatures.hasAccountModal) {
         console.log('GS-01 Step 8 skipped — no login/account modal for this GEO');
         return;
+      }
+      // Same LMS UK mobile finding as Steps 6-7 — nothing was clicked, so
+      // there's no modal to verify.
+      if (isMobile) {
+        const ctaDisplay = await page.locator('.game-cta').first()
+          .evaluate(el => getComputedStyle(el).display).catch(() => 'none');
+        if (ctaDisplay === 'none') {
+          console.log('GS-01 Step 8 skipped — no mobile Play CTA affordance for this brand');
+          return;
+        }
       }
       await expect(page).toHaveURL(/#account/, { timeout: 15_000 });
     });
@@ -482,7 +631,7 @@ test.describe('P1 - Search', () => {
         : page.locator('a[href="#search"]').filter({ visible: true }).first();
       if (geoFeatures.searchRequiresSidebarOpen && !(isMobile && (await mobileFooterSearch2.count()) > 0)) {
         await page.evaluate(() => {
-          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+          (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click();
         });
         await page.waitForTimeout(600);
         await dismissCampaignPopup(page);

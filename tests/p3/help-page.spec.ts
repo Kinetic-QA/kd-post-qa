@@ -12,8 +12,8 @@ import { currentGeoFeatures } from '../../helpers/geo-features';
  * it when open (no aria-expanded attribute, no <details> element).
  */
 
-const HAMBURGER = '[class*="hamburger"]';
-const SIDEBAR = '[class*="MainMenu_main-menu"]';
+const HAMBURGER = '[class*="hamburger"], #menu-X';
+const SIDEBAR = '[class*="MainMenu_main-menu"], #top-nav';
 
 test.describe('P3 - Help Page', () => {
 

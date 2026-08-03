@@ -19,8 +19,8 @@ import { currentLocaleStrings } from '../../helpers/locale-strings';
  *       mailto: href contains the correct email instead.
  */
 
-const HAMBURGER = '[class*="hamburger"]';
-const SIDEBAR   = '[class*="MainMenu_main-menu"]';
+const HAMBURGER = '[class*="hamburger"], #menu-X';
+const SIDEBAR   = '[class*="MainMenu_main-menu"], #top-nav';
 
 test.describe('P3 - Contact Us Page', () => {
 
@@ -241,7 +241,7 @@ test.describe('P3 - Contact Us Page', () => {
       await expect(page).toHaveURL(/#account\/feedback/, { timeout: 8_000 });
       console.log('CU-01 feedback form URL: ' + page.url());
       // Verify the feedback form iframe loads
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
+      const feedbackFrame = page.frameLocator('iframe[src*="/widgets/feedback/"]').frameLocator('iframe[src*="feedback-form"]');
       const emailInput = feedbackFrame.getByPlaceholder('name@example.com').first();
       await expect(emailInput).toBeVisible({ timeout: 15_000 });
     });

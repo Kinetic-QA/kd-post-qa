@@ -8,7 +8,11 @@ import { currentGeoFeatures } from '../../helpers/geo-features';
  * Scope: Report a Problem → Feedback Form flow triggered from a failed
  * login attempt, through email entry, category selection, and message
  * text, stopping short of actual submission.
- * Form is inside nested iframes: #frmFeedbackParent > iframe
+ * Form is inside nested iframes: iframe[src*="/widgets/feedback/"] > iframe[src*="feedback-form"].
+ * Matched by src, not a hardcoded id — the outer wrapper's own id shifted to
+ * "frmFeedback" (was "frmFeedbackParent") on a platform update, confirmed
+ * live 2026-08-03 on both UK and CA, so the src-based match is resilient to
+ * further id renames.
  * NOTE: SUBMIT is intentionally not clicked to avoid sending real feedback.
  */
 
@@ -111,14 +115,14 @@ test.describe('P1 - Feedback Form', () => {
       const reportLink = page.getByText(strings.reportProblemText).first();
       await reportLink.click();
       await page.waitForTimeout(3_000);
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
+      const feedbackFrame = page.frameLocator('iframe[src*="/widgets/feedback/"]').frameLocator('iframe[src*="feedback-form"]');
       const emailInput = feedbackFrame.getByPlaceholder('name@example.com').first();
       await expect(emailInput).toBeVisible({ timeout: 15_000 });
     });
 
     // ── Step 4: Fill email → click NEXT ──────────────────────────────────
     await runStep('Email entered → NEXT proceeds to Step 2', async () => {
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
+      const feedbackFrame = page.frameLocator('iframe[src*="/widgets/feedback/"]').frameLocator('iframe[src*="feedback-form"]');
       const emailInput = feedbackFrame.getByPlaceholder('name@example.com').first();
       await emailInput.fill('test_feedback@mailinator.com');
       const nextBtn = feedbackFrame.getByRole('button', { name: strings.feedbackNext }).first();
@@ -129,7 +133,7 @@ test.describe('P1 - Feedback Form', () => {
 
     // ── Step 5: Select "Other" → click NEXT ──────────────────────────────
     await runStep('"Other" selected → NEXT proceeds to Step 3', async () => {
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
+      const feedbackFrame = page.frameLocator('iframe[src*="/widgets/feedback/"]').frameLocator('iframe[src*="feedback-form"]');
       const otherOption = feedbackFrame.getByText(strings.feedbackOther, { exact: true }).first();
       await expect(otherOption).toBeVisible({ timeout: 10_000 });
       await otherOption.click();
@@ -142,7 +146,7 @@ test.describe('P1 - Feedback Form', () => {
 
     // ── Step 6: Fill textarea → SUBMIT visible and enabled ───────────────
     await runStep('Textarea typeable → SUBMIT enabled', async () => {
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
+      const feedbackFrame = page.frameLocator('iframe[src*="/widgets/feedback/"]').frameLocator('iframe[src*="feedback-form"]');
       const textarea = feedbackFrame.getByPlaceholder(strings.feedbackTextareaPlaceholder).first();
       await expect(textarea).toBeVisible({ timeout: 10_000 });
       await textarea.fill('test');

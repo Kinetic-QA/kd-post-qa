@@ -117,7 +117,7 @@ test.describe('P1 - Website Header', () => {
     // actual rect avoids treating a closed sidebar as already open.
     async function isMobileMenuOnScreen(): Promise<boolean> {
       return await page.evaluate(() => {
-        const el = document.querySelector('[class*="MainMenu_main-menu"]');
+        const el = document.querySelector('[class*="MainMenu_main-menu"], #top-nav');
         if (!el) return false;
         const rect = el.getBoundingClientRect();
         return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
@@ -128,7 +128,7 @@ test.describe('P1 - Website Header', () => {
       if (!isMobile) return;
       if (await isMobileMenuOnScreen()) return;
       await page.evaluate(() => {
-        (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+        (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click();
       });
       await page.waitForTimeout(800);
     }
@@ -260,7 +260,7 @@ test.describe('P1 - Website Header', () => {
       // "Search game" item, off-canvas until the sidebar is opened.
       if (geoFeatures.searchRequiresSidebarOpen && !(isMobile && (await mobileFooterSearch.count()) > 0)) {
         await page.evaluate(() => {
-          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+          (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click();
         });
         await page.waitForTimeout(600);
         await dismissCampaignPopup(page);
@@ -350,7 +350,7 @@ test.describe('P1 - Website Header', () => {
       }).catch(() => false);
       if (!isOnScreen) {
         await page.evaluate(() => {
-          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+          (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click();
         });
         await page.waitForTimeout(800);
       }
@@ -376,11 +376,11 @@ test.describe('P1 - Website Header', () => {
         return;
       }
       await dismissCampaignPopup(page);
-      const hamburger = page.locator('[class*="hamburger" i]').first();
+      const hamburger = page.locator('[class*="hamburger" i], #menu-X').first();
       await expect(hamburger).toBeVisible({ timeout: 10_000 });
       async function toggleHamburger() {
         await page.evaluate(() => {
-          const el = document.querySelector('[class*="hamburger" i]');
+          const el = document.querySelector('[class*="hamburger" i], #menu-X');
           (el as HTMLElement | null)?.click();
         });
         await page.waitForTimeout(800);
@@ -434,6 +434,19 @@ test.describe('P1 - Website Header', () => {
     });
 
     await runStep('Step 7: Header sticks to top only while scrolling', async () => {
+      // PSL-family brands (PSL, PSC — confirmed live on PSC CA 2026-08-03,
+      // same as PSL's confirmed no-sidebar/no-MobileFooter platform) have
+      // no fixed bottom bar at all: 0 [class*="MobileFooter"] elements
+      // found, and no other real fixed/sticky bottom nav either — mobile
+      // reuses the exact same `.main-tabs` header as desktop (see
+      // hasSidebarMenu: false in geo-features.ts). Skip gracefully here
+      // rather than soft-failing on a check this brand family has no
+      // equivalent element for.
+      if (isMobile && geoFeatures.hasSidebarMenu === false) {
+        console.log('WH-01 Step 7 skipped — no MobileFooter/bottom nav exists for this GEO');
+        record('Header remains pinned in place across scroll depths (skipped — no bottom nav for this GEO)', true);
+        return;
+      }
       // Mobile has no sticky top header by design — the persistent nav on
       // mobile is the fixed bottom bar (MobileFooter), not the top header,
       // which is expected to scroll away with the page (confirmed live).

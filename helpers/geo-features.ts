@@ -1489,6 +1489,208 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
       hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK's shape)
     },
+    // IE — onboarding started and completed 2026-08-03, confirmed live
+    // against www.primeslots.com/en-IE/. Same underlying PSL platform as
+    // UK/CA (non-SkillOnNet, native web-component account modal, 3-category
+    // taxonomy) — near-clone of CA (English, no blog/features/mobile-app/
+    // bingo), but genuinely localized to € like a real Irish market, not a
+    // clone of UK's £.
+    IE: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-03: /en-IE/blog/ 404s
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-03: /en-IE/promotions/ returns 200
+      hasPromotionsIconInHeader: false, // cloned from UK/CA's confirmed header crawl — same header nav shape (Home/Slots/Scratch Cards/Casino), no separate Promotions entry
+      featuresPath: null, // confirmed live 2026-08-03: /en-IE/features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-03: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-03: 404s — no Bingo vertical on this brand at all, kept as the common placeholder
+      currencySymbol: '€', // confirmed live 2026-08-03: real prices/jackpot ticker shown in € (e.g. a live "€48,228" progressive jackpot tile), unlike UK's £ — genuine market localization, not a UK clone
+      contactEmail: 'support@primeslots.com', // confirmed live 2026-08-03: same shared support address as UK/CA, real mailto link on /en-IE/contact/
+      aboutUsPath: 'about-us/', // confirmed live 2026-08-03: /en-IE/about-us/ returns 200, same slug as UK/CA
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-03: /en-IE/payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-03: zero facebook/twitter/instagram links found homepage-wide, same as CA (UK is the outlier with one facebook link)
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots/', '/scratch-cards/', '/casino/'], // confirmed live 2026-08-03: typing "Casino" into the real search panel returned 21 real game tiles (Casino Blocks, Casino Hold'em, Casino Spin, etc.) — verified against the actual results panel (input's DOM ancestor chain), not just persistent header nav links, avoiding the false-positive class of bug flagged for PSL UK's search investigation
+      gameTileHrefSubstrings: ['/slots/', '/scratch-cards/', '/casino/'], // confirmed live 2026-08-03: same 3-category taxonomy as UK/CA via header nav text (Home/Slots/Scratch Cards/Casino)
+      hasGameFilterCarousel: false, // cloned from UK/CA's confirmed finding — same platform/homepage template, not independently re-verified this session
+      hasFeedbackForm: true, // confirmed live 2026-08-03: /en-IE/contact/ has a real "Report a problem" link, same as CA (UK is the outlier at false)
+      hasGameCategoryNav: true, // confirmed live 2026-08-03: same 3-category taxonomy as UK/CA (Slots/Scratch Cards/Casino) via header nav text — needs the same isPslUkFormat branch in game-category-navigation.spec.ts
+      hasSidebarMenu: false, // confirmed live 2026-08-03: 0 sidebar/hamburger elements found — same as UK/CA, no off-canvas sidebar on this platform at all
+      hasLoginRegistration: true, // confirmed live 2026-08-03: real Log in button present in header
+      hasTestAccount: true, // real test account provided by Reeve 2026-08-03 (numlifafye@vusra.com) — confirmed live: submitting real credentials redirects to playsecure.primeslots.com with a real session token, same successful-login pattern as LP UK's playsecure redirect
+      hasAccountModal: true, // confirmed live 2026-08-03: clicking Log in advances the URL to /#account with a real, fillable login form, same native web-component modal as UK/CA
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-03: /en-IE/payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK/CA's shape)
+    },
+  },
+
+  // ── Prime Scratch Cards (PSC) ────────────────────────────────────────────
+  PSC: {
+    // UK — onboarding started and completed 2026-08-03, brand-new brand,
+    // confirmed live against www.primescratchcards.co.uk. Same underlying
+    // non-SkillOnNet platform as PSL (real login redirects to a
+    // playsecure.primescratchcards.co.uk subdomain with a session token,
+    // same `.main-tabs`/no-sidebar header shape, same son-cookie-consent
+    // shadow-DOM banner) — but genuinely its own brand, not a PSL re-skin:
+    // 1. Own taxonomy, own tab order: Home/Scratch Cards/Slots/Casino
+    //    (confirmed live via `.main-tabs` DOM dump) — Scratch Cards leads,
+    //    unlike PSL's Slots-first order.
+    // 2. NO `.header-menu-dropdown` submenus at all (confirmed live: 0
+    //    found) — a flatter taxonomy than PSL's nested New Slots/Best
+    //    Slots/Jackpots/etc. structure. game-category-navigation.spec.ts's
+    //    isPslUkFormat branch was widened to include PSC since its
+    //    dropdown-child checks already skip gracefully when no parent is
+    //    found, so only the (matching) top-level tab clicks actually run.
+    // 3. NO feedback form anywhere — confirmed live on both the /contact/
+    //    page (no "Report a problem" link/mailto found) AND the login
+    //    widget after a real failed-login attempt (no "Report a problem"
+    //    link appears, unlike PSL where it always does) — same
+    //    hasFeedbackForm: false outcome as PSL UK, but independently
+    //    re-confirmed here rather than assumed.
+    // 4. NO social media links anywhere homepage-wide (unlike PSL UK's one
+    //    Facebook link).
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-03: /blog/ 404s
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-03: /promotions/ returns 200
+      hasPromotionsIconInHeader: false, // confirmed live: header only has Search/Home/Scratch Cards/Slots/Casino tabs, no separate Promotions entry
+      featuresPath: null, // confirmed live 2026-08-03: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-03: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-03: 404s — no Bingo vertical on this brand at all, kept as the common placeholder
+      currencySymbol: '£', // confirmed live 2026-08-03: real prices shown in £
+      contactEmail: 'support@primescratchcards.com', // confirmed live 2026-08-03: real mailto link on /contact/
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-03: real footer link, /payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-03: zero facebook/twitter/instagram links found homepage-wide
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/scratch-cards/', '/slots/', '/casino/'], // confirmed live 2026-08-03: typing "Casino" into the real search panel returned 10 real game tiles (Casino Blocks, Casino Hold'em, Roulette, etc.) via the actual results panel screenshot, not persistent nav links — "Big Bass" also independently confirmed working (37 real tiles) but "Casino" chosen to stay consistent with the rest of the Prime family (see feedback_search_term_wordlist)
+      gameTileHrefSubstrings: ['/scratch-cards/', '/slots/', '/casino/'], // confirmed live 2026-08-03 via `.main-tabs` DOM dump — this brand's own 3-category taxonomy, Scratch Cards first
+      hasGameFilterCarousel: false, // cloned from PSL's confirmed finding — same platform/homepage template, not independently re-verified this session
+      hasFeedbackForm: false, // confirmed live 2026-08-03: no "Report a problem" link found on /contact/ NOR after a real failed-login attempt on the login widget — same outcome as PSL UK, independently re-confirmed for this brand
+      hasGameCategoryNav: true, // confirmed live 2026-08-03: real 3-category taxonomy (Scratch Cards/Slots/Casino) via `.main-tabs` — needs game-category-navigation.spec.ts's isPslUkFormat branch (widened to include PSC), NOT the shared NAV-scoped default
+      hasSidebarMenu: false, // confirmed live 2026-08-03: 0 sidebar/hamburger elements found — same as PSL, no off-canvas sidebar on this platform at all
+      hasLoginRegistration: true, // confirmed live 2026-08-03: real Log in button present in header, opens a real #account modal with a genuine username/password form
+      hasTestAccount: true, // real test account provided by Reeve 2026-08-03 (solace7097@flipssl.com) — confirmed live: submitting real credentials redirects to playsecure.primescratchcards.co.uk with a real session token, same successful-login pattern as PSL
+      hasAccountModal: true, // confirmed live 2026-08-03: clicking Log in advances the URL to /#account with a real, fillable login form, same native web-component modal as PSL
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-03: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with PSL's shape)
+    },
+    // CA (English Canada) — onboarding started and completed 2026-08-03,
+    // confirmed live against www.primescratchcards.com/en-CA/. Same
+    // underlying platform as PSC UK (real login redirects to
+    // playsecure.primescratchcards.com with a session token, same
+    // `.main-tabs`/no-sidebar/no-dropdown-submenu shape, same
+    // son-cookie-consent banner) — only the market-specific facts below
+    // were independently re-verified; everything else is inherited from
+    // UK's confirmed platform behavior.
+    CA: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-03: /en-CA/blog/ 404s
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-03: /en-CA/promotions/ returns 200
+      hasPromotionsIconInHeader: false, // cloned from UK's confirmed header crawl — same header nav shape, no separate Promotions entry
+      featuresPath: null, // confirmed live 2026-08-03: /en-CA/features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-03: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-03: 404s — no Bingo vertical on this brand at all, kept as the common placeholder
+      currencySymbol: '$', // confirmed live 2026-08-03: real jackpot ticker shows a genuine "$77,755" tile — real CAD pricing, not UK's £ (a stray £ elsewhere on the page, likely footer/legal boilerplate, is NOT the real price display)
+      contactEmail: 'support@primescratchcards.com', // confirmed live 2026-08-03: same shared support address as UK, real mailto link on /en-CA/contact/
+      aboutUsPath: 'about-us/', // confirmed live 2026-08-03: /en-CA/about-us/ returns 200, same slug as UK
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-03: /en-CA/payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-03: zero facebook/twitter/instagram links found homepage-wide, same as UK
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/scratch-cards/', '/slots/', '/casino/'], // confirmed live 2026-08-03: typing "Casino" into the real search panel returned 10 real game tiles via the actual results panel screenshot, same as UK
+      gameTileHrefSubstrings: ['/scratch-cards/', '/slots/', '/casino/'], // confirmed live 2026-08-03 via `.main-tabs` DOM dump — same 3-category taxonomy as UK, Scratch Cards first
+      hasGameFilterCarousel: false, // cloned from UK's confirmed finding — same platform/homepage template, not independently re-verified this session
+      hasFeedbackForm: false, // confirmed live 2026-08-03: no "Report a problem" link found on /contact/ NOR after a real failed-login attempt on the login widget — same as UK (unlike PSL, where CA/IE diverge from UK on this exact field — PSC does NOT diverge here)
+      hasGameCategoryNav: true, // confirmed live 2026-08-03: same 3-category taxonomy as UK (Scratch Cards/Slots/Casino) via `.main-tabs` — needs the same isPslUkFormat branch (widened to include PSC) in game-category-navigation.spec.ts
+      hasSidebarMenu: false, // confirmed live 2026-08-03: 0 sidebar/hamburger elements found — same as UK, no off-canvas sidebar on this platform at all
+      hasLoginRegistration: true, // confirmed live 2026-08-03: real Log in button present in header
+      hasTestAccount: true, // real test account provided by Reeve 2026-08-03 (gowem54020@186site.com — same test account already used for PSL CA) — confirmed live: submitting real credentials redirects to playsecure.primescratchcards.com with a real session token
+      hasAccountModal: true, // confirmed live 2026-08-03: clicking Log in advances the URL to /#account with a real, fillable login form, same native web-component modal as UK
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-03: /en-CA/payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK's shape)
+    },
+  },
+
+  // ── Lucky Me Slots (LMS) ─────────────────────────────────────────────────
+  LMS: {
+    // UK — onboarding started and completed 2026-08-03, brand-new brand,
+    // confirmed live against www.luckymeslots.co.uk. Same login-redirect
+    // platform family as PSL/PSC (real login redirects to
+    // playsecure.luckymeslots.co.uk with a session token) but a GENUINELY
+    // different header/nav architecture from both — initially assumed to
+    // be "same structure as PSC" but confirmed live NOT to be:
+    // 1. NO `.main-tabs` header at all (PSL/PSC's flat top-tab style) — the
+    //    header only has logo/search/login/join. Real category nav lives
+    //    entirely inside a hamburger-triggered off-canvas sidebar
+    //    (`<nav id="top-nav">`), closer to the LP/MC "SON platform" sidebar
+    //    family — except LMS's sidebar uses plain `<ul id="main-nav">`/
+    //    `<li>`/`<a>` markup with Font Awesome icons, NOT the
+    //    `MainMenu_main-menu__` React CSS-module classes LP's sidebar
+    //    branch depends on.
+    // 2. Hamburger trigger is a literal `id="menu-X"` (confirmed stable
+    //    across repeated page loads, not a random per-session id) — NOT a
+    //    `[class*="hamburger"]` match at all. Widened the shared
+    //    HAMBURGER_SELECTOR/inline hamburger selectors (12 files across
+    //    tests/ + helpers/common.ts) to also match `#menu-X`, and the
+    //    shared SIDEBAR_SELECTOR/"is sidebar on-screen" checks to also
+    //    match `#top-nav` (the `<nav>` element itself is what translates
+    //    on/off-screen — confirmed live via getBoundingClientRect x
+    //    changing from ~1265 (off-screen right) to 0 (on-screen) on open).
+    //    Both widenings are purely additive unions, safe for every other
+    //    brand.
+    // 3. Own taxonomy, own structure — confirmed live via the sidebar's own
+    //    DOM: "Our Games" group (Online Slots/Progressive Jackpots/Table
+    //    Games/Live Casino/Game List) + "Our Features" group (Daily
+    //    Tournaments/Daily Promotions/Quick Cashouts) + standalone VIP
+    //    Lounge — no Scratch Cards (unlike PSL/PSC), has Live Casino
+    //    (unlike PSL/PSC). Unlike LP's accordion sidebar (sub-items hidden
+    //    behind a per-category expand click), EVERY link here — top-level
+    //    and sub-category alike — is immediately visible and directly
+    //    clickable the moment the sidebar opens, confirmed live via
+    //    `offsetParent !== null` on every link with no hover/expand step;
+    //    a much simpler flat structure than LP's. Needs its own dedicated
+    //    `isLmsUkFormat` branch in game-category-navigation.spec.ts, not a
+    //    reuse of isPslUkFormat or isLpUkFormat.
+    // 4. A real markup quirk: two sidebar `<li>` elements (the "Log in" and
+    //    "Join Now" entries) share the exact same `id="nav-bar-login"` —
+    //    invalid HTML, but real. Confirmed real header buttons themselves
+    //    also have swapped-looking ids (`id="login-header"` renders "Join
+    //    Now" text, `id="join-header"` renders "Log in" text) — a genuine
+    //    site quirk, not a Playwright artifact. Existing shared helpers
+    //    already match by accessible text/role, not id, so this hasn't
+    //    needed a workaround, just noted here so it isn't mistaken for a
+    //    locator bug later.
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-03: /blog/ 404s
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-03: /promotions/ returns 200
+      hasPromotionsIconInHeader: false, // confirmed live: header only has Search/Login/Join — no separate Promotions entry outside the sidebar
+      featuresPath: null, // confirmed live 2026-08-03: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-03: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-03: 404s — no Bingo vertical on this brand at all, kept as the common placeholder
+      currencySymbol: '£', // confirmed live 2026-08-03: real prices shown in £ (e.g. a live "£29,301,370" jackpot ticker)
+      contactEmail: 'support@luckymeslots.com', // confirmed live 2026-08-03: real mailto link on /contact/
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-03: /payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-03: zero facebook/twitter/instagram links found homepage-wide
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/progressive-jackpots/', '/table-games/', '/live-casino/'], // confirmed live 2026-08-03: typing "Casino" into the real search panel returned 12 real game tiles (Casino Blocks, Casino Hold'em, Casino Malta Roulette, etc.), same word already standardized across PSL/PSC (see feedback_search_term_wordlist)
+      gameTileHrefSubstrings: ['/online-slots/', '/progressive-jackpots/', '/table-games/', '/live-casino/'], // confirmed live 2026-08-03 via the sidebar's own DOM — this brand's own taxonomy, no Scratch Cards, has Live Casino
+      hasGameFilterCarousel: false, // cloned from PSL/PSC's confirmed finding — not independently re-verified this session
+      hasFeedbackForm: false, // confirmed live 2026-08-03: no "Report a problem" link found on /contact/ NOR after a real failed-login attempt — same outcome as PSL/PSC UK
+      hasGameCategoryNav: true, // confirmed live 2026-08-03: real taxonomy inside the sidebar (see top-of-block comment) — needs its own dedicated isLmsUkFormat branch in game-category-navigation.spec.ts, NOT the shared NAV-scoped default, isPslUkFormat, or isLpUkFormat
+      hasSidebarMenu: true, // confirmed live 2026-08-03: real off-canvas sidebar exists (nav#top-nav, hamburger trigger id="menu-X") — the OPPOSITE of PSL/PSC, which have no sidebar at all
+      hasLoginRegistration: true, // confirmed live 2026-08-03: real Log in button present in header, opens a real #account modal with a genuine username/password form
+      hasTestAccount: true, // real test account provided by Reeve 2026-08-03 (saltegognu@vusra.com) — confirmed live: submitting real credentials redirects to playsecure.luckymeslots.co.uk with a real session token
+      hasAccountModal: true, // confirmed live 2026-08-03: clicking Log in advances the URL to /#account with a real, fillable login form
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-03: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with PSL/PSC's shape)
+    },
   },
 
   // ── Zingo Bingo (ZI) ─────────────────────────────────────────────────────
