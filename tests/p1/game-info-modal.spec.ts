@@ -102,7 +102,7 @@ test.describe('P1 - Game Information Modal', () => {
       // CSS-module classes every other brand shares, so without these the
       // exclusion set stayed empty and a real dropdown-child nav link
       // (e.g. "/slots/new/") got treated as a game tile.
-      const navHrefList = await page.locator('[class*="Nav_nav__"] a[href], [class*="MainMenu_main-menu"] a[href], .main-tabs a[href], .header-menu-dropdown a[href]')
+      const navHrefList = await page.locator('[class*="Nav_nav__"] a[href], [class*="MainMenu_main-menu"] a[href], .main-tabs a[href], .header-menu-dropdown a[href], #top-nav a[href]')
         .evaluateAll(els => els.map(el => (el as HTMLAnchorElement).href));
       const navHrefs = new Set(navHrefList);
       const count = await links.count();
@@ -174,11 +174,29 @@ test.describe('P1 - Game Information Modal', () => {
         return el;
       });
       const ancestorElement = ancestorHandle.asElement();
-      if (ancestorElement) await ancestorElement.hover().catch(() => {});
+      // force:true + short timeout — confirmed live on Lucky Me Slots (LMS)
+      // UK 2026-08-03: a plain .hover() retried against a genuinely
+      // intercepting element (an unrelated lazy-loading sibling tile
+      // image, or even the search input box) for its full default 30s
+      // before giving up — with up to 20 candidates checked elsewhere in
+      // this file, that alone can exceed the whole test's budget. force
+      // skips the pointer-interception hit-test (we only need to trigger
+      // the CSS :hover state, not simulate a literally unobstructed real
+      // click), and 2s is plenty for a hover that's actually going to work.
+      if (ancestorElement) await ancestorElement.hover({ force: true, timeout: 2_000 }).catch(() => {});
     }
 
     await runStep('Step 1: Click game title -> info modal appears', async () => {
       const link = await findGameLink();
+      // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03: unlike MC/UK
+      // (where the link has real dimensions at rest and only needs a hover
+      // before clicking), LMS's game-link anchor is genuinely zero-size
+      // until its ancestor `.game-box` is hovered — scrollIntoViewIfNeeded()
+      // itself timed out waiting for a visible target, before hover ever
+      // ran. Hover-reveal first, then scroll — safe for every brand, since
+      // hovering an already-visible ancestor is a documented no-op.
+      await hoverRevealAncestor(link);
+      await page.waitForTimeout(300);
       await link.scrollIntoViewIfNeeded();
       // Confirmed live on MC/UK and MC/COM: scrollIntoViewIfNeeded() can
       // align the target right at the very top edge, directly under the
@@ -265,9 +283,12 @@ test.describe('P1 - Game Information Modal', () => {
     await runStep('Steps 6-9: Open game link in new tab -> verify -> close', async () => {
       await dismissCampaignPopup(page);
       const link = await findGameLink();
-      await link.scrollIntoViewIfNeeded();
+      // Same LMS UK fix as Step 1 above: hover-reveal before scrolling,
+      // since the link can be genuinely zero-size (not just off-screen)
+      // until its ancestor is hovered.
       await hoverRevealAncestor(link);
       await page.waitForTimeout(300);
+      await link.scrollIntoViewIfNeeded();
       const href = await link.getAttribute('href') ?? '/';
       const fullUrl = new URL(href, page.url()).toString();
       const hrefPath = new URL(href, page.url()).pathname;
@@ -400,7 +421,14 @@ test.describe('P1 - Game Information Modal', () => {
       let box: { x: number; y: number; width: number; height: number } | null = null;
       const badHrefs = new Set<string>();
       for (let attempt = 0; attempt < 3; attempt++) {
-        await gameLink.scrollIntoViewIfNeeded();
+        // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03: every tile
+        // link on this brand is genuinely zero-size until hover-revealed
+        // (not a broken tile like TikiPop above) — scrollIntoViewIfNeeded()
+        // times out on ALL 3 attempts here since none ever gets a real box
+        // this way. Catch rather than throw so this loop falls through to
+        // its intended null-box fallback (hoverRevealAncestor below)
+        // instead of failing the whole step on an uncaught timeout.
+        await gameLink.scrollIntoViewIfNeeded().catch(() => {});
         await page.waitForTimeout(500);
         box = await gameLink.boundingBox().catch(() => null);
         if (box && box.width > 0 && box.height > 0) break;
@@ -435,6 +463,15 @@ test.describe('P1 - Game Information Modal', () => {
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 30 });
         await gameLink.hover({ timeout: 5_000 }).catch(() => {});
         await page.waitForTimeout(1_500);
+      } else if (!isMobile) {
+        // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03: this
+        // brand's tile link is genuinely zero-size at rest (box stayed
+        // null above), same hover-reveal pattern as Step 1's
+        // hoverRevealAncestor — hover the nearest sized ancestor instead
+        // of a coordinate-based mouse move, which has nothing to target
+        // without a real box.
+        await hoverRevealAncestor(gameLink);
+        await page.waitForTimeout(300);
       }
 
       // Confirmed live: the hover "JUGAR" text is just an image/text swap on
@@ -454,7 +491,19 @@ test.describe('P1 - Game Information Modal', () => {
       // falling through to the tile-click branch and never reaching
       // registration. Check existence by count, not visibility, and use a
       // native click either way so a zero-size element still works.
-      const tileCta = playCtaLocator(gameLink.locator('xpath=..'), strings.playCta).first();
+      // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03: this brand's
+      // real "Play Now" button is a SIBLING of the link's own immediate
+      // wrapping div (both live inside a shared `.game-cta` container one
+      // level higher), so gameLink.locator('xpath=..') alone never found
+      // it (0 count). Widen the search scope to the nearest `.game-cta`/
+      // `.game-box` ancestor when one exists, falling back to the plain
+      // immediate parent for every other brand (unaffected — a wider scope
+      // that also contains the immediate parent is a superset match, not a
+      // behavior change for brands where the CTA already sits there).
+      const widerScope = gameLink.locator('xpath=ancestor::*[contains(@class,"game-cta") or contains(@class,"game-box")][1]');
+      const hasWiderScope = await widerScope.count() > 0;
+      const ctaContainer = hasWiderScope ? widerScope : gameLink.locator('xpath=..');
+      const tileCta = playCtaLocator(ctaContainer, strings.playCta).first();
       const ctaExists = await tileCta.count() > 0;
       if (ctaExists) {
         await tileCta.evaluate((el: HTMLElement) => el.click());

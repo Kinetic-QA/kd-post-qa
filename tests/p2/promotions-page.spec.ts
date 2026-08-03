@@ -220,7 +220,7 @@ test.describe('P2 - Promotions Page', () => {
       }).catch(() => false);
       if (!isOnScreen) {
         await page.evaluate(() => {
-          (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
+          (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click();
         });
         await page.waitForTimeout(800);
       }

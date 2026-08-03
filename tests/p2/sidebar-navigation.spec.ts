@@ -22,8 +22,8 @@ import { currentLocaleStrings } from '../../helpers/locale-strings';
  * 4. history.pushState clears hash without triggering popup
  */
 
-const SIDEBAR = '[class*="MainMenu_main-menu"]';
-const HAMBURGER = '[class*="hamburger"]';
+const SIDEBAR = '[class*="MainMenu_main-menu"], #top-nav';
+const HAMBURGER = '[class*="hamburger"], #menu-X';
 
 test.describe('P2 - Sidebar Navigation', () => {
 
@@ -74,13 +74,59 @@ test.describe('P2 - Sidebar Navigation', () => {
     }
 
     async function isSidebarOpen() {
-      // Confirmed via live inspection: Overlay_overlay shows when sidebar is open
-      const display = await page.locator('[class*="Overlay_overlay"]')
-        .evaluate(el => window.getComputedStyle(el).display).catch(() => 'none');
-      return display !== 'none';
+      // Confirmed via live inspection: Overlay_overlay shows when sidebar is open.
+      // Explicit count-first check + Promise.race safety net — a bare
+      // locator.evaluate() on a brand with ZERO matching elements (e.g. LMS,
+      // which has no Overlay_overlay at all) risks waiting on Playwright's
+      // own default per-call timeout before the .catch() ever fires; with
+      // 15+ calls to this function across one test run, that risked
+      // compounding into the multi-minute hangs actually observed on LMS.
+      const overlayCount = await page.locator('[class*="Overlay_overlay"]').count().catch(() => 0);
+      if (overlayCount > 0) {
+        const display = await Promise.race([
+          page.locator('[class*="Overlay_overlay"]').first().evaluate(el => window.getComputedStyle(el).display),
+          page.waitForTimeout(2_000).then(() => 'none'),
+        ]).catch(() => 'none');
+        if (display !== 'none') return true;
+      }
+      // Lucky Me Slots (LMS) UK — confirmed live 2026-08-03: this brand has
+      // no Overlay_overlay element at all — its off-canvas `nav#top-nav`
+      // itself is what translates on/off-screen (confirmed live via
+      // getBoundingClientRect: x goes from ~viewport-width when closed to 0
+      // when genuinely open). Harmless no-op check for brands without a
+      // #top-nav element.
+      const topNavCount = await page.locator('#top-nav').count().catch(() => 0);
+      if (topNavCount === 0) return false;
+      const topNavOnScreen = await Promise.race([
+        page.locator('#top-nav').first().evaluate(el => {
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.x <= 5;
+        }),
+        page.waitForTimeout(2_000).then(() => false),
+      ]).catch(() => false);
+      return topNavOnScreen;
     }
 
     async function openSidebar() {
+      // Lucky Me Slots (LMS) UK — confirmed live 2026-08-03: unlike the SPA
+      // brands where category links route client-side, LMS's `<a href>`
+      // clicks are real full-page navigations — the son-cookie-consent
+      // banner (only dismissed once at initial setup) can reappear after
+      // each one and silently intercept every subsequent click, eventually
+      // hanging a later navStep for the rest of the test's budget.
+      // Deliberately minimal (no assertNoSiteError/scrollTo side effects
+      // like the shared dismissCookieConsent helper bundles in — an
+      // earlier attempt using that shared helper here introduced a
+      // DIFFERENT flake on this same brand's Promotions step, likely from
+      // one of those side effects interfering mid-navigation): just click
+      // the banner's own Accept button if present, no-op otherwise.
+      await page.evaluate(() => {
+        const el = document.querySelector('son-cookie-consent');
+        const sr = el && (el as any).shadowRoot as ShadowRoot | null;
+        const buttons = sr ? Array.from(sr.querySelectorAll('button')) : [];
+        const target = buttons.find(b => (b.textContent ?? '').trim().toLowerCase().includes('allow all'));
+        (target as HTMLButtonElement | undefined)?.click();
+      }).catch(() => {});
       // Idempotent — confirmed live (both SNG AB and Slingo UK): navStepIfExists
       // calls openSidebar() itself, then delegates to navStep(), which calls
       // openSidebar() AGAIN. clickHamburger() is a raw toggle (same element
@@ -143,6 +189,16 @@ test.describe('P2 - Sidebar Navigation', () => {
     async function navStep(label: string, href: string, expectedPath: string) {
       await openSidebar();
       const link = page.locator(SIDEBAR + ' a[href*="' + expectedPath + '"]').first();
+      // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03: this step
+      // hung for minutes at a time with no visible error — link.evaluate()
+      // below has no explicit timeout, so if the locator ever resolves to
+      // zero attached elements (a real race with openSidebar()'s "already
+      // open" check, or the sidebar toggling shut between calls), it
+      // silently waits on Playwright's own ~30s default per attempt,
+      // compounding across retries into the multi-minute hangs actually
+      // observed. Wait for a real attached+visible match with an explicit
+      // bound first, so a genuine miss fails fast and visibly instead.
+      await link.waitFor({ state: 'visible', timeout: 8_000 }).catch(() => {});
       // Native el.click() via evaluate, not link.click() — confirmed live on
       // SNG AB: the sidebar's Slots/Casino/Live Casino rows render an "All"
       // sub-link (the real, correct link this locator resolves to) directly
@@ -154,7 +210,10 @@ test.describe('P2 - Sidebar Navigation', () => {
       // user's mouse click in a normal browser — don't assume it's equally
       // harmless. Flag to Reeve for a manual check before treating this
       // sidebar overlap as confirmed-safe the way the header one was.
-      await link.evaluate((el: HTMLElement) => el.click());
+      await Promise.race([
+        link.evaluate((el: HTMLElement) => el.click()),
+        page.waitForTimeout(8_000),
+      ]).catch(() => {});
       // Confirmed live (same root cause already fixed in footer-navigation.spec.ts's
       // footerStep): the PREVIOUS navStep's navigation can still be in flight when
       // this click fires, so a fixed wait doesn't guarantee THIS click's navigation

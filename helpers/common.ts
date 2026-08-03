@@ -135,19 +135,24 @@ export async function resolveMobileAccountButton(
   const byId = page.locator(`#mobile-${kind}`);
   if (await byId.count() > 0) return byId.first();
 
-  const sidebarOnScreen = await page.evaluate(() => {
-    const el = document.querySelector('[class*="MainMenu_main-menu"]');
-    if (!el) return false;
-    const rect = el.getBoundingClientRect();
-    return rect.width > 0 && rect.x > -10 && rect.x < window.innerWidth;
-  });
-  if (!sidebarOnScreen) {
-    await page.evaluate(() => {
-      (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click();
-    });
-    await page.waitForTimeout(800);
+  // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03: the x-position
+  // boundingClientRect heuristic below can misreport an actually-closed
+  // sidebar as "already on screen" at this brand's mobile viewport width,
+  // silently skipping the hamburger click entirely and leaving the sidebar
+  // closed for the rest of this function. Rather than trust that heuristic
+  // as a gate, always check for the real button first — click the
+  // hamburger and re-check only if it's genuinely not there yet. Safe for
+  // every other brand too: if the button is already visible, the extra
+  // click is skipped exactly as before.
+  const sidebarLocator = page.locator('[class*="MainMenu_main-menu"], #top-nav').getByRole('button', { name: textMatcher }).first();
+  if (await sidebarLocator.count() > 0 && await sidebarLocator.isVisible().catch(() => false)) {
+    return sidebarLocator;
   }
-  const sidebarBtn = page.locator('[class*="MainMenu_main-menu"]').getByRole('button', { name: textMatcher }).first();
+  await page.evaluate(() => {
+    (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click();
+  });
+  await page.waitForTimeout(800);
+  const sidebarBtn = page.locator('[class*="MainMenu_main-menu"], #top-nav').getByRole('button', { name: textMatcher }).first();
   if (await sidebarBtn.count() > 0) return sidebarBtn;
   // Confirmed live on Prime Slots (PSL) UK 2026-07-30: this brand has no
   // hamburger/sidebar at all on mobile, but its desktop-shaped #login-
@@ -402,8 +407,13 @@ export async function goHome(page: Page): Promise<void> {
   await dismissPopups(page);
 }
 
-const SIDEBAR_SELECTOR = '[class*="MainMenu_main-menu"]';
-const HAMBURGER_SELECTOR = '[class*="hamburger"]';
+const SIDEBAR_SELECTOR = '[class*="MainMenu_main-menu"], #top-nav';
+// #menu-X added 2026-08-03: Lucky Me Slots (LMS) confirmed live to use a
+// literal id="menu-X" for its hamburger trigger (not a class match at all,
+// same value across repeated page loads — confirmed stable, not a random
+// per-session id). Purely additive: doesn't affect any brand that doesn't
+// have this exact id.
+const HAMBURGER_SELECTOR = '[class*="hamburger"], #menu-X';
 
 /**
  * Confirmed live: real visitors only ever reach the blog through the

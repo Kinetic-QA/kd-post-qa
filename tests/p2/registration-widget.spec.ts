@@ -103,7 +103,7 @@ test.describe('P2 - Registration Widget', () => {
       await expect(reportLink).toBeVisible({ timeout: 10_000 });
       await reportLink.click();
       await page.waitForTimeout(2_000);
-      const feedbackFrame = page.frameLocator('#frmFeedbackParent').frameLocator('iframe#frmFeedback');
+      const feedbackFrame = page.frameLocator('iframe[src*="/widgets/feedback/"]').frameLocator('iframe[src*="feedback-form"]');
       const emailInput = feedbackFrame.getByPlaceholder('name@example.com').first();
       await expect(emailInput).toBeVisible({ timeout: 15_000 });
     });

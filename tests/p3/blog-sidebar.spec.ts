@@ -16,8 +16,8 @@ import { currentLocaleStrings } from '../../helpers/locale-strings';
  * site or have its own; confirm live before trusting this in CI.
  */
 
-const SIDEBAR = '[class*="MainMenu_main-menu"]';
-const HAMBURGER = '[class*="hamburger"]';
+const SIDEBAR = '[class*="MainMenu_main-menu"], #top-nav';
+const HAMBURGER = '[class*="hamburger"], #menu-X';
 
 test.describe('P3 - Blog Sidebar', () => {
 

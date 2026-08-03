@@ -291,7 +291,7 @@ test.describe('P1 - Game Category Navigation', () => {
       && test.info().project.name.replace(/-mobile$/, '') === 'ES';
 
     async function clickSidebarSubCategoryAndVerify(categoryClass: string, hrefPart: string, label: string) {
-      await page.evaluate(() => (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click());
+      await page.evaluate(() => (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click());
       await page.waitForTimeout(600);
       // Expand this category's accordion — confirmed live: each of the 3
       // top-level rows is its own independent toggle; clicking one does not
@@ -332,7 +332,7 @@ test.describe('P1 - Game Category Navigation', () => {
       // leftover open sidebar's overlay blocking the next click, the same
       // lesson already learned from the unconditional-sidebar-opening bug
       // documented at the top of this file.
-      await page.evaluate(() => (document.querySelector('[class*="hamburger" i]') as HTMLElement | null)?.click());
+      await page.evaluate(() => (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click());
       await page.waitForTimeout(300);
     }
 
@@ -495,7 +495,47 @@ test.describe('P1 - Game Category Navigation', () => {
     // Cards — a whole new top-level category not seen on any other brand
     // onboarded so far), Casino (Roulette/BlackJack/Special games/All
     // Casino games). No Bingo, no Live Casino, no Slingo.
-    const isPslUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PSL';
+    // Widened 2026-08-03 to include PSC (Prime Scratch Cards): confirmed
+    // live it shares the exact same `.main-tabs` top-level nav (Home/
+    // Scratch Cards/Slots/Casino, same href slugs) as PSL, but has NO
+    // `.header-menu-dropdown` submenus at all (0 found) — a flatter
+    // taxonomy, not PSL's nested New Slots/Best Slots/Jackpots structure.
+    // Safe to share this branch: clickDropdownChildAndVerify already skips
+    // gracefully when its dropdown parent isn't found, so PSC's top-level
+    // tab clicks run and pass while its (nonexistent) submenu checks skip.
+    const isPslUkFormat = ['PSL', 'PSC'].includes((process.env.TEST_BRAND ?? 'SC').toUpperCase());
+    // Lucky Me Slots (LMS) UK — onboarded 2026-08-03, brand-new brand.
+    // Confirmed live NOT to share PSL/PSC's `.main-tabs` header at all —
+    // every category link (top-level AND sub-category alike) lives inside
+    // a real off-canvas sidebar (`nav#top-nav`, hamburger trigger
+    // `id="menu-X"` — see geo-features.ts's LMS.UK block for the full
+    // investigation). Unlike LP's accordion sidebar, every link here is
+    // immediately visible once the sidebar opens — no per-category expand
+    // click needed — so a single flat click-and-verify helper suffices,
+    // simpler than LP's clickSidebarSubCategoryAndVerify.
+    const isLmsUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LMS';
+
+    async function clickLmsSidebarLinkAndVerify(hrefPart: string, label: string) {
+      await page.evaluate(() => (document.querySelector('#menu-X') as HTMLElement | null)?.click());
+      await page.waitForTimeout(600);
+      const link = page.locator('nav#top-nav').locator(`a[href="${hrefPart}"]`).first();
+      const exists = await link.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!exists) {
+        results.push({ label: `${label} (skipped — not offered for this GEO)`, status: 'Pass' });
+        console.log('SKIP | ' + label + ' | link not found for this GEO');
+        return;
+      }
+      await link.evaluate((el: HTMLElement) => el.click());
+      await page.waitForLoadState('domcontentloaded');
+      await dismissCampaignPopup(page);
+      const expectedUrl = siteUrl(hrefPart);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 8_000 }).then(() => true).catch(() => false);
+      const actualUrl = page.url();
+      const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
+      results.push({ label, status: passed ? 'Pass' : 'Fail' });
+      console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+    }
 
     async function clickTopTabAndVerify(hrefPart: string, label: string) {
       const expectedUrl = siteUrl(hrefPart);
@@ -598,6 +638,24 @@ test.describe('P1 - Game Category Navigation', () => {
       });
       await test.step('Casino > Special games → /casino/special/', async () => {
         await clickDropdownChildAndVerify('Casino', '/casino/special/', 'Special games');
+      });
+    }
+
+    if (isLmsUkFormat) {
+      await test.step('Online Slots → /online-slots/', async () => {
+        await clickLmsSidebarLinkAndVerify('/online-slots/', 'Online Slots');
+      });
+      await test.step('Progressive Jackpots → /progressive-jackpots/', async () => {
+        await clickLmsSidebarLinkAndVerify('/progressive-jackpots/', 'Progressive Jackpots');
+      });
+      await test.step('Table Games → /table-games/', async () => {
+        await clickLmsSidebarLinkAndVerify('/table-games/', 'Table Games');
+      });
+      await test.step('Live Casino → /live-casino/', async () => {
+        await clickLmsSidebarLinkAndVerify('/live-casino/', 'Live Casino');
+      });
+      await test.step('Game List → /game-list/', async () => {
+        await clickLmsSidebarLinkAndVerify('/game-list/', 'Game List');
       });
     }
 

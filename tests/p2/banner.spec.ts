@@ -165,8 +165,14 @@ test.describe('P2 - Banner', () => {
       // intentionally targets the future spec so the test starts passing
       // once Slingo picks up the new format; a failure here today is an
       // expected, known pending-rollout gap, not a live bug.
+      // PSC's own banner markup (confirmed live 2026-08-03) is itself the
+      // <img class="banner-bg"> element, not a wrapper div containing a
+      // child <img> like every other brand — banner.locator('img') finds
+      // 0 descendants there and silently reads undefined/undefined instead
+      // of the real (still-wrong-format) size. Check the matched element
+      // itself first before drilling into a child.
       const banner = page.locator('[class*="Banner" i], [class*="banner" i]').first();
-      const img = banner.locator('img').first();
+      const img = (await banner.evaluate(el => el.tagName) === 'IMG') ? banner : banner.locator('img').first();
       const natural = await img.evaluate((el: HTMLImageElement) => ({
         width: el.naturalWidth, height: el.naturalHeight,
       })).catch(() => null);

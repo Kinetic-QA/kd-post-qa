@@ -11,8 +11,8 @@ import { currentGeoFeatures } from '../../helpers/geo-features';
  * daily-picks/, tournaments/, my-levels/, hot-cold/ inner pages.
  */
 
-const HAMBURGER = '[class*="hamburger"]';
-const SIDEBAR = '[class*="MainMenu_main-menu"]';
+const HAMBURGER = '[class*="hamburger"], #menu-X';
+const SIDEBAR = '[class*="MainMenu_main-menu"], #top-nav';
 
 test.describe('P3 - Features Page', () => {
 

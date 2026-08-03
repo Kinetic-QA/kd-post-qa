@@ -81,7 +81,7 @@ test.describe('P3 - Blog Search', () => {
         'button[aria-label*="menu" i], button[aria-label*="hamburger" i], ' +
         '[class*="hamburger"], [class*="Hamburger"], [class*="burger"], ' +
         '[class*="sidebar-toggle"], [class*="SidebarToggle"], ' +
-        '[class*="menu-toggle"], [class*="MenuToggle"]'
+        '[class*="menu-toggle"], [class*="MenuToggle"], #menu-X'
       ).first();
       await expect(hamburger).toBeVisible({ timeout: 10_000 });
       // Not hamburger.click() — this toggle anchor sits permanently
@@ -96,7 +96,7 @@ test.describe('P3 - Blog Search', () => {
           'button[aria-label*="menu" i], button[aria-label*="hamburger" i], ' +
           '[class*="hamburger"], [class*="Hamburger"], [class*="burger"], ' +
           '[class*="sidebar-toggle"], [class*="SidebarToggle"], ' +
-          '[class*="menu-toggle"], [class*="MenuToggle"]'
+          '[class*="menu-toggle"], [class*="MenuToggle"], #menu-X'
         ) as HTMLElement | null;
         el?.click();
       });
