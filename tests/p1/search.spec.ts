@@ -64,8 +64,18 @@ test.describe('P1 - Search', () => {
     const strings = currentLocaleStrings();
     const geoFeatures = currentGeoFeatures();
     const isMobile = test.info().project.name.endsWith('-mobile');
+    // Confirmed live on Lucky Me Slots (LMS) SE 2026-08-04: with only 2
+    // categories and few real results, the search panel's own "browse
+    // category" link (bare href="/online-slots/", matching this selector's
+    // substring check with no slug after it) got picked as a "genuine"
+    // result and clicked instead of an actual game tile — it isn't caught
+    // by realNavHrefs() below since it lives inside the search-results
+    // panel, not the header/sidebar nav. Exclude the bare category href
+    // itself the same way game-info-modal.spec.ts's selector already does;
+    // harmless no-op for brands whose real game tiles are individually
+    // slugged and never end in the bare substring anyway.
     const gameLinkSelector = geoFeatures.searchResultHrefSubstrings
-      .map(sub => `a[href*="${sub}"]`)
+      .map(sub => `a[href*="${sub}"]:not([href$="${sub}"])`)
       .join(', ');
 
     try {
@@ -328,6 +338,15 @@ test.describe('P1 - Search', () => {
 
     // ── Step 6: Hover a game → PLAY IT visible ───────────────────────────
     await runStep('Step 6: Hover game tile → Play It CTA appears', async () => {
+      // Same skip condition as Steps 7-8 below — the Play It CTA exists
+      // solely to hand off into registration/login, so there's nothing
+      // meaningful to check here on a GEO with no account modal (either a
+      // real gap, or — as on Lucky Me Slots (LMS) SE 2026-08-04 — a
+      // deliberate scope decision to not test login/registration at all).
+      if (!geoFeatures.hasAccountModal) {
+        console.log('GS-01 Step 6 skipped — no login/account modal for this GEO');
+        return;
+      }
       // Confirmed live on Lucky Me Slots (LMS) UK 2026-08-03 mobile: this
       // brand's `.game-cta` overlay (the "Play Now" button this step and
       // Step 7 need) is genuinely `display: none` at mobile widths — a

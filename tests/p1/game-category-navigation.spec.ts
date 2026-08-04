@@ -514,6 +514,28 @@ test.describe('P1 - Game Category Navigation', () => {
     // click needed — so a single flat click-and-verify helper suffices,
     // simpler than LP's clickSidebarSubCategoryAndVerify.
     const isLmsUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LMS';
+    // Lucky Me Slots (LMS) SE — onboarded 2026-08-04. Confirmed live this
+    // brand's SE market has a genuinely SMALLER taxonomy than UK/CA: no
+    // Table Games, no Live Casino (both confirmed 404 via direct nav), and
+    // no VIP Lounge/Daily Tournaments/Daily Promotions/Quick Cashouts group
+    // either (those pages return a live 200 but are orphaned — not linked
+    // from the sidebar at all, same "confirmed-live orphaned page" pattern
+    // already documented for LP SE's promotions pages). Real sidebar only
+    // has Online Slots/Progressive Jackpots/Game List, plus a real
+    // "Utbetalningar" (Withdrawals) entry (/withdraw/) that UK/CA don't
+    // have. Needs its own narrower step list rather than reusing
+    // isLmsUkFormat's 5-link block, which would fail for real on this
+    // GEO's missing Table Games/Live Casino links.
+    const isLmsSeFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LMS'
+      && test.info().project.name.replace(/-mobile$/, '') === 'SE';
+    // Simba Games (SG) UK — onboarded 2026-08-04, brand-new brand. Same
+    // underlying sidebar architecture as LMS (nav#top-nav, hamburger
+    // trigger id="menu-X") — reuses clickLmsSidebarLinkAndVerify unchanged
+    // — but a genuinely RICHER 7-link taxonomy: Online Slots/Card & Table
+    // Games/Live Dealer/Roulette/Video Poker (real URL typo,
+    // "/video-pocker/", confirmed live, not a mistake) plus Game List and
+    // VIP Lounge, vs LMS's 4-5 links.
+    const isSgUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG';
 
     async function clickLmsSidebarLinkAndVerify(hrefPart: string, label: string) {
       await page.evaluate(() => (document.querySelector('#menu-X') as HTMLElement | null)?.click());
@@ -641,7 +663,7 @@ test.describe('P1 - Game Category Navigation', () => {
       });
     }
 
-    if (isLmsUkFormat) {
+    if (isLmsUkFormat && !isLmsSeFormat) {
       await test.step('Online Slots → /online-slots/', async () => {
         await clickLmsSidebarLinkAndVerify('/online-slots/', 'Online Slots');
       });
@@ -656,6 +678,42 @@ test.describe('P1 - Game Category Navigation', () => {
       });
       await test.step('Game List → /game-list/', async () => {
         await clickLmsSidebarLinkAndVerify('/game-list/', 'Game List');
+      });
+    }
+
+    if (isLmsSeFormat) {
+      await test.step('Online Slots → /online-slots/', async () => {
+        await clickLmsSidebarLinkAndVerify('/online-slots/', 'Online Slots');
+      });
+      await test.step('Progressive Jackpots → /progressive-jackpots/', async () => {
+        await clickLmsSidebarLinkAndVerify('/progressive-jackpots/', 'Progressive Jackpots');
+      });
+      await test.step('Game List → /game-list/', async () => {
+        await clickLmsSidebarLinkAndVerify('/game-list/', 'Game List');
+      });
+    }
+
+    if (isSgUkFormat) {
+      await test.step('Online Slots → /slots/', async () => {
+        await clickLmsSidebarLinkAndVerify('/slots/', 'Online Slots');
+      });
+      await test.step('Card & Table Games → /cards-and-tables/', async () => {
+        await clickLmsSidebarLinkAndVerify('/cards-and-tables/', 'Card & Table Games');
+      });
+      await test.step('Live Dealer → /live-dealer/', async () => {
+        await clickLmsSidebarLinkAndVerify('/live-dealer/', 'Live Dealer');
+      });
+      await test.step('Roulette Game → /roulette/', async () => {
+        await clickLmsSidebarLinkAndVerify('/roulette/', 'Roulette Game');
+      });
+      await test.step('Video Poker → /video-pocker/', async () => {
+        await clickLmsSidebarLinkAndVerify('/video-pocker/', 'Video Poker');
+      });
+      await test.step('Game List → /game-list/', async () => {
+        await clickLmsSidebarLinkAndVerify('/game-list/', 'Game List');
+      });
+      await test.step('VIP Lounge → /vip-lounge/', async () => {
+        await clickLmsSidebarLinkAndVerify('/vip-lounge/', 'VIP Lounge');
       });
     }
 

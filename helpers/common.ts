@@ -439,7 +439,15 @@ export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Pr
   // hamburger/sidebar at all — its Blog link lives directly in the footer
   // instead. Fall back to a plain footer-link click rather than assuming
   // every brand reaches the blog through a sidebar drawer.
-  const footerBlogLink = page.locator(`footer a[href*="${blogPath}"], [class*="Footer_footer-mid"] a[href*="${blogPath}"]`).first();
+  // Confirmed live on Simba Games (SG) UK 2026-08-04: this brand's real
+  // footer link is literally href="/blog" (no trailing slash), unlike every
+  // other brand's "/blog/" — a plain substring match against blogPath
+  // ('blog/', trailing slash) silently found nothing and fell through to
+  // the sidebar path below, which then failed for real since SG has no
+  // sidebar blog link at all. Strip the trailing slash before matching so
+  // this works regardless of which form a given brand's real href uses.
+  const blogPathNoTrailingSlash = blogPath.replace(/\/$/, '');
+  const footerBlogLink = page.locator(`footer a[href*="${blogPathNoTrailingSlash}"], [class*="Footer_footer-mid"] a[href*="${blogPathNoTrailingSlash}"]`).first();
   if (await footerBlogLink.count() > 0) {
     await footerBlogLink.scrollIntoViewIfNeeded().catch(() => {});
     await footerBlogLink.click();
@@ -462,7 +470,7 @@ export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Pr
   await page.waitForTimeout(600);
   await dismissCampaignPopup(page);
 
-  const blogLink = page.locator(`${SIDEBAR_SELECTOR} a[href*="${blogPath}"]`).first();
+  const blogLink = page.locator(`${SIDEBAR_SELECTOR} a[href*="${blogPathNoTrailingSlash}"]`).first();
   await expect(blogLink).toBeVisible({ timeout: 10_000 });
   await blogLink.click();
   await page.waitForLoadState('domcontentloaded');

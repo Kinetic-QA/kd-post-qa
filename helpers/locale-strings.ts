@@ -49,7 +49,7 @@ const EN: LocaleStrings = {
   loginButton: /log\s*in|sign\s*in/i,
   loginSubmitButton: /^login$/i,
   usernameOrEmailLabel: /username or email/i,
-  joinButton: /join/i,
+  joinButton: /join|register/i, // "register" added 2026-08-04 — confirmed live: Simba Games (SG) UK's header button reads "Register", not "Join" like every other English-locale brand onboarded so far — same shared-regex-covers-multiple-brands pattern already used for PC UK's loginButton
   loginErrorText: /the login details you entered are incorrect/i,
   reportProblemText: /report a problem/i,
   membersLoginText: /members login/i,
@@ -185,7 +185,7 @@ const STRINGS: Record<string, LocaleStrings> = {
     loginButton: /logga in/i, // not exercised — SE has no login CTA (hasLoginRegistration: false)
     loginSubmitButton: /^logga in$/i, // not exercised
     usernameOrEmailLabel: /användarnamn eller e-post/i, // not exercised
-    joinButton: /gå med/i, // not exercised
+    joinButton: /gå med|registrera dig( nu)?/i, // confirmed live 2026-08-04 on LMS SE (the first sv brand with a real, functional join button to exercise): real header/sidebar button reads "Registrera dig nu", not "Gå med" — widened rather than assume every sv brand phrases it identically, same shared-by-locale pattern as DK's joinButton
     loginErrorText: /felaktiga inloggningsuppgifter/i, // not exercised
     reportProblemText: /rapportera ett problem/i, // not exercised — SE has no feedback form (hasFeedbackForm: false)
     membersLoginText: /medlem.*logga in/i, // not exercised
@@ -199,7 +199,7 @@ const STRINGS: Record<string, LocaleStrings> = {
     feedbackSubmit: /^skicka$/i,
     forgotPasswordText: /glömt lösenordet/i, // not exercised
     noAccountText: /skapa konto/i, // not exercised
-    searchPlaceholder: /^sök( spel)?$/i, // confirmed live on LP SE 2026-07-30: real placeholder is just "Sök", not "Sök spel" — widened to accept both rather than assume every sv brand phrases it identically
+    searchPlaceholder: /^sök( spel)?\.*$/i, // confirmed live on LP SE 2026-07-30: real placeholder is just "Sök", not "Sök spel" — widened to accept both. Trailing \.* added 2026-08-04 for LMS SE, whose real placeholder is "Sök spel..." (with an ellipsis) — same EN "trailing ellipsis" shape already handled for ZI UK/LP UK's searchPlaceholder
     feedbackTextareaPlaceholder: /skriv ditt svar här/i, // not exercised
     homeLinkText: /^hem$/i,
     footerResponsibleGamingText: /^ansvarsfullt spelande$/i,
@@ -241,7 +241,7 @@ const STRINGS: Record<string, LocaleStrings> = {
     feedbackSubmit: /^send$/i, // not exercised on either brand
     forgotPasswordText: /glemt.*adgangskode/i, // confirmed live on both: login modal's link reads "Glemt din Adgangskode?"
     noAccountText: /ny på gentingcasino|ny på megacasino|opret konto/i, // confirmed live: GC's login modal link reads "Ny på GentingCasino! Opret konto", MC's reads "Ny på MegaCasino! Opret konto" — "opret konto" alone already matches both, kept the full phrases too for clarity
-    searchPlaceholder: /^search game$|^søg efter spil$/i, // confirmed live: GC's search placeholder is genuinely UNTRANSLATED English ("Search game", a real site quirk, not a guess gone wrong); MC's is real Danish ("Søg efter spil") — genuinely different brand behavior, not a guess conflict
+    searchPlaceholder: /^search game$|^søg efter spil\.*$/i, // confirmed live: GC's search placeholder is genuinely UNTRANSLATED English ("Search game", a real site quirk, not a guess gone wrong); MC's is real Danish ("Søg efter spil") — genuinely different brand behavior, not a guess conflict. Trailing \.* added 2026-08-04 for LMS DK, whose real placeholder is "Søg efter spil..." (with an ellipsis) — same trailing-ellipsis shape already handled for LMS SE's sv.searchPlaceholder
     feedbackTextareaPlaceholder: /skriv dit svar her/i, // not exercised on either brand
     homeLinkText: /^hjem$/i, // confirmed live on MC (header logo link text); guessed for GC (not yet independently confirmed there)
     footerResponsibleGamingText: /^ansvarligt spil$|^ansvarsbevidst spil$/i, // confirmed live: GC's footer reads "Ansvarligt spil", MC's reads "Ansvarsbevidst spil" — different real brand copy

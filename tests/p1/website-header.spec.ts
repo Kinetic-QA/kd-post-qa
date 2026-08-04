@@ -55,6 +55,21 @@ test.describe('P1 - Website Header', () => {
     }
 
     async function closeAccountModal() {
+      // Simba Games (SG) UK — confirmed live 2026-08-04: once its
+      // son-auth-modals widget has been opened once (e.g. Step 1's Login),
+      // neither Escape nor force-hiding pointer-events lets the header's
+      // OTHER button (Join/Register) open a genuinely different widget —
+      // the click lands but the URL never advances, same as if it were
+      // absorbed as an outside-the-modal dismiss click. A full reload is
+      // the only reliable reset, same reasoning already applied to EVERY
+      // brand's mobile flow below — just needed here on desktop too, for
+      // this brand specifically.
+      if ((process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG') {
+        await page.goto('', { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(500);
+        return;
+      }
       await page.keyboard.press('Escape');
       // :is(..., .modal-content) — confirmed live on Prime Slots (PSL) UK
       // 2026-07-30: this brand's account modal is a Tailwind-styled web

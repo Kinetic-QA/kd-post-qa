@@ -97,10 +97,20 @@ test.describe('P2 - Sidebar Navigation', () => {
       // #top-nav element.
       const topNavCount = await page.locator('#top-nav').count().catch(() => 0);
       if (topNavCount === 0) return false;
+      // Simba Games (SG) UK — confirmed live 2026-08-04: unlike LMS's
+      // left-anchored drawer (slides to x<=5), this brand's #top-nav slides
+      // in from the RIGHT — closed sits fully off-screen (x === viewport
+      // width), open ends flush against the viewport's own right edge
+      // (e.g. x≈950 with width 330 on a 1280px viewport, i.e. x + width ≈
+      // viewport width). Check both directions rather than assuming every
+      // #top-nav brand opens to the left like LMS.
       const topNavOnScreen = await Promise.race([
         page.locator('#top-nav').first().evaluate(el => {
           const rect = el.getBoundingClientRect();
-          return rect.width > 0 && rect.x <= 5;
+          if (rect.width === 0) return false;
+          const leftAnchoredOpen = rect.x <= 5;
+          const rightAnchoredOpen = rect.x > 0 && Math.abs((rect.x + rect.width) - window.innerWidth) <= 5;
+          return leftAnchoredOpen || rightAnchoredOpen;
         }),
         page.waitForTimeout(2_000).then(() => false),
       ]).catch(() => false);
@@ -457,9 +467,17 @@ test.describe('P2 - Sidebar Navigation', () => {
     await navStep(`About us -> /${aboutUsPath}`, `/${aboutUsPath}`, `/${aboutUsPath}`);
 
     // -- Step 45: Blog -> /blog/ -------------------------------------------
+    // Confirmed live on Simba Games (SG) UK 2026-08-04: hasBlog: true just
+    // means the blog PAGE exists somewhere — this brand's real Blog link
+    // lives in the footer only, not the sidebar, unlike every other brand
+    // with hasBlog: true onboarded so far. A plain navStep() here silently
+    // no-op'd (0 matching sidebar links) and left the soft assertion
+    // checking a stale URL from the previous step. navStepIfExists already
+    // skips cleanly when a link genuinely isn't in the sidebar — reuse it
+    // here too, rather than assuming every blog is sidebar-reachable.
     if (geoFeatures.hasBlog && geoFeatures.blogPath) {
       const blogPath = geoFeatures.blogPath;
-      await navStep(`Blog -> /${blogPath}`, `/${blogPath}`, `/${blogPath}`);
+      await navStepIfExists(`Blog -> /${blogPath}`, `/${blogPath}`, `/${blogPath}`);
     } else {
       record('Blog link (skipped — no Blog for this GEO)', true);
     }
