@@ -22,7 +22,18 @@ import { currentLocaleStrings } from '../../helpers/locale-strings';
  * 4. history.pushState clears hash without triggering popup
  */
 
-const SIDEBAR = '[class*="MainMenu_main-menu"], #top-nav';
+// Wrapped in :is() so the trailing descendant combinator (e.g. `${SIDEBAR}
+// button`) applies to BOTH alternatives — a bare comma-joined selector only
+// binds the combinator to the last branch, so `#top-nav button` scoped
+// correctly but the first branch silently became a container-only selector
+// on any brand using the class instead of the id. On Slingo (no #top-nav),
+// this meant every `SIDEBAR + '...'` locator was matching the whole <nav>
+// container itself, not a link/button inside it — clicking it landed
+// wherever the click's center point happened to fall (different per
+// viewport), which is why ROW's SN-01 clicked into Features (desktop) or
+// Slingo (mobile) instead of opening the login modal. Confirmed live via
+// DOM inspection 2026-08-04.
+const SIDEBAR = ':is([class*="MainMenu_main-menu"], #top-nav)';
 const HAMBURGER = '[class*="hamburger"], #menu-X';
 
 test.describe('P2 - Sidebar Navigation', () => {

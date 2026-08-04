@@ -13,7 +13,13 @@ import { currentGeoFeatures } from '../../helpers/geo-features';
  */
 
 const HAMBURGER = '[class*="hamburger"], #menu-X';
-const SIDEBAR = '[class*="MainMenu_main-menu"], #top-nav';
+// Wrapped in :is() so `${SIDEBAR} a[...]` scopes to descendants of EITHER
+// alternative — a bare comma-joined selector only binds the trailing
+// combinator to the last branch, so on brands with no #top-nav (e.g.
+// Slingo), `SIDEBAR + ' a[...]'` matched the whole <nav> container itself
+// instead of any link inside it. Same root cause fixed in
+// sidebar-navigation.spec.ts 2026-08-04 — see that file's comment.
+const SIDEBAR = ':is([class*="MainMenu_main-menu"], #top-nav)';
 
 test.describe('P3 - Help Page', () => {
 
