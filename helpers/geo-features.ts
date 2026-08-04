@@ -1691,6 +1691,239 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
       hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with PSL/PSC's shape)
     },
+
+    // CA — onboarded 2026-08-04, confirmed live against
+    // www.luckymeslots.com/en-CA/. A genuine clone of UK on every point
+    // checked live: identical sidebar taxonomy (Online Slots/Progressive
+    // Jackpots/Table Games/Live Casino/Game List, no Scratch Cards), same
+    // #top-nav/#menu-X sidebar architecture, same support@luckymeslots.com
+    // contact address (COM-rooted, not a CA-specific inbox), zero social
+    // links, same playsecure.luckymeslots.com login-redirect platform. Only
+    // real difference is currency ($ CAD vs £ GBP), confirmed via live
+    // jackpot-ticker prices on the homepage.
+    CA: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-04: /en-CA/blog/ 404s, same as UK
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-04: /en-CA/promotions/ returns 200
+      hasPromotionsIconInHeader: false, // confirmed live: header only has Search/Login/Join — no separate Promotions entry outside the sidebar, same as UK
+      featuresPath: null, // confirmed live 2026-08-04: /en-CA/features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-04: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-04: 404s — no Bingo vertical on this brand at all, kept as the common placeholder
+      currencySymbol: '$', // confirmed live 2026-08-04: real prices shown in $ (e.g. "$10"/"$0.10"/"$5" bet-size buttons) — the one real divergence from UK's £
+      contactEmail: 'support@luckymeslots.com', // confirmed live 2026-08-04: real mailto link on /en-CA/contact/ — same address as UK, not CA-specific
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-04: /en-CA/payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-04: zero facebook/twitter/instagram links found homepage-wide, same as UK
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/progressive-jackpots/', '/table-games/', '/live-casino/'], // same taxonomy/word as UK, standardized per feedback_search_term_wordlist
+      gameTileHrefSubstrings: ['/online-slots/', '/progressive-jackpots/', '/table-games/', '/live-casino/'], // confirmed live 2026-08-04 via sidebar DOM dump — byte-identical taxonomy to UK
+      hasGameFilterCarousel: false, // cloned from UK's confirmed finding — same platform/homepage template, not independently re-verified this session
+      hasFeedbackForm: false, // confirmed live 2026-08-04: no "Report a problem" link found on /en-CA/contact/ — same as UK
+      hasGameCategoryNav: true, // confirmed live 2026-08-04: same sidebar taxonomy as UK — reuses the isLmsUkFormat branch (widened) in game-category-navigation.spec.ts, not a new dedicated branch
+      hasSidebarMenu: true, // confirmed live 2026-08-04: real off-canvas sidebar (nav#top-nav, hamburger trigger id="menu-X"), same as UK
+      hasLoginRegistration: true, // confirmed live 2026-08-04: real Log in button present in header
+      hasTestAccount: true, // real test account provided by Reeve 2026-08-04 (gowem54020@186site.com) — confirmed live: submitting real credentials redirects to playsecure.luckymeslots.com with a real session token
+      hasAccountModal: true, // confirmed live 2026-08-04: clicking Log in advances the URL to /en-CA/#account with a real, fillable login form, same native web-component modal as UK
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-04: /en-CA/payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK's shape)
+    },
+
+    // SE — onboarded 2026-08-04, confirmed live against
+    // se.luckymeslots.com. UNLIKE Lord Ping's SE market (a dead Pay N
+    // Play/Trustly shell with 0 real form fields), LMS SE actually has a
+    // genuinely REAL login/registration form under the hood: clicking
+    // "Logga in" advances to /#account and the son-auth-modals shadow DOM
+    // contains real username/password input fields (confirmed via
+    // shadow-DOM probe), same platform family as UK/CA's playsecure
+    // redirect flow. BUT per Reeve (2026-08-04): login/registration are
+    // explicitly OUT OF SCOPE for this GEO — don't spend time testing or
+    // fixing that flow here. Set hasLoginRegistration/hasAccountModal to
+    // false (same as LP SE) purely as a scope decision, NOT because the
+    // form doesn't exist — this cleanly skips login.spec.ts,
+    // registration.spec.ts, login-widget.spec.ts, and
+    // registration-widget.spec.ts, and the website-header.spec.ts JOIN/
+    // LOGIN CTA steps that gate on hasAccountModal. Also has a genuinely
+    // SMALLER taxonomy than UK/CA: no Table Games, no Live
+    // Casino (both confirmed 404), and no VIP Lounge/Daily
+    // Tournaments/Daily Promotions/Quick Cashouts group either — those
+    // pages return a live 200 but are orphaned, not linked from the sidebar
+    // (same "confirmed-live orphaned page" pattern as LP SE's promotions
+    // pages). Real sidebar only has Online Slots/Progressive
+    // Jackpots/Game List, plus a real "Utbetalningar" (Withdrawals) entry
+    // UK/CA don't have.
+    SE: {
+      locale: 'sv', uiLocalized: true,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-04: /blog/ 404s
+      hasPromotionsPage: false, promotionsPath: null, // confirmed live 2026-08-04: /promotions/ returns a live 200 but is NOT linked anywhere in the sidebar — an orphaned page, not a real feature, same as LP SE's promotions pages
+      hasPromotionsIconInHeader: false, // no Promotions entry anywhere in the header or sidebar
+      featuresPath: null, // confirmed live 2026-08-04: /features/ 404s
+      mobileAppPath: 'mobile-app/', // NOT independently confirmed this session — kept as the common placeholder, skips cleanly either way
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-04: 404s — no Bingo vertical on this brand at all
+      currencySymbol: 'kr', // Swedish Krona — NOT independently confirmed via visible price/bonus copy this session (none found in the static homepage crawl); carried over from every other brand's SE market, verify on first real run same as GC/MC/PC SE's caveat
+      contactEmail: 'support@luckymeslots.com', // confirmed live 2026-08-04: real mailto link on /contact/ — same address as UK/CA, not SE-specific
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-04: /payment-methods/ returns 200
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-04: zero facebook/twitter/instagram links found homepage-wide, same as UK/CA
+      hasSocialMedia: false,
+      searchTerm: 'Book', searchResultHrefSubstrings: ['/online-slots/', '/progressive-jackpots/'], // confirmed live 2026-08-04: typing "Slots" (the wordlist's default for a Slots-only taxonomy) returned a real but genuinely EMPTY "Sorry, we don't have that one yet" state — this catalog's real game titles don't contain the word "slots". "Big Bass" and "Book of Dead" (the wordlist's other standard terms) were also empty — this brand doesn't carry those exact titles. "Book" DOES return real results (Book of Atem, Book Of Ba'al, etc., confirmed live via the actual search panel) — used as a deliberate deviation from the standard wordlist since none of the standard terms exist in this GEO's real catalog
+      gameTileHrefSubstrings: ['/online-slots/', '/progressive-jackpots/'], // confirmed live 2026-08-04 via sidebar DOM dump — narrower taxonomy than UK/CA, no Table Games/Live Casino hrefs exist
+      hasGameFilterCarousel: false, // cloned from UK/CA's confirmed finding — not independently re-verified this session
+      hasFeedbackForm: false, // confirmed live 2026-08-04: no "Rapportera ett problem" / "Report a problem" link found on /contact/
+      hasGameCategoryNav: true, // confirmed live 2026-08-04: real sidebar taxonomy, but only 3 links (Online Slots/Progressive Jackpots/Game List, no Table Games/Live Casino) — needs its own dedicated isLmsSeFormat branch in game-category-navigation.spec.ts, NOT a reuse of isLmsUkFormat's 5-link block
+      hasSidebarMenu: true, // confirmed live 2026-08-04: real off-canvas sidebar (nav#top-nav, hamburger trigger id="menu-X"), same architecture as UK/CA
+      hasLoginRegistration: false, // real "Logga in"/"Registrera dig nu" buttons DO exist in the header (confirmed live 2026-08-04, genuinely functional, NOT a Pay N Play dead shell like LP SE) — set to false anyway per Reeve's explicit direction (2026-08-04): login/registration are out of scope for this GEO, don't test or debug that flow here
+      hasTestAccount: false, // no SE test account provided, and login/registration are out of scope for this GEO per Reeve — see hasLoginRegistration
+      hasAccountModal: false, // clicking "Logga in" DOES genuinely advance to /#account with real username+password fields in the son-auth-modals shadow DOM (confirmed live 2026-08-04) — set to false anyway to match hasLoginRegistration's scope decision above, so every spec gated on this flag skips login/registration testing for this GEO
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-04: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK/CA's shape)
+    },
+
+    // DK — onboarded 2026-08-04, confirmed live against
+    // www.luckymeslots.dk. Real functional login (confirmed via shadow-DOM
+    // probe: username+password fields), same as UK/CA — hasLoginRegistration
+    // stays true here, UNLIKE the SE scope decision above, since Reeve's
+    // "don't test login" direction was specific to SE. Registration DOES
+    // ask for a real Danish CPR number (personalID field, placeholder
+    // "XXXXXX-XXXX") instead of mobile/DOB — same confirmed pattern as
+    // GC/MC's own DK markets, which is why isLmsDkFormat skips
+    // registration.spec.ts entirely (see registration.spec.ts) rather than
+    // attempting a CPR-aware fill flow. Taxonomy is a near-match for UK/CA
+    // (Online Slots/Progressive Jackpots/Table Games/Live Casino all
+    // present and linked) but genuinely narrower: no "Game List" sidebar
+    // link at all, and "Hurtig udbetaling" (Quick Cashout) appears as its
+    // own standalone sidebar item instead of grouped under a "Features"
+    // header. Reuses isLmsUkFormat's existing 5-link block in
+    // game-category-navigation.spec.ts unchanged (it's brand-scoped, not
+    // GEO-scoped) — the missing "Game List" link cleanly self-skips via
+    // clickLmsSidebarLinkAndVerify's existing "not offered for this GEO"
+    // handling, no new branch needed.
+    DK: {
+      locale: 'da', uiLocalized: true,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-04: /blog/ 404s
+      hasPromotionsPage: false, promotionsPath: null, // confirmed live 2026-08-04: /promotions/ returns a live 200 but is NOT linked anywhere in the sidebar — an orphaned page, same "confirmed-live orphaned page" pattern as LP/LMS SE's promotions pages
+      hasPromotionsIconInHeader: false, // no Promotions entry anywhere in the header or sidebar
+      featuresPath: null, // confirmed live 2026-08-04: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-04: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-04: 404s — no Bingo vertical on this brand at all
+      currencySymbol: 'kr', // confirmed live 2026-08-04: real jackpot figure in the game info modal reads "410.806 kr." — no gameModalCurrencyText override needed here (unlike GC/MC DK's own "kr" vs "DKK" split), since "kr" itself is what the modal's own headline figure actually uses. NOTE: the SAME modal's separate "Min to Max Bet" line shows a "(€)" euro symbol instead — a real site data inconsistency, not something this currency check targets
+      contactEmail: 'support@luckymeslots.com', // confirmed live 2026-08-04: real mailto link on /contact/ — same address as UK/CA/SE, not DK-specific
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-04: /payment-methods/ returns 200
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-04: zero facebook/twitter/instagram links found homepage-wide, same as every other LMS market
+      hasSocialMedia: false,
+      searchTerm: 'Book of Dead', searchResultHrefSubstrings: ['/online-slots/', '/progressive-jackpots/', '/table-games/', '/live-casino/'], // confirmed live 2026-08-04: this catalog genuinely carries "Book of Dead" (unlike LMS SE, where it returned zero results) — real search panel returned 16 real result tiles for this exact term
+      gameTileHrefSubstrings: ['/online-slots/', '/progressive-jackpots/', '/table-games/', '/live-casino/'], // confirmed live 2026-08-04 via sidebar DOM dump — same 4-category taxonomy as UK/CA, no Game List link though
+      hasGameFilterCarousel: false, // cloned from UK/CA's confirmed finding — not independently re-verified this session
+      hasFeedbackForm: false, // NOT independently confirmed this session (contact page not directly probed for a feedback link) — carried over from UK/CA/SE's confirmed finding, verify on first real run
+      hasGameCategoryNav: true, // confirmed live 2026-08-04: real sidebar taxonomy, 4 links (Online Slots/Progressive Jackpots/Table Games/Live Casino, no Game List) — reuses isLmsUkFormat's existing 5-link block in game-category-navigation.spec.ts unchanged; the missing Game List link cleanly self-skips via clickLmsSidebarLinkAndVerify's own "not offered for this GEO" handling
+      hasSidebarMenu: true, // confirmed live 2026-08-04: real off-canvas sidebar (nav#top-nav, hamburger trigger id="menu-X"), same architecture as UK/CA/SE
+      hasLoginRegistration: true, // confirmed live 2026-08-04: real "Log ind"/"Tilmeld Dig Nu" buttons in header, genuinely functional (real username+password fields confirmed via shadow-DOM probe) — registration itself needs the CPR skip (see isLmsDkFormat in registration.spec.ts), but login stays fully in scope, unlike the SE scope decision above
+      hasTestAccount: false, // no DK test account provided yet, same "no working DK account" situation as GC/MC's own DK markets
+      hasAccountModal: true, // confirmed live 2026-08-04: clicking "Log ind" advances the URL to /#account with a real, fillable username+password form in the son-auth-modals shadow DOM
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-04: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK/CA/SE's shape)
+    },
+  },
+
+  // ── Simba Games (SG) ─────────────────────────────────────────────────────
+  SG: {
+    // UK — onboarding started 2026-08-04, brand-new brand, confirmed live
+    // against www.simbagames.co.uk. Same underlying sidebar architecture as
+    // Lucky Me Slots (LMS) — real off-canvas sidebar (nav#top-nav, hamburger
+    // trigger id="menu-X"), real login/registration (confirmed live: real
+    // test account submits real credentials and redirects to
+    // playsecure.simbagames.co.uk with a real session token) — BUT a
+    // genuinely MUCH RICHER taxonomy than any LMS market: Promotions, a
+    // "Games" landing page (/casino-slot-games/), Online Slots (/slots/),
+    // Card & Table Games (/cards-and-tables/), Live Dealer (/live-dealer/),
+    // Roulette (/roulette/), Video Poker (a real URL typo:
+    // "/video-pocker/", confirmed live, not a mistake to fix), Game List,
+    // and VIP Lounge — 7 real category links vs LMS's 4-5. Also has a real
+    // Blog (confirmed live 200, footer-linked) and a real Bonus Policy
+    // footer link, neither of which any LMS market has. Registration uses
+    // the standard mobile+DOB fields (confirmed via shadow-DOM probe: no
+    // CPR or other unusual identity field) — no special format branch
+    // needed, unlike LMS DK. No Bingo vertical at all (/bingo/ confirmed
+    // 404) — same no-Bingo 3-checkbox consent set as every other no-Bingo
+    // brand onboarded so far.
+    UK: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: true, blogPath: 'blog/', // confirmed live 2026-08-04: /blog/ returns 200, real footer link (literal href is "/blog", no trailing slash, but the path itself resolves identically either way)
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-04: real sidebar link, /promotions/ returns 200
+      hasPromotionsIconInHeader: false, // confirmed live: header only has Search/Register/Login — Promotions is sidebar-only, no separate header icon
+      featuresPath: null, // confirmed live 2026-08-04: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-04: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-04: 404s — no Bingo vertical on this brand at all (/bingo/ also confirmed 404)
+      currencySymbol: '£', // confirmed live 2026-08-04: real bet-size buttons show "£10"/"£0.10"/"£5" etc.
+      contactEmail: 'support@simbagames.com', // confirmed live 2026-08-04: real mailto link on /contact/
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-04: /payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-04: zero facebook/twitter/instagram links found homepage-wide
+      hasSocialMedia: false,
+      searchTerm: 'Book of Dead', searchResultHrefSubstrings: ['/slots/', '/cards-and-tables/', '/live-dealer/', '/roulette/', '/video-pocker/'], // confirmed live 2026-08-04: real search panel (placeholder "Search game...") returned 2 real result tiles for "Book of Dead"
+      gameTileHrefSubstrings: ['/slots/', '/cards-and-tables/', '/live-dealer/', '/roulette/', '/video-pocker/'], // confirmed live 2026-08-04 via sidebar DOM dump — this brand's own 5-vertical taxonomy (excludes the Game List/VIP Lounge sidebar entries, which aren't game-category verticals themselves)
+      hasGameFilterCarousel: false, // NOT independently confirmed this session (homepage not directly probed for a GamesSlider_wrapper carousel) — verify on first real run
+      hasFeedbackForm: false, // confirmed live 2026-08-04: no "Report a problem" link found on /contact/
+      hasGameCategoryNav: true, // confirmed live 2026-08-04: real 7-link sidebar taxonomy (Promotions/Games/Online Slots/Card & Table Games/Live Dealer/Roulette/Video Poker/Game List/VIP Lounge) — needs its own dedicated isSgUkFormat branch in game-category-navigation.spec.ts, genuinely richer than any LMS market's taxonomy
+      hasSidebarMenu: true, // confirmed live 2026-08-04: real off-canvas sidebar (nav#top-nav, hamburger trigger id="menu-X"), same architecture as LMS
+      hasLoginRegistration: true, // confirmed live 2026-08-04: real LOGIN/Register buttons in header
+      hasTestAccount: true, // real test account provided by Reeve 2026-08-04 (solace7097@flipssl.com) — confirmed live: submitting real credentials redirects to playsecure.simbagames.co.uk with a real session token
+      hasAccountModal: true, // confirmed live 2026-08-04: clicking LOGIN advances the URL to /#account with a real, fillable login form (2 real input fields confirmed via shadow-DOM probe)
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-04: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // confirmed live 2026-08-04 via a real failed run: no real blog-specific search icon exists — the fallback selector matched an unrelated element and navigated to a random blog post instead of a search page, consistent with this blog platform's other confirmed gaps (empty masthead, WordPress-style URLs)
+      hasBlogSearch: false, // confirmed live 2026-08-04 — same root cause as hasBlogDesktopSearch above, no working blog search feature on this platform
+      hasFunctionalBlogLogin: false, // confirmed live 2026-08-04 via a real failed run: the blog's own header (<header id="masthead">) is a genuinely EMPTY shell — 0 text content, no real Login/Join controls inside it at all. The real Login/Register buttons visible on the blog page live in a separate, non-landmark element outside any header/banner — a real gap on the blog's own separate platform, same class of issue as PSL UK's blog login
+    },
+
+    // CA — onboarded 2026-08-04, confirmed live against
+    // www.simbagames.com/en-CA/. A genuine clone of UK on every point
+    // checked live: identical 7-link sidebar taxonomy (Promotions/Games/
+    // Online Slots/Card & Table Games/Live Dealer/Roulette/Video
+    // Poker/Game List/VIP Lounge, same "video-pocker" URL typo), same
+    // support@simbagames.com contact address, same real login/registration
+    // (confirmed live: real credentials redirect to
+    // playsecure.simbagames.com with a real session token), standard
+    // Canadian mobile+DOB registration fields (no CPR quirk). /en-CA/blog/
+    // technically redirects to the same shared www.simbagames.co.uk blog
+    // UK uses and returns 200, BUT confirmed live this market has ZERO real
+    // links to it anywhere — no sidebar entry, no footer entry either
+    // (unlike UK, whose footer genuinely links to it). Same "orphaned
+    // page" pattern already established elsewhere (e.g. LP SE's
+    // promotions page) — a technically-reachable-by-direct-URL page with
+    // no real user-facing path counts as not having the feature. Set
+    // hasBlog: false rather than leave every blog spec trying (and
+    // failing) to find a navigation path that doesn't exist for this GEO.
+    // Only other real difference from UK is currency ($ CAD vs £ GBP),
+    // confirmed via live bet-size button prices.
+    CA: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-04: /en-CA/blog/ technically 200s (redirects to the shared simbagames.co.uk blog) but has ZERO real links anywhere on this GEO's own site (no sidebar, no footer) — an orphaned page, not a real feature for this market
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-04: real sidebar link, /en-CA/promotions/ returns 200
+      hasPromotionsIconInHeader: false, // confirmed live: header only has Search/Register/Login — Promotions is sidebar-only, same as UK
+      featuresPath: null, // confirmed live 2026-08-04: /en-CA/features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-04: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-04: 404s — no Bingo vertical on this brand at all
+      currencySymbol: '$', // confirmed live 2026-08-04: real bet-size buttons show "$10"/"$0.10"/"$5" etc. — the one real divergence from UK's £
+      contactEmail: 'support@simbagames.com', // confirmed live 2026-08-04: real mailto link on /en-CA/contact/ — same address as UK, not CA-specific
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-04: /en-CA/payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-04: zero facebook/twitter/instagram links found homepage-wide, same as UK
+      hasSocialMedia: false,
+      searchTerm: 'Book of Dead', searchResultHrefSubstrings: ['/slots/', '/cards-and-tables/', '/live-dealer/', '/roulette/', '/video-pocker/'], // confirmed live 2026-08-04: real search panel returned 2 real result tiles for "Book of Dead", same as UK
+      gameTileHrefSubstrings: ['/slots/', '/cards-and-tables/', '/live-dealer/', '/roulette/', '/video-pocker/'], // confirmed live 2026-08-04 via sidebar DOM dump — byte-identical taxonomy to UK
+      hasGameFilterCarousel: false, // cloned from UK's confirmed finding — same platform/homepage template, not independently re-verified this session
+      hasFeedbackForm: false, // confirmed live 2026-08-04: no "Report a problem" link found on /en-CA/contact/ — same as UK
+      hasGameCategoryNav: true, // confirmed live 2026-08-04: same 7-link sidebar taxonomy as UK — reuses isSgUkFormat (widened) in game-category-navigation.spec.ts, not a new dedicated branch
+      hasSidebarMenu: true, // confirmed live 2026-08-04: real off-canvas sidebar (nav#top-nav, hamburger trigger id="menu-X"), same as UK
+      hasLoginRegistration: true, // confirmed live 2026-08-04: real LOGIN/Register buttons in header
+      hasTestAccount: true, // real test account provided by Reeve 2026-08-04 (hitramagne@gufum.com) — confirmed live: submitting real credentials redirects to playsecure.simbagames.com with a real session token
+      hasAccountModal: true, // confirmed live 2026-08-04: clicking LOGIN advances the URL to /en-CA/#account with a real, fillable login form, same native web-component modal as UK
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-04: /en-CA/payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK's shape)
+    },
   },
 
   // ── Zingo Bingo (ZI) ─────────────────────────────────────────────────────

@@ -73,15 +73,59 @@ test.describe('P3 - Blog Page', () => {
       // Same poll-for-a-few-seconds fix as Step 1's category scan above —
       // confirmed live on PSL UK 2026-07-31, a one-shot scan can race the
       // blog page's own content still hydrating.
+      // Confirmed live on Simba Games (SG) UK 2026-08-04: this brand's real
+      // post links are genuinely relative to whatever directory the page
+      // is already on (e.g. "2018/10/21/some-post-title/index.html") — the
+      // href attribute itself never contains "blog" at all, since the page
+      // is already inside /blog/. The a[href*="/${blogPath}"] scan below
+      // (which every other brand's flat "blog/category/slug/" URLs need)
+      // can never match these — scan every href ending in "index.html"
+      // that ISN'T a category link (those start with "category/") instead.
+      function isSgPostHref(h: string): boolean {
+        // Requires at least one real path segment before "index.html" (a
+        // date/slug), excluding a bare bare "index.html" self-link (e.g.
+        // the "blog" breadcrumb/home link back to the current listing)
+        // and any "category/.../index.html" category link.
+        return /^[a-z0-9-]+(\/[a-z0-9-]+)*\/index\.html$/i.test(h) && !h.startsWith('category/') && !h.includes('/search/');
+      }
+
       let postHref: string | undefined;
       for (let attempt = 0; attempt < 6 && !postHref; attempt++) {
-        const postHrefs = await page.locator(`a[href*="/${geoFeatures.blogPath}"]`)
-          .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
-        postHref = [...new Set(postHrefs)].find(h => {
+        const allHrefs = await page.locator('a[href]').evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
+        const uniqueHrefs = [...new Set(allHrefs)];
+        postHref = uniqueHrefs.find(isSgPostHref) ?? uniqueHrefs.find(h => {
           const path = h.split(geoFeatures.blogPath!)[1] ?? '';
-          return path && !path.startsWith('search') && /^[a-z0-9-]+\/[a-z0-9-]+\/?$/.test(path);
+          // Confirmed live on other brands: real post URLs are the flat
+          // "blogPath/segment/segment/" shape (2+ segments after blogPath),
+          // vs. a bare 1-segment category link.
+          return path && !path.startsWith('search') && /^[a-z0-9-]+(\/[a-z0-9-]+)+\/?(index\.html)?$/i.test(path);
         });
         if (!postHref) await page.waitForTimeout(1_000);
+      }
+      // Confirmed live on Simba Games (SG) UK 2026-08-04: this brand's base
+      // /blog/ listing page shows ONLY category links, never individual
+      // post links directly — a real structural difference from every
+      // other brand's blog, where posts are visible right on the landing
+      // page. Fall back to clicking into whatever category exists first,
+      // then re-scan there for a real post link, same as a real visitor
+      // would have to.
+      if (!postHref) {
+        const categoryHref = await page.locator(`a[href*="/${geoFeatures.blogPath}"]`)
+          .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[])
+          .then(hrefs => [...new Set(hrefs)].find(h => {
+            const path = h.split(geoFeatures.blogPath!)[1] ?? '';
+            return path && !path.startsWith('search') && /^([a-z0-9-]+\/?|index\.html)$/i.test(path);
+          }));
+        if (categoryHref) {
+          await page.locator(`a[href="${categoryHref}"]`).first().click();
+          await page.waitForLoadState('domcontentloaded');
+          await page.waitForTimeout(1_500);
+          for (let attempt = 0; attempt < 6 && !postHref; attempt++) {
+            const allHrefs = await page.locator('a[href]').evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
+            postHref = [...new Set(allHrefs)].find(isSgPostHref);
+            if (!postHref) await page.waitForTimeout(1_000);
+          }
+        }
       }
       if (!postHref) throw new Error('BP-01: no "Read More" link and no real blog post link found on the listing page');
       await page.locator(`a[href="${postHref}"]`).first().click();
@@ -110,7 +154,13 @@ test.describe('P3 - Blog Page', () => {
           .evaluateAll(els => els.map(a => a.getAttribute('href')).filter(Boolean) as string[]);
         categoryHref = [...new Set(categoryHrefs)].find(h => {
           const path = h.split(geoFeatures.blogPath!)[1] ?? '';
-          return path && !path.startsWith('search') && /^[a-z0-9-]+\/?$/.test(path);
+          // Confirmed live on Simba Games (SG) UK 2026-08-04: this brand's
+          // real blog runs on a genuinely different (WordPress/static-site
+          // style) platform — category links are relative and end in
+          // "index.html" (e.g. "category/blog/index.html"), not a clean
+          // trailing slug like every other brand's blog. Accept that shape
+          // too, rather than assume every blog uses the same URL style.
+          return path && !path.startsWith('search') && /^([a-z0-9-]+\/?|index\.html)$/i.test(path);
         });
         if (!categoryHref) await page.waitForTimeout(1_000);
       }

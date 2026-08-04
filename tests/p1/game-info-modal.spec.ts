@@ -105,7 +105,26 @@ test.describe('P1 - Game Information Modal', () => {
       const navHrefList = await page.locator('[class*="Nav_nav__"] a[href], [class*="MainMenu_main-menu"] a[href], .main-tabs a[href], .header-menu-dropdown a[href], #top-nav a[href]')
         .evaluateAll(els => els.map(el => (el as HTMLAnchorElement).href));
       const navHrefs = new Set(navHrefList);
-      const count = await links.count();
+      let count = await links.count();
+      // Confirmed live on Lucky Me Slots (LMS) SE 2026-08-04: unlike every
+      // other GEO checked so far, this brand's real homepage shows ZERO
+      // individual game-tile links at all — only the bare category nav
+      // links themselves (confirmed via a full-page link dump after a full
+      // scroll). Individual tiles only exist on the category page itself
+      // (e.g. /online-slots/). Navigate there once if the homepage
+      // genuinely has none, rather than timing out on an empty locator;
+      // harmless no-op for every other GEO, which always finds tiles on
+      // the homepage already.
+      if (count === 0) {
+        const categoryPath = geoFeatures.gameTileHrefSubstrings?.[0];
+        if (categoryPath) {
+          await page.goto(categoryPath.replace(/^\//, ''), { waitUntil: 'domcontentloaded' });
+          await page.waitForTimeout(1_500);
+          await dismissCookieConsent(page);
+          await dismissCampaignPopup(page);
+          count = await links.count();
+        }
+      }
       for (let i = 0; i < Math.min(count, 30); i++) {
         const candidate = links.nth(i);
         const href = await candidate.getAttribute('href').catch(() => null);
@@ -325,6 +344,12 @@ test.describe('P1 - Game Information Modal', () => {
         const link = await findGameLink(triedHrefs);
         const linkHref = await link.getAttribute('href').catch(() => null);
         if (linkHref) triedHrefs.add(linkHref);
+        // Same LMS hover-reveal fix as Steps 6-9 above: this candidate can be
+        // genuinely zero-size until its ancestor tile is hovered, which made
+        // the unconditional scrollIntoViewIfNeeded() below hang for the full
+        // default timeout on LMS CA (confirmed live 2026-08-04) before ever
+        // reaching the box-check/hover-reveal further down this loop.
+        await hoverRevealAncestor(link);
         await link.scrollIntoViewIfNeeded();
         await page.evaluate(() => window.scrollBy(0, -120));
         await page.waitForTimeout(200);

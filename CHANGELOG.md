@@ -9,6 +9,21 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-04
+
+### Added
+
+- **Lucky Me Slots (LMS) — Canada, Sweden, and Denmark markets, closing out this brand's full onboarding (UK/CA/SE/DK all done).** Canada was a near-exact clone of the UK site (same menu, same layout), just priced in Canadian dollars — 33 passed, 0 failed. Sweden turned out to have its own smaller menu (no Table Games, no Live Casino, a "Withdrawals" link the other markets don't have) and, per instruction, login/sign-up were intentionally left out of scope for this market rather than spending time on them — 24 passed, 0 failed. Denmark matched the UK's full menu again but its sign-up form asks for a real Danish ID number (same known limit already seen on a couple of other brands' Danish sites, so sign-up correctly skips there) — 28 passed, 0 failed, clean on the first try.
+- **Simba Games (SG) — a brand-new brand, never tested before, now covering both its UK and Canada markets.** Shares the same underlying menu style as Lucky Me Slots, but with a much bigger game menu (7 categories including Live Dealer, Roulette, and Video Poker) and its own blog section running on noticeably older website software. UK: 38 passed, 0 failed (the most involved single-market onboarding of the project so far — see Fixed section below). Canada: a clean near-copy of the UK site, 34 passed, 0 failed, after confirming its blog page — while technically reachable by typing the address directly — has no real link to it anywhere on the Canadian site, so it doesn't count as a real feature there.
+
+### Fixed
+
+- **Two small shared-code wording fixes that affect every brand using the same underlying menu style as Lucky Me Slots/Simba Games:** the sign-up button's expected wording only recognized "Join," but Simba Games' real button says "Register" instead — widened to accept either. Same for the Swedish-language search box placeholder, which had a trailing "..." on Lucky Me Slots Sweden that the check wasn't expecting.
+- **Found and fixed a menu-opening bug that would have affected every brand sharing this platform going forward:** the check for "did the slide-out menu actually open" assumed every brand's menu slides in from the left edge of the screen (true for Lucky Me Slots) — but Simba Games' menu slides in from the right instead. Widened the check to recognize either direction.
+- **Fixed a real sign-up bug on Simba Games UK:** the site has a second, completely empty, invisible copy of the sign-up form sitting in front of the real one, left over from an older version of the page. Our check was finding this empty decoy first and giving up, thinking sign-up was broken. Now checks that a form actually has real fields in it before trying to use it.
+- **Fixed a stuck-menu bug on Simba Games UK:** once the sign-in window had been opened once, clicking a different button (like "Register") right after wouldn't do anything — the page needed a full refresh first before it would open a different window. Added that refresh step for this brand.
+- **Simba Games UK's blog section runs on much older website software than the rest of the site, with several of its own real problems**, all now correctly handled instead of causing false failures: its main header is completely empty (no working sign-in there at all — confirmed not a bug, just how that page is built); its search feature doesn't actually search anything (clicking it just opens a random old blog post); and its individual blog post web addresses are built completely differently from every other brand we test (date-based addresses like "2018/10/21/some-title" instead of a clean category/post-name style), which needed real work to recognize correctly.
+
 ## [Unreleased] - 2026-08-03
 
 ### Added
