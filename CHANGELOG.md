@@ -9,6 +9,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-05 (session 3)
+
+### Fixed
+
+- **Fixed a false alarm on Slingo (SC) UK's feedback form check**: the automated check for "did the form close cleanly" was accidentally clicking the close button on an unrelated pop-up notification instead of the feedback form's own close button, making it look like the form failed to close when it actually worked fine. Now it only looks at the feedback form's real close button.
+- **Fixed a false alarm on Slingo (SC) UK's game information popup check**: a screen-position adjustment meant to nudge a game tile out from under the sticky header was instead pushing already-visible tiles further down, off the bottom of the screen, making the check wrongly report it couldn't find a clickable game. The adjustment now only applies when it's actually needed.
+- **Fixed a false alarm on Slingo (SC) UK's search icon check**: clicking the search icon in the site header wasn't reliably opening the search panel during automated testing (the click landed on the icon correctly, but nothing happened), even though the feature works fine for real users. Switched to a more reliable way of triggering the click.
+- Re-ran Slingo (SC) UK, Spain, Ireland, Sweden, and South Africa (all desktop + mobile) after the above fixes: all five markets came back clean with zero real site issues found. Sweden showed a much higher "skipped" count than the other markets, but this was confirmed to be expected — Sweden uses a different sign-in system entirely (an instant bank-deposit model with no traditional username/password login), so login, sign-up, promotions, and a few other checks correctly don't apply there.
+
 ## [Unreleased] - 2026-08-05 (session 2)
 
 ### Added
