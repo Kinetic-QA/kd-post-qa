@@ -280,8 +280,10 @@ test.describe('P1 - Game Category Navigation', () => {
     // and English URL slugs (just prefixed with /en-IE/ or /en-CA/ by
     // baseURL) — widened to cover all three rather than adding near-
     // duplicate branches.
+    // COM confirmed live 2026-08-05: identical Online Slots/Live Casino/
+    // Casino Games header taxonomy as UK — widened to cover it too.
     const isLpUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
-      && ['UK', 'IE', 'CA'].includes(test.info().project.name.replace(/-mobile$/, ''));
+      && ['UK', 'IE', 'CA', 'COM'].includes(test.info().project.name.replace(/-mobile$/, ''));
     // ES has its own real taxonomy, confirmed live 2026-07-29 via the
     // sidebar's own DOM — different sub-categories than UK (no Daily
     // Jackpots, no Live Casino sub-breakdown at all, Video Bingo instead of
@@ -535,7 +537,32 @@ test.describe('P1 - Game Category Navigation', () => {
     // Games/Live Dealer/Roulette/Video Poker (real URL typo,
     // "/video-pocker/", confirmed live, not a mistake) plus Game List and
     // VIP Lounge, vs LMS's 4-5 links.
-    const isSgUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG';
+    // DK and SE are carved out below — DK's sidebar uses real
+    // Danish-language hrefs (/spilleautomater/, /kort-og-bordspil/,
+    // /roulette-spil/) instead of UK/CA's English ones and drops Game
+    // List/VIP Lounge entirely; SE's is even narrower still (just Slots +
+    // Game List, no Card/Table/Live Dealer/Roulette/Video Poker at all) —
+    // this check would otherwise silently self-skip every DK/SE link as
+    // "not offered for this GEO" when it's actually just a mismatch.
+    const isSgUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG'
+      && !['DK', 'SE'].includes(test.info().project.name.replace(/-mobile$/, ''));
+    // Simba Games (SG) DK — onboarded 2026-08-05, confirmed live via a real
+    // browser probe of nav#top-nav: a genuinely NARROWER 5-link taxonomy
+    // than UK/CA (Spilleautomater/Kort- og bordspil/Live dealer/Roulette
+    // spil/Video Poker, same "/video-pocker/" URL typo) — no Game List, no
+    // VIP Lounge link anywhere in the sidebar. Reuses
+    // clickLmsSidebarLinkAndVerify unchanged (same nav#top-nav/#menu-X
+    // architecture as UK/CA), just a narrower step list with Danish hrefs.
+    const isSgDkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG'
+      && test.info().project.name.replace(/-mobile$/, '') === 'DK';
+    // Simba Games (SG) SE — onboarded 2026-08-05, confirmed live via a real
+    // nav#top-nav DOM dump: the narrowest taxonomy of any SG market so
+    // far — just "Spelautomater" (/slots/, same English href as UK/CA's
+    // own Slots link) plus "Game List" (/game-list/). No Card & Table
+    // Games, no Live Dealer, no Roulette, no Video Poker, no Promotions, no
+    // VIP Lounge link anywhere in the sidebar.
+    const isSgSeFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG'
+      && test.info().project.name.replace(/-mobile$/, '') === 'SE';
 
     async function clickLmsSidebarLinkAndVerify(hrefPart: string, label: string) {
       await page.evaluate(() => (document.querySelector('#menu-X') as HTMLElement | null)?.click());
@@ -714,6 +741,33 @@ test.describe('P1 - Game Category Navigation', () => {
       });
       await test.step('VIP Lounge → /vip-lounge/', async () => {
         await clickLmsSidebarLinkAndVerify('/vip-lounge/', 'VIP Lounge');
+      });
+    }
+
+    if (isSgSeFormat) {
+      await test.step('Spelautomater (Slots) → /slots/', async () => {
+        await clickLmsSidebarLinkAndVerify('/slots/', 'Spelautomater (Slots)');
+      });
+      await test.step('Game List → /game-list/', async () => {
+        await clickLmsSidebarLinkAndVerify('/game-list/', 'Game List');
+      });
+    }
+
+    if (isSgDkFormat) {
+      await test.step('Spilleautomater (Online Slots) → /spilleautomater/', async () => {
+        await clickLmsSidebarLinkAndVerify('/spilleautomater/', 'Spilleautomater (Online Slots)');
+      });
+      await test.step('Kort- og bordspil (Card & Table Games) → /kort-og-bordspil/', async () => {
+        await clickLmsSidebarLinkAndVerify('/kort-og-bordspil/', 'Kort- og bordspil (Card & Table Games)');
+      });
+      await test.step('Live dealer → /live-dealer/', async () => {
+        await clickLmsSidebarLinkAndVerify('/live-dealer/', 'Live dealer');
+      });
+      await test.step('Roulette spil (Roulette Game) → /roulette-spil/', async () => {
+        await clickLmsSidebarLinkAndVerify('/roulette-spil/', 'Roulette spil (Roulette Game)');
+      });
+      await test.step('Video Poker → /video-pocker/', async () => {
+        await clickLmsSidebarLinkAndVerify('/video-pocker/', 'Video Poker');
       });
     }
 

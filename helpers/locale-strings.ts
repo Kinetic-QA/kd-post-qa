@@ -182,15 +182,15 @@ const STRINGS: Record<string, LocaleStrings> = {
   // by any spec and left as reasonable placeholders rather than guessed
   // translations, since there's nothing live to verify them against.
   sv: {
-    loginButton: /logga in/i, // not exercised — SE has no login CTA (hasLoginRegistration: false)
-    loginSubmitButton: /^logga in$/i, // not exercised
+    loginButton: /logga in|inloggning/i, // "logga in" not exercised on brands with no login CTA. "inloggning" added 2026-08-05 for Simba Games (SG) SE, the first sv brand confirmed to have a real, functional login header button — its own real copy reads "INLOGGNING", not "Logga in"
+    loginSubmitButton: /^logga in$/i, // NOT independently confirmed for SG SE (modal submit text not exercised this session, no personnummer available) — verify on first real run
     usernameOrEmailLabel: /användarnamn eller e-post/i, // not exercised
-    joinButton: /gå med|registrera dig( nu)?/i, // confirmed live 2026-08-04 on LMS SE (the first sv brand with a real, functional join button to exercise): real header/sidebar button reads "Registrera dig nu", not "Gå med" — widened rather than assume every sv brand phrases it identically, same shared-by-locale pattern as DK's joinButton
+    joinButton: /gå med|registrera dig( nu)?|öppna konto/i, // confirmed live 2026-08-04 on LMS SE (the first sv brand with a real, functional join button to exercise): real header/sidebar button reads "Registrera dig nu", not "Gå med" — widened rather than assume every sv brand phrases it identically, same shared-by-locale pattern as DK's joinButton. "öppna konto" added 2026-08-05 for Simba Games (SG) SE, whose real header button reads "Öppna konto"
     loginErrorText: /felaktiga inloggningsuppgifter/i, // not exercised
     reportProblemText: /rapportera ett problem/i, // not exercised — SE has no feedback form (hasFeedbackForm: false)
     membersLoginText: /medlem.*logga in/i, // not exercised
     backButtonText: /^tillbaka$/i,
-    playCta: /^spela$/i,
+    playCta: /^spela$|öppna konto/i, // "öppna konto" added 2026-08-05 for Simba Games (SG) SE: confirmed live this brand's real game-tile hover CTA reads "ÖPPNA KONTO" (Create Account) instead of "Spela" — a real site quirk (no logged-in session exists to actually "play"), same class of per-brand hover-CTA difference already documented for GC's icon-only CTA
     bonusPolicyText: /bonusvillkor/i, // NOT confirmed live — SE's homepage banner has no visible T&C/bonus disclaimer text at all (image-only banner), so this pattern isn't exercised by BN-01's T&C check either
     readMoreText: /läs mer/i, // not exercised — SE has no Blog
     // NOT yet confirmed live — best-guess translations for the feedback widget (not exercised, hasFeedbackForm: false).
@@ -225,10 +225,10 @@ const STRINGS: Record<string, LocaleStrings> = {
   // (also hasTestAccount: false there). Expect to correct any still-guessed
   // fields from real failures, same pattern as every other locale here.
   da: {
-    loginButton: /log ind/i, // confirmed live on both GC and MC: header button reads "Log ind"/"LOG IND"
-    loginSubmitButton: /^log ind$/i, // confirmed live on both: login modal's submit button also reads "Log ind"
+    loginButton: /log ind|log på/i, // confirmed live on GC/MC: header button reads "Log ind"/"LOG IND". "log på" added 2026-08-05 for Simba Games (SG) DK, whose real header button reads "LOG PÅ" instead — genuinely different brand copy, same language
+    loginSubmitButton: /^log ind$/i, // confirmed live on GC/MC: login modal's submit button also reads "Log ind". NOT independently confirmed for SG DK (modal submit text not exercised this session, no test account) — verify on first real run
     usernameOrEmailLabel: /brugernavn eller e-?mail/i, // confirmed live on both: login modal field label reads "Brugernavn Eller E-Mail"
-    joinButton: /opret dig|tilmeld/i, // confirmed live: GC's header button reads "OPRET DIG", MC's reads "TILMELD" — genuinely different brand copy, same language
+    joinButton: /opret dig|tilmeld|opret konto/i, // confirmed live: GC's header button reads "OPRET DIG", MC's reads "TILMELD" — genuinely different brand copy, same language. "opret konto" added 2026-08-05 for Simba Games (SG) DK, whose real header button reads "Opret Konto"
     loginErrorText: /de indtastede (login)?oplysninger er forkerte/i, // NOT yet confirmed on either brand — guessed (neither had a working test account to trigger a real failed-login attempt against)
     reportProblemText: /rapporter et problem/i, // not exercised on either brand — both have hasFeedbackForm: false
     membersLoginText: /login for medlemmer/i, // confirmed live on both: registration modal's tab-switch link reads "Login for medlemmer"

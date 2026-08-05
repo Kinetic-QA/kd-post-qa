@@ -252,6 +252,17 @@ test.describe('P1 - Website Header', () => {
     });
 
     await runStep('Step 3: Search icon opens search panel (/#search)', async () => {
+      // Confirmed live on Lord Ping (LP) COM 2026-08-05: same brand-wide
+      // "one widget opened+closed, a DIFFERENT one stops responding until a
+      // real reload" quirk already documented for Simba Games — reproduced
+      // in isolation (search alone works fine; search right after
+      // Steps 1/2's Login/Join modal does not, even after closeAccountModal()
+      // reports success). A soft page.goto('', {waitUntil:'domcontentloaded'})
+      // reload clears the stuck state.
+      if ((process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP') {
+        await page.goto('', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(1_000);
+      }
       await dismissCampaignPopup(page);
       // On Slingo/SpinGenie, mobile's visible search icon lives in the
       // sticky bottom nav — the header's own #search link is still in the

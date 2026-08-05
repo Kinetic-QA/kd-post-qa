@@ -121,7 +121,16 @@ test.describe('P2 - Login Widget', () => {
       await page.waitForTimeout(1_000);
       await dismissCampaignPopup(page);
       await openLoginWidget();
-      const noAccountLink = page.getByText(strings.noAccountText).first();
+      // Scoped to the modal — confirmed live on Simba Games (SG) DK
+      // 2026-08-05: this locale's noAccountText regex (widened to include
+      // "opret konto" for SG DK's own header copy) also matches the
+      // HEADER's separate "Opret Konto" join button, which sits behind the
+      // modal overlay and never becomes clickable — an unscoped .first()
+      // picked that wrong element instead of the modal's own real link.
+      // Same class of bug already worked around for the Forgot Password
+      // step above.
+      const modalForNoAccount = page.locator('[class*="AccountPopup_account"], [class*="Popup_popup"], .modal-content').filter({ visible: true }).first();
+      const noAccountLink = modalForNoAccount.getByText(strings.noAccountText).first();
       await expect(noAccountLink).toBeVisible({ timeout: 10_000 });
       await noAccountLink.click();
       await page.waitForTimeout(1_500);

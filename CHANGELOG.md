@@ -9,6 +9,33 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-05 (session 2)
+
+### Added
+
+- **Lord Ping (LP), Lucky Me Slots (LMS), Prime Scratch Cards (PSC), and Prime Slots (PSL) — international (.com) markets added for all four brands**, closing out the last unfinished market on each. All four were tested from a South Africa connection, with sign-up tested end-to-end since none of these markets ask for a government ID number (unlike Denmark/Sweden on other brands) — no real login test was run for any of them, since no test accounts exist yet. Lord Ping: 36 passed, 0 failed. Lucky Me Slots: 32 passed, 0 failed (this market also has a real "report a problem" feedback link that its UK/Canada sites don't have). Prime Scratch Cards: 30 passed, 0 failed. Prime Slots: 31 passed, 0 failed (one already-known slow-loading page hiccup recovered on retry, not a real issue).
+
+### Fixed
+
+- **Found and fixed a real bug on Lord Ping's international site**: after opening and closing the sign-in or sign-up window, clicking the search icon right after did nothing at all — the same "needs a quick refresh before a different button works" quirk already seen on Simba Games, now confirmed on this brand too. Added the same refresh step here.
+- **Found and fixed the same class of bug on Prime Scratch Cards' international site (mobile only)**: after closing a sign-up window that opened from a search result, clicking the search icon again silently reopened the sign-up window instead of the search panel. Same refresh-step fix applied, and pre-emptively added to Prime Slots too since it shares the exact same sign-in/sign-up window design.
+- **Caught and corrected an early false read on Lucky Me Slots' international site**: a "report a problem" feedback link initially looked confirmed working, but a closer look at the same test run showed it had actually been correctly skipped (not found) rather than genuinely confirmed — corrected before it could mislead future work on this market.
+- **Confirmed real, pre-existing gap on Prime Slots' international site**: the mobile version of the homepage banner image is broken/missing entirely (loads as a blank 0×0 image). Already correctly flagged as a failed check rather than silently passing — no code change needed, just confirmation this is real.
+
+## [Unreleased] - 2026-08-05
+
+### Added
+
+- **Simba Games (SG) — Denmark and Sweden markets added.** Denmark: 28 passed, 0 failed (desktop + mobile combined). Sign-up here asks for a real Danish personal ID number, so — same as a few other brands' Danish sites — that part is correctly skipped rather than guessed at. Sweden: 24 passed, 0 failed. Sweden turned out to be the most unusual market yet for this brand — its "Log In" button opens a completely different scan-a-QR-code sign-in screen instead of a normal username/password box, while its "Create Account" button opens a normal-looking sign-up form that (like Denmark) asks for a real Swedish personal ID number. Both markets have a much smaller game menu than the UK/Canada sites — just Slots (Sweden also loses Card & Table Games, Live Dealer, Roulette, and Video Poker entirely).
+- **Simba Games (SG) — international (.com) market added, completing this brand's full rollout (UK, Canada, Denmark, Sweden, and now .com, all done).** Same look and feel as the UK/Canada sites in every way checked. Tested from a South Africa connection: pricing correctly shows in South African Rand, and — unlike Denmark and Sweden — sign-up here does NOT ask for a government ID number, so the full sign-up flow could be tested end-to-end (no real login test was run, since no test account exists for this market yet). 32 passed, 0 failed (desktop + mobile combined).
+
+### Fixed
+
+- **Found and fixed a real bug on Simba Games Denmark**: the Danish-language menu links (e.g. "Spilleautomater") point to Danish web addresses, but the actual games behind them live at the same English web addresses as the UK/Canada sites. Our check was looking for games under the Danish addresses and coming up empty — now it looks in the right place.
+- **Found and fixed a real bug affecting any brand sharing this login widget**: the "Don't have an account?" link check wasn't narrowed down to just the sign-in pop-up, so on Simba Games Denmark it accidentally matched the header's separate "Create Account" button sitting behind the pop-up instead of the real link inside it, and gave up waiting for it to become clickable. Now it only looks inside the actual pop-up.
+- **Found and fixed a real bug on Simba Games Sweden**: after closing a sign-up window that opened from a search result, clicking the search icon again did nothing at all — a known quirk already seen on this brand's UK site, where the page needs a quick refresh before a different button will respond. Added that refresh step here too.
+- **Simba Games Sweden's game tiles use "Create Account" as their hover button text instead of the usual "Play"** (this brand doesn't offer a Play preview at all here) — now recognized correctly instead of failing to find a Play button that doesn't exist.
+
 ## [Unreleased] - 2026-08-04
 
 ### Added
