@@ -98,6 +98,12 @@ export default defineConfig({
   use: {
     headless: false,
     viewport: { width: 1280, height: 720 },
+    // Pins the headed Chromium window to DISPLAY3, the right monitor
+    // (bounds: 1920,11 - 1920x1080). Without this, Chromium's default
+    // window placement sometimes lands on one of the other two monitors.
+    launchOptions: {
+      args: ['--window-position=2020,111'],
+    },
     screenshot: 'on',
     video: { mode: 'on', size: { width: 1280, height: 720 } },
     trace: 'on',

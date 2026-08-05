@@ -292,7 +292,14 @@ test.describe('P1 - Website Header', () => {
         await dismissCampaignPopup(page);
       }
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
-      await searchLink.click({ force: true });
+      // Confirmed live on Slingo UK desktop 2026-08-05: this link's icon has
+      // no visible label/content (an empty <a href="#search">, see the
+      // page snapshot), and a coordinate-based click({force:true}) landed
+      // 22 straight polls without the hash ever changing — same class of
+      // issue as resolveMobileAccountButton()'s callers elsewhere in this
+      // file. A native DOM click sidesteps the coordinate/actionability math
+      // entirely and reliably fires the real click handler.
+      await searchLink.evaluate((el: HTMLElement) => el.click());
       await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
       await page.waitForTimeout(1_500);
       // The visible "Back" text is screen-reader-only (0x0 on screen) — the

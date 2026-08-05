@@ -158,7 +158,12 @@ test.describe('P1 - Feedback Form', () => {
 
     // ── Step 7: Close form ────────────────────────────────────────────────
     await runStep('Form closed cleanly', async () => {
-      const closeBtn = page.locator('button[aria-label*="Close" i], [class*="Popup_close"], [class*="close"]').first();
+      // Confirmed live on Slingo UK 2026-08-05: the bare [class*="close"]
+      // branch also matches an unrelated AppToaster notification's own close
+      // button (class="AppToaster_close-btn__..."), which sorted first and
+      // was outside the viewport — excluding AppToaster elements keeps this
+      // scoped to the actual feedback form's close control.
+      const closeBtn = page.locator('button[aria-label*="Close" i]:not([class*="AppToaster"]), [class*="Popup_close"]:not([class*="AppToaster"]), [class*="close"]:not([class*="AppToaster"])').first();
       const closeBtnVisible = await closeBtn.isVisible({ timeout: 2_000 }).catch(() => false);
       if (closeBtnVisible) {
         await closeBtn.click({ force: true });

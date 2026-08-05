@@ -351,8 +351,19 @@ test.describe('P1 - Game Information Modal', () => {
         // reaching the box-check/hover-reveal further down this loop.
         await hoverRevealAncestor(link);
         await link.scrollIntoViewIfNeeded();
-        await page.evaluate(() => window.scrollBy(0, -120));
-        await page.waitForTimeout(200);
+        await page.waitForTimeout(150);
+        // Only nudge away from the sticky header if the candidate actually
+        // landed near the TOP of the viewport (the MC/UK and MC/COM case this
+        // was written for). Confirmed live on Slingo UK: applying this nudge
+        // unconditionally instead pushed a candidate that scrollIntoViewIfNeeded()
+        // had already placed near the BOTTOM of the viewport out of view by the
+        // same 120px (candidate measured at y=790 against a 720px-tall viewport
+        // — exactly this offset).
+        const preNudgeBox = await link.boundingBox().catch(() => null);
+        if (preNudgeBox && preNudgeBox.y >= 0 && preNudgeBox.y < 150) {
+          await page.evaluate(() => window.scrollBy(0, -120));
+          await page.waitForTimeout(200);
+        }
         const box = await link.boundingBox().catch(() => null);
         const vh = page.viewportSize()?.height ?? 720;
         const vw = page.viewportSize()?.width ?? 1280;
