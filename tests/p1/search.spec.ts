@@ -639,6 +639,27 @@ test.describe('P1 - Search', () => {
 
     // ── Step 10: Click Search button again ───────────────────────────────
     await runStep('Step 10: Click Search button again → panel reopens', async () => {
+      // Confirmed live on Simba Games (SG) SE 2026-08-05 (same brand-wide
+      // quirk already documented on SG UK's registration flow — see
+      // CHANGELOG 2026-08-04): once one hash-routed widget (here, the
+      // registration modal opened from a search result) has been closed,
+      // clicking a DIFFERENT hash-routed control right after is a genuine
+      // no-op — the click registers but the app's router never picks up
+      // the new hash — until the page gets a real reload first. A soft
+      // page.goto('', {waitUntil:'domcontentloaded'}) reload (same idiom
+      // used by closeAccountModal elsewhere) clears the stuck state.
+      // Confirmed live on Prime Scratch Cards (PSC) COM 2026-08-05, mobile
+      // viewport only: same class of bug — Step 9's close click leaves the
+      // native web-component modal's own internal state stuck even after
+      // the URL hash is reset (via history.pushState, which clears the
+      // hash but doesn't fire a real hashchange for the app's router to
+      // react to), so Step 10's search click actually lands back on
+      // #account instead of #search. PSL shares the identical modal/close
+      // mechanism, so included preemptively too.
+      if (['SG', 'PSC', 'PSL'].includes((process.env.TEST_BRAND ?? 'SC').toUpperCase())) {
+        await page.goto('', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(1_000);
+      }
       await dismissCampaignPopup(page);
       // Same MobileFooter-vs-plain-header fallback as Step 1 — see that
       // step's comment (GC doesn't hide its header search on mobile).
