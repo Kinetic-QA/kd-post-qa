@@ -1,7 +1,7 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
 import type { Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle, resolveMobileAccountButton } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, RegistrationData, EsRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, generateSouthAfricanMobile, RegistrationData, EsRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -157,6 +157,29 @@ test.describe('Registration Flow', () => {
     // format, no override needed there.
     const isPcComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PC'
       && test.info().project.name.replace(/-mobile$/, '') === 'COM';
+    // I36/COM — onboarding started 2026-08-05, tested from a real South
+    // Africa VPN. Same auto-detect-from-real-IP pattern as MC/COM (Malta)
+    // and PC/COM (UAE) — only the mobile number format needs to match
+    // whatever VPN is actually in use this session (generateSouthAfricanMobile,
+    // same generator SNG's ROW format used the last time it was onboarded
+    // from South Africa) — swap this if a future session tests from
+    // somewhere else, don't assume South Africa carries forward.
+    const isI36ComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'I36'
+      && test.info().project.name.replace(/-mobile$/, '') === 'COM';
+    // Zingo Bingo (ZI) COM — onboarding started 2026-08-05, tested from a
+    // real South Africa VPN. Same auto-detect-from-real-IP pattern as I36/
+    // COM (confirmed live: the default UK-shaped mobile number was rejected
+    // after 9+ retry attempts, full 180s timeout) — reuses
+    // generateSouthAfricanMobile, same generator already in use this
+    // session for I36/COM. Swap if a future session tests from a different
+    // VPN, don't assume South Africa carries forward. Also confirmed live
+    // via curl: unlike ZI UK (a genuine bingo-first brand), this market's
+    // nav has NO Bingo Rooms category at all — same 3-checkbox
+    // (over_18/gdpr/terms_accept) consent set as every other no-Bingo
+    // brand/GEO, NOT ZI UK's own 4-checkbox default. This is a per-GEO fact
+    // for this brand specifically, unlike I36's brand-wide isI36NoBingoFormat.
+    const isZiComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'ZI'
+      && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // MC/CA — confirmed live 2026-07-22 (correct Canada VPN/IP verified via
     // ipinfo.io): same auto-detect-from-real-IP pattern as COM/ROW —
     // country code correctly shows Canada with no explicit selection needed.
@@ -267,6 +290,14 @@ test.describe('Registration Flow', () => {
     // Canadian mobile/DOB generator same as every other brand's CA market.
     const isSgCaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG'
       && test.info().project.name.replace(/-mobile$/, '') === 'CA';
+    // Ice36 (I36) CA — onboarding started 2026-08-05, tested from a real
+    // Canada VPN. Same underlying SkillOnNet/"son" platform as MC's CA
+    // market — reuses the Canadian mobile/DOB generator same as every other
+    // brand's CA market rather than waiting for a real failed run to prove
+    // it, since every prior CA market without this branch failed the same
+    // way (Step 0 falls through to the UK-shaped default and times out).
+    const isI36CaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'I36'
+      && test.info().project.name.replace(/-mobile$/, '') === 'CA';
     // MC/FR-CA — onboarding started 2026-07-23, tested from a confirmed
     // Montreal VPN. Same underlying platform as MC/CA but genuinely
     // translated field labels — confirmed live via DOM snapshot: mobile
@@ -316,6 +347,14 @@ test.describe('Registration Flow', () => {
     // as both: skip cleanly rather than build a from-scratch CPR-aware fill
     // flow for a single GEO.
     const isLmsDkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LMS'
+      && test.info().project.name.replace(/-mobile$/, '') === 'DK';
+    // Ice36 (I36) DK — onboarding started 2026-08-05: confirmed live via
+    // real browser probe that this market's registration widget ALSO asks
+    // for a Danish CPR number (placeholder "XXXXXX-XXXX") as Step 0, same
+    // regulation-driven pattern already confirmed on GC/MC/LMS's own DK
+    // markets. Same conclusion as all three: skip cleanly rather than build
+    // a from-scratch CPR-aware fill flow for a single GEO.
+    const isI36DkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'I36'
       && test.info().project.name.replace(/-mobile$/, '') === 'DK';
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
@@ -622,6 +661,13 @@ test.describe('Registration Flow', () => {
       // cleanly rather than run the default (non-CPR-aware) flow against a
       // field shape it doesn't expect.
       test.skip(true, 'LMS/DK registration requires a Danish CPR number as Step 0 (not mobile/DOB) — CPR-aware fill flow not yet built, see isLmsDkFormat comment');
+    } else if (isI36DkFormat) {
+      // See isI36DkFormat's own comment above — Step 0 asks for a Danish CPR
+      // number before the familiar mobile/DOB fields, on both desktop and
+      // mobile. Same conclusion as GC/MC/LMS's own DK markets: skip cleanly
+      // rather than run the default (non-CPR-aware) flow against a field
+      // shape it doesn't expect.
+      test.skip(true, 'I36/DK registration requires a Danish CPR number as Step 0 (not mobile/DOB) — CPR-aware fill flow not yet built, see isI36DkFormat comment');
     } else if (isMobile) {
       // Mobile's flow is a genuinely different shape from desktop's —
       // confirmed live: 5 named steps ("STEP X OF 5") instead of desktop's 4
@@ -653,7 +699,7 @@ test.describe('Registration Flow', () => {
       // generateCanadianDOB() unchanged. Address shape not independently
       // confirmed this session either, same conservative default-and-fix-on-
       // failure approach as LP/CA above.
-      if (isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat) {
+      if (isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat) {
         data.dob = generateCanadianDOB();
       }
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
@@ -685,7 +731,7 @@ test.describe('Registration Flow', () => {
         // MC/CA, no explicit "Canada" dropdown selection needed either.
         await ((isAlbertaFormat || isCanadianMobileFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, 'Canada', isFrCaFormat ? frCaStep0Labels : undefined)
-          : (isPcCaFormat || isMcCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat)
+          : (isPcCaFormat || isMcCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile)
           : isMcFrCaFormat
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, undefined, mcFrCaStep0Labels)
@@ -693,6 +739,8 @@ test.describe('Registration Flow', () => {
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
           : isPcComFormat
           ? fillStep0WithRetry(page, scope, data, generateUaeMobile)
+          : (isI36ComFormat || isZiComFormat)
+          ? fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile)
           : fillStep0WithRetry(page, scope, data));
       });
 
@@ -720,7 +768,7 @@ test.describe('Registration Flow', () => {
         // call, and mcFrCaStep0Labels.continue) that this brand's Continue
         // button is lowercase "Continuer" everywhere, NOT SNG FR-CA's
         // all-caps "CONTINUER" — kept distinct from isFrCaFormat below.
-        await ((isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat)
+        await ((isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat)
           ? fillMobileStep2GenderEmailCA(page, scope, data,
               (isFrCaFormat || isMcFrCaFormat) ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined,
               isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue', (isFrCaFormat || isMcFrCaFormat))
@@ -743,10 +791,11 @@ test.describe('Registration Flow', () => {
         // that's the same pre-existing site-side issue, not a new bug.
         await (usesAbAddressShape
           ? fillMobileStep3AddressAB(page, scope, data)
-          : (isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat)
+          : (isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat)
           ? fillMobileStep3AddressCA(page, scope, data,
               (isFrCaFormat || isMcFrCaFormat) ? 'Adresse' : 'Start typing your address',
-              (isFrCaFormat || isMcFrCaFormat), isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue')
+              (isFrCaFormat || isMcFrCaFormat), isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue',
+              isMcFrCaFormat)
           : fillMobileStep3Address(page, scope, data));
       });
 
@@ -755,13 +804,18 @@ test.describe('Registration Flow', () => {
         // live 2026-07-21 ON matches AB here too, not the generic/CA shape —
         // see fillMobileStep4CredentialsAB's docstring. MC/FR-CA: same
         // lowercase "Continuer" fact as Steps 2/3 above; deposit-limit
-        // sub-step label NOT yet independently confirmed for MC/FR-CA,
-        // reusing SNG FR-CA's as a best guess (correct via real failures).
+        // sub-step label confirmed live 2026-08-05 (now reachable for the
+        // first time — this step was unreachable before that session's
+        // address-autocomplete timing fix) to read "Définir des limites de
+        // dépôt" ("Define," not SNG FR-CA's "Fixer"/"Set") — genuinely
+        // different brand copy, same language, same pattern already seen
+        // elsewhere in this file (e.g. isFrCaFormat/isMcFrCaFormat's
+        // Continue-button casing).
         await (usesAbAddressShape
           ? fillMobileStep4CredentialsAB(page, scope, data)
           : fillMobileStep4Credentials(page, scope, data,
               isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue',
-              (isFrCaFormat || isMcFrCaFormat) ? 'Fixer des limites de dépôt' : 'Set deposit limits'));
+              isMcFrCaFormat ? 'Définir des limites de dépôt' : isFrCaFormat ? 'Fixer des limites de dépôt' : 'Set deposit limits'));
       });
 
       await runStep('Step 5 of 5: Deposit limit + consents', async () => {
@@ -781,7 +835,7 @@ test.describe('Registration Flow', () => {
           : (isCanadianMobileFormat || isMcFrCaFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'], false,
               (isFrCaFormat || isMcFrCaFormat) ? 'Non' : 'No')
-          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat || isI36NoBingoFormat || isPslUkFormat || isPslCaFormat || isPscUkFormat || isPscCaFormat || isLmsUkFormat || isLmsCaFormat || isSgUkFormat || isSgCaFormat)
+          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat || isI36NoBingoFormat || isZiComFormat || isPslUkFormat || isPslCaFormat || isPscUkFormat || isPscCaFormat || isLmsUkFormat || isLmsCaFormat || isSgUkFormat || isSgCaFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
           : fillMobileStep5Final(page, scope));
       });
@@ -822,7 +876,7 @@ test.describe('Registration Flow', () => {
       // DOB shape via shadow-DOM form inspection — reuses generateCanadianDOB()
       // unchanged, same conservative default-and-fix-on-failure address
       // approach as LP/CA.
-      if (isMcCaFormat || isPcCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat) {
+      if (isMcCaFormat || isPcCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat) {
         data.dob = generateCanadianDOB();
       }
       // MC/FR-CA: same dash-separated YYYY-MM-DD format as SNG FR-CA
@@ -853,13 +907,15 @@ test.describe('Registration Flow', () => {
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
           : isPcComFormat
           ? fillStep0WithRetry(page, scope, data, generateUaeMobile)
+          : (isI36ComFormat || isZiComFormat)
+          ? fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile)
           // MC/CA and MC/FR-CA: country already auto-detects correctly (no
           // 'Canada' label needed, unlike SNG AB/CA) — just needs a
           // NANP-format number; MC/FR-CA additionally needs its own
           // (genuinely translated, brand-specific) field labels.
           : isMcFrCaFormat
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile, undefined, mcFrCaStep0Labels)
-          : (isMcCaFormat || isPcCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat)
+          : (isMcCaFormat || isPcCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat)
           ? fillStep0WithRetry(page, scope, data, generateCanadianMobile)
           : fillStep0WithRetry(page, scope, data));
       });
@@ -878,7 +934,7 @@ test.describe('Registration Flow', () => {
         // firstName/lastName/email/gender labels NOT yet independently
         // confirmed for MC FR-CA, reusing SNG FR-CA's frCaStep1Labels as a
         // starting guess (same language, correct via real failures if wrong).
-        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isMcCaFormat || isMcFrCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat)
+        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isMcFrCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat)
           ? ((isFrCaFormat || isMcFrCaFormat) ? scope.getByLabel('Adresse').first() : scope.getByPlaceholder('Start typing your address').first())
           : undefined, (isFrCaFormat || isMcFrCaFormat) ? frCaStep1Labels : undefined,
           (isFrCaFormat || isMcFrCaFormat) ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined);
@@ -908,13 +964,32 @@ test.describe('Registration Flow', () => {
         // Needs a real (non-automated) browser check or a suggestions-API
         // allowlist fix from whoever owns MC's address-autocomplete
         // integration; not something further test-code changes can solve.
+        // RE-INVESTIGATED LIVE 2026-08-05 (real Canada VPN, per a teammate
+        // report of "FR-CA blockers"): confirmed the SAME failure with TWO
+        // more real addresses beyond the original "Bank Street" — including
+        // a specific, unambiguous, real full address ("150 Elgin Street,
+        // Ottawa, ON") — every one fails identically (empty field, red icon,
+        // "Adresse invalide"), which rules out "which address text" as the
+        // variable; see generateMcFrCaAddress's updated docstring. Also
+        // confirmed SNG's own FR-CA market (the only other brand with this
+        // GEO) has NO such issue — its address step passes cleanly on both
+        // desktop and mobile from the same VPN — so this is isolated to
+        // MC's own autocomplete integration specifically, not a FR-CA- or
+        // VPN-wide problem. Also tried forcing the widget's own "Enter
+        // address manually" escape hatch whenever "Adresse invalide" shows
+        // (not just when Postcode/Ville haven't appeared yet, since they
+        // reliably appear even in the invalid state) — the manual-entry
+        // link itself does not exist once the widget is already in this
+        // stuck state, so there is no in-UI recovery path at all. This is a
+        // confirmed, real, currently-unrecoverable site bug — escalate to
+        // MC's dev team/brand owner rather than re-investigating further.
         await (usesAbAddressShape ? fillStep2AB(page, scope, data)
           : isCanadianMobileFormat ? fillStep2CA(page, scope, data,
               isFrCaFormat ? 'Adresse' : 'Start typing your address',
               isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue',
               isFrCaFormat ? /nom d'utilisateur/i : /username/i)
           : isMcFrCaFormat ? fillComAddress(page, scope, data, 'Adresse', true, 'Code postal', 'Ville', 'Continuer', /nom d.utilisateur/i, /saisir l.adresse manuellement/i)
-          : (isMcComFormat || isMcCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat) ? fillComAddress(page, scope, data)
+          : (isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat) ? fillComAddress(page, scope, data)
           : fillStep2(page, scope, data));
       });
 
@@ -942,7 +1017,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat)
           : isMcFrCaFormat
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'], /nom d.utilisateur/i, /mot de passe/i, true)
-          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat || isI36NoBingoFormat || isPslUkFormat || isPslCaFormat || isPscUkFormat || isPscCaFormat || isLmsUkFormat || isLmsCaFormat || isSgUkFormat || isSgCaFormat)
+          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat || isI36NoBingoFormat || isZiComFormat || isPslUkFormat || isPslCaFormat || isPscUkFormat || isPscCaFormat || isLmsUkFormat || isLmsCaFormat || isSgUkFormat || isSgCaFormat)
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
       });
@@ -2310,7 +2385,22 @@ async function fillComAddress(
     ? scope.getByLabel(streetLabel)
     : scope.getByPlaceholder(streetLabel)).first();
   await expect(streetInput).toBeVisible({ timeout: 10_000 });
+  // ROOT CAUSE FOUND AND FIXED 2026-08-05 (real Canada VPN, prompted by a
+  // teammate report of "FR-CA blockers"): this was never about which
+  // address text gets typed (every real address tried failed identically —
+  // see generateMcFrCaAddress's docstring) — it was a timing race. The old
+  // code clicked and started typing the moment the field became "visible,"
+  // but the autocomplete widget's own JS hasn't finished mounting/attaching
+  // its validation listeners yet at that point — typing into it too early
+  // leaves it permanently stuck on "Adresse invalide" no matter what real
+  // address goes in, confirmed by watching a real headed run live. Waiting
+  // for the widget to actually settle before interacting fixed it outright —
+  // confirmed clean over 3 repeated desktop runs and mobile (see
+  // fillMobileStep3AddressCA's useAutocompleteTyping param for the same fix
+  // applied there).
+  await page.waitForTimeout(2_500);
   await streetInput.click();
+  await page.waitForTimeout(500);
   // A plain .fill() left this field permanently invalid on MC FR-CA — its
   // own client-side validation apparently needs real per-keystroke input
   // events (not a batch value-set) to mark the field valid; confirmed live
@@ -2324,19 +2414,19 @@ async function fillComAddress(
   await page.waitForTimeout(800);
 
   const postcodeInput = scope.getByRole('textbox', { name: postcodeLabel }).first();
-  // MC FR-CA: confirmed live 2026-07-23 — this widget is INCONSISTENT about
-  // whether typing alone reveals Postcode/Ville/Country/Province, or
-  // whether the "Saisir l'adresse manuellement" ("Enter address manually")
-  // link needs an explicit click first — order matters: clicking the link
-  // BEFORE typing doesn't reliably work either. Try the straightforward
-  // path first (short wait), and only fall back to the manual link if
-  // Postcode still hasn't appeared. IMPORTANT: clicking the manual-entry
-  // link swaps in a genuinely different (non-autocomplete) Adresse input
-  // and clears whatever was typed into the old one — re-fill it as plain
-  // text afterward (no geocoding validation applies in this mode, so a
-  // simple .fill() is fine here, unlike the autocomplete field above).
-  const postcodeAppearedFromTyping = await postcodeInput.isVisible({ timeout: 3_000 }).catch(() => false);
-  if (!postcodeAppearedFromTyping && manualEntryLinkText) {
+  // MC FR-CA: confirmed live 2026-08-05 — Postcode/Ville/Country/Province
+  // reliably appear as SOON AS YOU START TYPING in the Adresse field,
+  // regardless of whether a real autocomplete match was ever found — their
+  // visibility is NOT a valid signal that the street itself was accepted.
+  // The street field can still be showing a persistent "Adresse invalide"
+  // error with postcode/city both already visible and green-checked
+  // (confirmed live via screenshot). The old check here treated postcode
+  // visibility as "autocomplete succeeded" and skipped the manual-entry
+  // fallback in exactly that situation — check for the real "Adresse
+  // invalide" error text instead, and fall back to manual entry whenever
+  // it's showing, even if postcode/city already appeared.
+  const addressInvalid = await scope.getByText(/adresse invalide/i).first().isVisible({ timeout: 2_000 }).catch(() => false);
+  if (addressInvalid && manualEntryLinkText) {
     const manualLink = scope.getByText(manualEntryLinkText).first();
     if (await manualLink.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await manualLink.click();
@@ -2382,6 +2472,17 @@ async function fillMobileStep3AddressCA(
   streetLabel: string | RegExp = 'Start typing your address',
   useLabelNotPlaceholder: boolean = false,
   continueLabel: string = 'Continue',
+  // MC FR-CA (confirmed live 2026-08-05, mobile): unlike every other brand
+  // using this shared function (SNG/PC/MC's other CA markets — all plain,
+  // non-validated text fields), MC/FR-CA's Adresse field is a real
+  // autocomplete component, same as desktop's fillComAddress — it needs the
+  // widget to actually finish mounting before typing starts (a plain .fill()
+  // right after the field becomes "visible" races its hydration and leaves
+  // it permanently stuck on "Adresse invalide") and real per-keystroke input
+  // events, not a batch value-set. Defaults to false (the plain-field
+  // behavior every other CA-shaped brand/GEO already relies on) so this
+  // doesn't slow down or change behavior for anyone else.
+  useAutocompleteTyping: boolean = false,
 ): Promise<void> {
   console.log('REG-01 (CA mobile) Step 3/5 address');
 
@@ -2391,8 +2492,15 @@ async function fillMobileStep3AddressCA(
     ? scope.getByLabel(streetLabel)
     : scope.getByPlaceholder(streetLabel)).first();
   await expect(streetInput).toBeVisible({ timeout: 10_000 });
-  await streetInput.click();
-  await streetInput.fill(addr.street);
+  if (useAutocompleteTyping) {
+    await page.waitForTimeout(2_500);
+    await streetInput.click();
+    await page.waitForTimeout(500);
+    await streetInput.pressSequentially(addr.street, { delay: 100 });
+  } else {
+    await streetInput.click();
+    await streetInput.fill(addr.street);
+  }
   await page.waitForTimeout(800);
 
   const postcodeInput = scope.locator('#zipCode').first();

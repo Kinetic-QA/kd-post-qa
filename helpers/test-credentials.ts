@@ -24,7 +24,7 @@ const KNOWN_GEOS_BY_BRAND: Record<string, string[]> = {
   MC: ['UK', 'COM', 'CA', 'FR-CA', 'IE', 'ES'],
   PC: ['UK', 'ES', 'CA', 'IE', 'COM'],
   LP: ['UK', 'ES', 'IE', 'CA'],
-  ZI: ['UK'],
+  ZI: ['UK', 'COM'],
   I36: ['UK', 'COM', 'IE', 'CA', 'ES', 'DK'],
   PSL: ['UK', 'CA', 'IE'],
   PSC: ['UK', 'CA'],

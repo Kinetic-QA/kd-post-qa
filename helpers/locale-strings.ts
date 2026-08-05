@@ -228,7 +228,7 @@ const STRINGS: Record<string, LocaleStrings> = {
     loginButton: /log ind/i, // confirmed live on both GC and MC: header button reads "Log ind"/"LOG IND"
     loginSubmitButton: /^log ind$/i, // confirmed live on both: login modal's submit button also reads "Log ind"
     usernameOrEmailLabel: /brugernavn eller e-?mail/i, // confirmed live on both: login modal field label reads "Brugernavn Eller E-Mail"
-    joinButton: /opret dig|tilmeld/i, // confirmed live: GC's header button reads "OPRET DIG", MC's reads "TILMELD" — genuinely different brand copy, same language
+    joinButton: /opret dig|tilmeld|deltag/i, // confirmed live: GC's header button reads "OPRET DIG", MC's reads "TILMELD", Ice36 (I36)'s reads "Deltag" (confirmed live 2026-08-05) — three genuinely different brand copies, same language, same shared-by-locale pattern
     loginErrorText: /de indtastede (login)?oplysninger er forkerte/i, // NOT yet confirmed on either brand — guessed (neither had a working test account to trigger a real failed-login attempt against)
     reportProblemText: /rapporter et problem/i, // not exercised on either brand — both have hasFeedbackForm: false
     membersLoginText: /login for medlemmer/i, // confirmed live on both: registration modal's tab-switch link reads "Login for medlemmer"

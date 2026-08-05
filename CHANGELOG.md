@@ -9,7 +9,47 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased] - 2026-08-04
+## [Unreleased] - 2026-08-05
+
+### Added
+
+- **Ice36 (I36) — international (.com) market, the second market onboarded for this brand.** Tested from a real South Africa connection since this market shows whatever country the tester is actually connecting from rather than a fixed country (same behavior already seen on a couple of other brands' international sites), so today's checks used a South-Africa-shaped mobile number to match. This market has no blog section at all (unlike the UK site, which does), otherwise the same look, game categories, and account pop-up as the UK site. Full run (desktop + phone together): 28 passed, 3 failed, 1 needed a second try before passing, 16 skipped for real reasons (no test account yet for this market, no blog to check, etc.) — took about 29 minutes end to end. Skipped the "successful login" check specifically, since we don't have a working test account for this market yet.
+- **Ice36 (I36) — Ireland market, the third market onboarded for this brand, with a real working test account this time.** Same look and game categories as the UK/COM sites, priced in euros, no blog section (same as COM). The real "successful login" check passed cleanly on both computer and phone. Full run (desktop + phone together): 31 passed, 3 failed, 0 needed a second try, 14 skipped for real reasons (no blog to check, etc.) — took about 20 minutes end to end.
+- **Ice36 (I36) — Canada market, the fourth market onboarded for this brand, with a real working test account.** Same look/game categories/no-blog setup as COM and Ireland, priced in Canadian dollars, tested from a real Canada connection. The real "successful login" check passed cleanly on both computer and phone; sign-up needed one retry on phone before going through, same known transient hiccup already seen elsewhere on this brand. Full run (desktop + phone together): 30 passed, 3 failed, 1 needed a second try before passing, 14 skipped for real reasons — took about 27 minutes end to end.
+- **Ice36 (I36) — Spain market, the fifth market onboarded for this brand, with a real working test account.** A genuinely Spanish-language site this time, and its own different set of game categories (Tragaperras/Ruleta/Ruleta en Vivo/Blackjack/Megaways/Slingo/Video Bingo, not the Slots/Casino/Live Casino used everywhere else on this brand) — otherwise no blog, same as the other markets. The real "successful login" check passed cleanly on both computer and phone. Full run (desktop + phone together): 31 passed, 3 failed, 14 skipped for real reasons — took about 20 minutes end to end.
+- **Ice36 (I36) — Denmark market, the sixth and final market onboarded for this brand, closing out Ice36's onboarding entirely.** Its own fully Danish-localized game menu (Spillemaskiner/Casino/Live Casino/Blackjack/Roulette/Megaways/Jackpots), no blog. No test account exists yet for this market, so the "successful login" check was skipped as instructed. Full run (desktop + phone together): 25 passed, 3 failed, 18 skipped for real reasons (no test account yet, sign-up needs a real Danish ID number — see below — etc.) — took about 17 minutes end to end.
+
+### Fixed
+
+- **Found and fixed a real, shared sign-up bug affecting every Spanish-market test across every brand, not just Ice36.** The sign-up form randomly picks a Spanish first name to build a test email address with, and one of those names ("Lucía") has an accent mark in it — most Spanish sites' email checks didn't seem to mind, but Ice36 Spain's real email check correctly rejected the accented address as invalid ("Comprueba que has introducido una dirección de correo electrónico válida"), which caught this. Fixed so the test account's on-screen name still shows the accent like a real person's name would, but the email address itself now always uses the plain, accent-free version.
+- **Fixed a real "Join" button wording gap on Ice36 Denmark:** this Danish-language brand's own button reads "Deltag," a third distinct wording our check didn't recognize alongside the two other Danish brands' own phrasing ("Opret Dig" and "Tilmeld") — widened so all three are accepted.
+- **Fixed a real per-market difference on the Contact Us page for Ice36 Denmark:** unlike every other Ice36 market, this one genuinely has no "Report a problem" link on its Contact Us page at all — confirmed as a real product gap, not a broken check, and the check now skips this cleanly for Denmark instead of failing on content that isn't there.
+
+### Known open items
+
+- **Ice36 (all six markets — UK, COM, IE, CA, ES, DK): the same handful of shared site reliability issues kept showing up throughout this onboarding, not new bugs each time:** opening a game sometimes shows the site's own "Something went wrong" error screen (or can't find a clickable game after a few tries) instead of game details; and the header's search icon and, on phone, the "Play"/sign-in button sometimes don't open their pop-up window at all on the first click. Confirmed on all 6 markets, so this is a real, shared platform issue across the whole brand — worth flagging to the brand owner rather than something our checks can work around.
+- **Ice36 Denmark's sign-up form asks for a real Danish ID (CPR) number as its very first step**, same regulatory requirement already seen on a couple of other brands' Danish sites — sign-up correctly skips here rather than guessing a fake one, same as those other brands.
+- Still need a real test account for Ice36 COM to close out the "successful login" check for that market.
+- **This closes out Ice36's onboarding — every intended market (UK, COM, IE, CA, ES, DK) has now been tested on both computer and phone.** Germany remains intentionally excluded per instruction.
+
+### Added
+
+- **Zingo Bingo (ZI) — international (.com) market, the second market onboarded for this brand.** Tested from a real South Africa connection, same "shows whatever country the tester is actually connecting from" behavior already seen on other brands' international sites, so sign-up used a South-Africa-shaped mobile number to match. Unlike the UK site (a genuine bingo-first brand), this market has no Bingo Rooms category at all — its menu is Slots/Slingo/Jackpots/Instant Win Games/Casino Games only. No test account exists yet, so the "successful login" check was skipped as instructed. Full run (desktop + phone together): 24 passed, 6 failed, 4 needed a second try before passing, 14 skipped for real reasons — took about 28 minutes end to end.
+
+### Fixed
+
+- **Fixed sign-up on Zingo Bingo COM, which was completely broken before today:** the checklist had no idea this market needed a South-Africa-style mobile number, its own no-house-number address shape, and its own 3-checkbox consent set (no Bingo tick-box, since this market has no real Bingo games) — all three fixed and confirmed working end to end, sign-up now completes cleanly on phone.
+
+### Known open items
+
+- **A "New" games-menu link on Zingo Bingo COM is sometimes mistaken for an actual clickable game** — same known recurring mix-up already seen on a couple of other brands (a genuine sub-menu link sorting in ahead of real game tiles), not fixed for this brand's own menu markup yet.
+- **The search feature's phone-only entry point on Zingo Bingo COM sometimes isn't clickable ("outside the visible screen area")** — needs a closer look at this market's own mobile search button next session, not chased further today.
+- **The same shared site-reliability issue already flagged across every Ice36 market showed up here too** — several buttons (Join, feedback form, registration, sign-in) sometimes don't open their pop-up window on the first click. Confirmed on a second, unrelated brand now, which points more strongly toward this being a platform-wide quirk rather than anything brand-specific.
+- No test account exists yet for Zingo Bingo COM — still need one to close out the "successful login" check for this market.
+
+### Fixed
+
+- **Fixed the long-standing Mega Casino French Canada (FR-CA) sign-up blocker a teammate flagged.** Sign-up had been stuck for weeks on the address step, always showing "invalid address" no matter what real address was typed in. Turned out to have nothing to do with which address was used (tried several different real ones, all failed identically) — it was a timing issue: the check was typing into the address box a split second before that part of the page had actually finished loading, so nothing typed ever registered properly. Slowing down and waiting for that part of the page to be fully ready before typing fixed it completely — confirmed clean over several repeat runs on both computer and phone. Fixing this also uncovered a second, previously-unreachable small wording issue further along in the same sign-up flow (a deposit-limits screen whose real heading reads "Définir des limites de dépôt," not the "Fixer..." wording this brand had been assumed to share with SpinGenie's French Canada site) — fixed too, so Mega Casino French Canada's full sign-up now completes end to end on both computer and phone for the first time.
 
 ### Added
 
