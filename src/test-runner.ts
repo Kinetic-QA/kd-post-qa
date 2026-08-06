@@ -86,10 +86,24 @@ function walkSuites(
 }
 
 export function runPlaywrightTest(testType: string, testFile: string): TestRunResult {
-  const resultsPath = path.join(process.cwd(), 'test-results', 'results.json');
+  // Must match playwright.config.ts's reportRoot/outputDir formula
+  // (`Test Reports/<BRAND>/<GEO>/<YYYY-MM-DD>/test-results`, or
+  // `Test Reports/<BRAND>/_combined-<GEOs>/<YYYY-MM-DD>/test-results` for
+  // multi-GEO) — it namespaces results.json by brand+GEO+date so a later run
+  // for a different GEO (or a later day) doesn't wipe this one's results
+  // before we've read them.
+  const brand = process.env.TEST_BRAND ?? 'SC';
+  const geos = process.env.TEST_GEOS
+    ?.split(',').map(g => g.trim()).filter(Boolean) ?? [process.env.TEST_GEO ?? 'UK'];
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const reportRoot = geos.length === 1
+    ? path.join('Test Reports', brand, geos[0], dateStr)
+    : path.join('Test Reports', brand, `_combined-${geos.join('-')}`, dateStr);
+  const runDir = path.join(process.cwd(), reportRoot, 'test-results');
+  const resultsPath = path.join(runDir, 'results.json');
 
   if (fs.existsSync(resultsPath)) fs.unlinkSync(resultsPath);
-  fs.mkdirSync(path.join(process.cwd(), 'test-results'), { recursive: true });
+  fs.mkdirSync(runDir, { recursive: true });
 
   const start = Date.now();
 

@@ -112,10 +112,55 @@ class ExcelReporter {
       return;
     }
 
-    const outDir = path.join(__dirname, 'test-results');
+    const geos = [...new Set(rows.map(r => r.geo))];
+    // Desktop+mobile runs of the same GEO produce project names like "UK"
+    // and "UK-mobile" — strip the "-mobile" suffix before deduping so a
+    // combined run is still recognized as a single-GEO run. Computed here
+    // (not just below in the baseName block) so both the Excel report's own
+    // folder AND its filename land in the same brand+GEO location as
+    // playwright.config.ts's outputDir (Test Reports/<BRAND>/<GEO>/).
+    const baseGeos = [...new Set(geos.map(g => g.replace(/-mobile$/, '')))];
+    const brand = (process.env.TEST_BRAND || 'SC').toUpperCase();
+    // Must match playwright.config.ts's own dateStr/reportRoot formula so
+    // the Excel file and the HTML report/traces from the same run all land
+    // in the same dated folder.
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const reportRoot = baseGeos.length === 1
+      ? `Test Reports/${brand}/${baseGeos[0]}/${dateStr}`
+      : `Test Reports/${brand}/_combined-${baseGeos.join('-')}/${dateStr}`;
+    const outDir = path.join(__dirname, reportRoot);
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-    const geos = [...new Set(rows.map(r => r.geo))];
+    // Open the HTML report's index.html directly via the OS file-open
+    // command, instead of relying on Playwright's own `open: 'always'` —
+    // confirmed live 2026-08-06 that Playwright's built-in auto-open
+    // requires starting a real server, which needs a real TTY and skips
+    // entirely when process.env.CLAUDECODE is set (even after clearing it
+    // in playwright.config.ts, a real server proved unreliable to keep
+    // alive). The report's index.html is fully self-contained (confirmed
+    // live: screenshots, steps, and "View Trace" all work with no server
+    // running at all), so just opening the file directly sidesteps the
+    // whole server/port/TTY problem. Reporters' onEnd hooks run in the same
+    // order they're listed in playwright.config.ts (html, json, list, this
+    // one last) — by the time this runs, the html reporter's onEnd has
+    // already finished writing index.html.
+    const { portForKey } = require('./helpers/report-port.cjs');
+    const reportKey = `${brand}-${baseGeos.join('-')}-${dateStr}`;
+    const reportPort = portForKey(reportKey);
+    const reportIndexPath = path.join(outDir, `report-${reportPort}`, 'index.html');
+    if (fs.existsSync(reportIndexPath)) {
+      // spawn (detached + unref'd), not exec — confirmed live 2026-08-06:
+      // exec's child inherits Playwright's own process group/job object on
+      // Windows, which gets torn down the instant the test run exits (right
+      // after this onEnd finishes), killing "start" before it can actually
+      // dispatch the file-open. Detaching lets it survive the parent
+      // process exiting.
+      const child = require('child_process').spawn('cmd', ['/c', 'start', '', reportIndexPath], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+    }
 
     // EXCEL_REPORT_FILE opts into append mode — used for a multi-session
     // combined report (e.g. one GEO per paused run, VPN switched between
@@ -167,10 +212,6 @@ class ExcelReporter {
     if (!appendFile) {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 23);
       const uniqueSuites = [...new Set(rows.map(r => r.file).filter(Boolean))];
-      // Desktop+mobile runs of the same GEO produce project names like "DE"
-      // and "DE-mobile" — strip the "-mobile" suffix before deduping so a
-      // combined run is still recognized as a single-GEO run.
-      const baseGeos = [...new Set(geos.map(g => g.replace(/-mobile$/, '')))];
       const baseName = uniqueSuites.length === 1
         ? uniqueSuites[0]
             .replace(/^(p[12]|sample)\s*[-–]\s*/i, '')  // strip "P1 - ", "P2 - ", "Sample - "

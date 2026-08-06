@@ -2,6 +2,25 @@ import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 import { getLiveUrl, getQAUrl } from './helpers/brand-urls';
 
+// Playwright's own HTML reporter checks process.env.CLAUDECODE and, if set,
+// silently skips starting the report server at all (not just the browser
+// popup) — confirmed live 2026-08-06: a real test run inside a VS Code
+// terminal (which inherits CLAUDECODE from the Claude Code extension being
+// active in that window, even for a terminal the user opened manually, not
+// one Claude Code itself spawned) produced a built report with nothing
+// serving it, hence ERR_CONNECTION_REFUSED on the auto-opened tab. Deleting
+// it here (before Playwright's own runner reads it) only affects this one
+// child process's env, not VS Code's — so `open: 'always'` actually opens
+// the browser regardless of which terminal a real interactive run happens
+// in. Automated/non-interactive invocations (agent.ts's spawned runs, CI)
+// are unaffected either way since they lack a TTY, which the same check
+// also requires.
+delete process.env.CLAUDECODE;
+delete process.env.COPILOT_CLI;
+// require(), not import — TS's module resolution doesn't match an explicit
+// .cjs extension against a .d.ts declaration file of the same base name.
+const { portForKey } = require('./helpers/report-port.cjs') as { portForKey: (key: string) => number };
+
 // Loads .env (gitignored) so credentials/config set there — e.g.
 // TEST_CREDENTIALS_<GEO>_USERNAME/PASSWORD in helpers/test-credentials.ts —
 // are available both here at config-load time and in every test.
@@ -44,6 +63,40 @@ function resolveUrl(brand: string, geo: string): string {
 // One GEO per entry in TEST_GEOS (multi-GEO mode) or just TEST_GEO otherwise.
 const geosToRun = TEST_GEOS && TEST_GEOS.length > 0 ? TEST_GEOS : [TEST_GEO];
 
+// All generated output lives under Test Reports/<BRAND>/<GEO>/ (see
+// helpers/brand-urls.ts for the brand -> GEO folders already scaffolded
+// there) instead of a shared top-level test-results/ that Playwright clears
+// at the start of every invocation — that used to silently destroy the
+// previous GEO's traces when GEOs are run one at a time as separate
+// `npx playwright test` calls, the pattern forced by real VPN switching
+// between GEOs (see feedback_multi_geo_vpn_switch). Each project below gets
+// its own outputDir pointing at its own GEO's folder, so even a single
+// combined TEST_GEOS="UK,ES" run correctly splits traces/videos/screenshots
+// by GEO rather than lumping them together.
+// Every run additionally nests under today's date (YYYY-MM-DD) so repeated
+// runs for the same brand+GEO don't scatter loose report-<port>/test-results/
+// *.xlsx siblings directly inside the GEO folder — same-day reruns share
+// that date folder (latest overwrites, same as before), different days get
+// their own.
+const dateStr = new Date().toISOString().slice(0, 10);
+const reportRoot = geosToRun.length === 1
+  ? `Test Reports/${TEST_BRAND}/${geosToRun[0]}/${dateStr}`
+  : `Test Reports/${TEST_BRAND}/_combined-${geosToRun.join('-')}/${dateStr}`;
+const outputDir = `${reportRoot}/test-results`;
+
+// Deterministic port per brand+GEO(s)+date combo (same key every time ->
+// same port every time), baked into both the HTML reporter's own port
+// option and the report folder's name — so `Test Reports/SC/UK/2026-08-06/
+// report-9518` tells you exactly which URL to open it on, without needing
+// to check logs or ask what port a previous run used. Date is part of the
+// key (not just the folder path) so two different days' reports for the
+// same brand+GEO get distinct ports and can be open in the browser at the
+// same time without one colliding on the other's port. Range 9323-9522 (200
+// slots) keeps it clear of Playwright's own 9323 default while making
+// collisions across brand/GEO/date combos unlikely.
+const reportKey = `${TEST_BRAND}-${geosToRun.join('-')}-${dateStr}`;
+const reportPort = portForKey(reportKey);
+
 // Each GEO contributes a desktop project and, when TEST_MOBILE is set, its
 // own "<geo>-mobile" project immediately after it — interleaved (UK,
 // UK-mobile, ES, ES-mobile, ...) rather than all desktop projects followed
@@ -53,15 +106,25 @@ const geosToRun = TEST_GEOS && TEST_GEOS.length > 0 ? TEST_GEOS : [TEST_GEO];
 // TEST_GEOS list), so a multi-GEO + TEST_MOBILE run silently produced only
 // one mobile project total instead of one per GEO.
 const projects = geosToRun.flatMap(geo => {
+  // Own outputDir per GEO (not just per invocation) — this is what makes a
+  // combined TEST_GEOS="UK,ES" run still save UK's traces/videos under
+  // Test Reports/<BRAND>/UK/ and ES's under Test Reports/<BRAND>/ES/,
+  // matching each GEO's own pre-scaffolded folder regardless of how many
+  // GEOs run together. Mobile shares the same folder as its desktop
+  // sibling — the project name ("<geo>-mobile") already keeps each test's
+  // own subfolder distinct.
+  const geoOutputDir = `Test Reports/${TEST_BRAND}/${geo}/${dateStr}/test-results`;
   const geoProjects = [{
     // Named after the GEO (not "chromium") so helpers/geo-features.ts can
     // resolve the active GEO from test.info().project.name in both modes.
     name: geo,
+    outputDir: geoOutputDir,
     use: { ...devices['Desktop Chrome'], baseURL: resolveUrl(TEST_BRAND, geo) },
   }];
   if (TEST_MOBILE) {
     geoProjects.push({
       name: `${geo}-mobile`,
+      outputDir: geoOutputDir,
       use: { ...devices['Pixel 5'], baseURL: resolveUrl(TEST_BRAND, geo) },
       // Playwright's mobile emulation (isMobile/hasTouch/deviceScaleFactor)
       // relies on a CDP device-metrics override that's incompatible with
@@ -89,8 +152,13 @@ export default defineConfig({
   retries: 1,
   workers: 1,
   reporter: [
-    ['html', { outputFolder: 'playwright-report', open: 'always' }],
-    ['json', { outputFile: 'test-results/results.json' }],
+    // open: 'never' — excel-reporter.cjs opens the report's index.html
+    // directly instead (confirmed live: it's fully self-contained, works
+    // with no server at all), which is reliable regardless of CLAUDECODE/
+    // TTY state. Leaving this on 'always' too would double-open a second,
+    // server-based tab whenever a real TTY run doesn't hit those checks.
+    ['html', { outputFolder: `${reportRoot}/report-${reportPort}`, open: 'never', port: reportPort }],
+    ['json', { outputFile: `${outputDir}/results.json` }],
     ['list'],
     ['./excel-reporter.cjs'],
   ],
@@ -113,5 +181,5 @@ export default defineConfig({
 
   projects,
 
-  outputDir: 'test-results/',
+  outputDir,
 });
