@@ -252,6 +252,17 @@ test.describe('P1 - Website Header', () => {
     });
 
     await runStep('Step 3: Search icon opens search panel (/#search)', async () => {
+      // Confirmed live on Lord Ping (LP) COM 2026-08-05: same brand-wide
+      // "one widget opened+closed, a DIFFERENT one stops responding until a
+      // real reload" quirk already documented for Simba Games — reproduced
+      // in isolation (search alone works fine; search right after
+      // Steps 1/2's Login/Join modal does not, even after closeAccountModal()
+      // reports success). A soft page.goto('', {waitUntil:'domcontentloaded'})
+      // reload clears the stuck state.
+      if ((process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP') {
+        await page.goto('', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(1_000);
+      }
       await dismissCampaignPopup(page);
       // On Slingo/SpinGenie, mobile's visible search icon lives in the
       // sticky bottom nav — the header's own #search link is still in the
@@ -281,7 +292,14 @@ test.describe('P1 - Website Header', () => {
         await dismissCampaignPopup(page);
       }
       await expect(searchLink).toBeVisible({ timeout: 10_000 });
-      await searchLink.click({ force: true });
+      // Confirmed live on Slingo UK desktop 2026-08-05: this link's icon has
+      // no visible label/content (an empty <a href="#search">, see the
+      // page snapshot), and a coordinate-based click({force:true}) landed
+      // 22 straight polls without the hash ever changing — same class of
+      // issue as resolveMobileAccountButton()'s callers elsewhere in this
+      // file. A native DOM click sidesteps the coordinate/actionability math
+      // entirely and reliably fires the real click handler.
+      await searchLink.evaluate((el: HTMLElement) => el.click());
       await expect(page).toHaveURL(/#search/, { timeout: 10_000 });
       await page.waitForTimeout(1_500);
       // The visible "Back" text is screen-reader-only (0x0 on screen) — the

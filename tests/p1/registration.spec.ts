@@ -180,6 +180,16 @@ test.describe('Registration Flow', () => {
     // for this brand specifically, unlike I36's brand-wide isI36NoBingoFormat.
     const isZiComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'ZI'
       && test.info().project.name.replace(/-mobile$/, '') === 'COM';
+    // Simba Games (SG) COM — onboarded 2026-08-05, tested from a confirmed
+    // South Africa IP (verified via ipinfo.io: Johannesburg, ZA). Same
+    // auto-detect-from-real-IP pattern as MC/PC's own COM markets — the
+    // registration widget's mobile-country dropdown reflects whichever
+    // country the tester's real IP resolves to, not a fixed GEO, so
+    // generateSouthAfricanMobile() (not the default UK-shaped generator) is
+    // needed here. Same no-house-number CA-shaped address step and no-Bingo
+    // 3-checkbox consent set as every other COM market onboarded so far.
+    const isSgComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG'
+      && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // MC/CA — confirmed live 2026-07-22 (correct Canada VPN/IP verified via
     // ipinfo.io): same auto-detect-from-real-IP pattern as COM/ROW —
     // country code correctly shows Canada with no explicit selection needed.
@@ -221,6 +231,15 @@ test.describe('Registration Flow', () => {
     // here either, same 3-checkbox set.
     const isLpUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
       && test.info().project.name.replace(/-mobile$/, '') === 'UK';
+    // Lord Ping (LP) COM — onboarded 2026-08-05, tested from a confirmed
+    // South Africa IP (verified via ipinfo.io: Johannesburg, ZA). Same
+    // auto-detect-from-real-IP pattern as every other brand's COM market —
+    // reuses generateSouthAfricanMobile() (same generator SG/COM uses) and
+    // the CA-shaped no-house-number address step. Same no-Bingo taxonomy as
+    // LP UK/CA (Online Slots/Live Casino/Casino Games) — no gdprBingo
+    // checkbox exists here either, same 3-checkbox set.
+    const isLpComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
+      && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // Prime Slots (PSL) UK — onboarded 2026-07-30, brand-new brand. Same
     // no-Bingo-vertical reasoning as MC/PC/LP (PSL's taxonomy is Slots/
     // Scratch Cards/Casino — confirmed live via header-menu-dropdown crawl,
@@ -298,6 +317,20 @@ test.describe('Registration Flow', () => {
     // way (Step 0 falls through to the UK-shaped default and times out).
     const isI36CaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'I36'
       && test.info().project.name.replace(/-mobile$/, '') === 'CA';
+    // Prime Slots (PSL) COM, Prime Scratch Cards (PSC) COM, Lucky Me Slots
+    // (LMS) COM — all onboarded 2026-08-05, tested from a confirmed South
+    // Africa IP (verified via ipinfo.io: Johannesburg, ZA). Same
+    // auto-detect-from-real-IP pattern as every other brand's COM market —
+    // reuse generateSouthAfricanMobile() (same generator SG/LP's own COM
+    // markets use) and the CA-shaped no-house-number address step. Same
+    // no-Bingo taxonomy as each brand's own UK/CA markets — no gdprBingo
+    // checkbox exists on any of these three brands.
+    const isPslComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PSL'
+      && test.info().project.name.replace(/-mobile$/, '') === 'COM';
+    const isPscComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PSC'
+      && test.info().project.name.replace(/-mobile$/, '') === 'COM';
+    const isLmsComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LMS'
+      && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // MC/FR-CA — onboarding started 2026-07-23, tested from a confirmed
     // Montreal VPN. Same underlying platform as MC/CA but genuinely
     // translated field labels — confirmed live via DOM snapshot: mobile
@@ -356,6 +389,21 @@ test.describe('Registration Flow', () => {
     // a from-scratch CPR-aware fill flow for a single GEO.
     const isI36DkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'I36'
       && test.info().project.name.replace(/-mobile$/, '') === 'DK';
+    // Simba Games (SG) DK — onboarded 2026-08-05: confirmed live via real
+    // browser probe (son-auth-modals shadow DOM) that this market's
+    // registration widget ALSO asks for a Danish CPR number (personalID
+    // field, placeholder "XXXXXX-XXXX") as Step 0, same regulation-driven
+    // pattern already confirmed on GC/MC/LMS's own DK markets. Same
+    // conclusion as all three: skip cleanly rather than build a
+    // from-scratch CPR-aware fill flow for a single GEO.
+    const isSgDkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG'
+      && test.info().project.name.replace(/-mobile$/, '') === 'DK';
+    // Note: Simba Games (SG) SE also has a personnummer-gated registration
+    // widget (same shape as isSgDkFormat above), but this whole spec
+    // already skips for that GEO via hasLoginRegistration: false (see
+    // geo-features.ts's SE block for the full reasoning — a genuinely
+    // split login/registration situation) before reaching this code, so no
+    // isSgSeFormat branch is needed here.
     const isMobile = test.info().project.name.endsWith('-mobile');
     const strings = currentLocaleStrings();
 
@@ -668,6 +716,13 @@ test.describe('Registration Flow', () => {
       // rather than run the default (non-CPR-aware) flow against a field
       // shape it doesn't expect.
       test.skip(true, 'I36/DK registration requires a Danish CPR number as Step 0 (not mobile/DOB) — CPR-aware fill flow not yet built, see isI36DkFormat comment');
+    } else if (isSgDkFormat) {
+      // See isSgDkFormat's own comment above — Step 0 asks for a Danish CPR
+      // number (personalID field) before the familiar mobile/DOB fields, on
+      // both desktop and mobile. Same conclusion as GC/MC/LMS's own DK
+      // markets: skip cleanly rather than run the default (non-CPR-aware)
+      // flow against a field shape it doesn't expect.
+      test.skip(true, 'SG/DK registration requires a Danish CPR number as Step 0 (not mobile/DOB) — CPR-aware fill flow not yet built, see isSgDkFormat comment');
     } else if (isMobile) {
       // Mobile's flow is a genuinely different shape from desktop's —
       // confirmed live: 5 named steps ("STEP X OF 5") instead of desktop's 4
@@ -739,7 +794,7 @@ test.describe('Registration Flow', () => {
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
           : isPcComFormat
           ? fillStep0WithRetry(page, scope, data, generateUaeMobile)
-          : (isI36ComFormat || isZiComFormat)
+          : (isI36ComFormat || isZiComFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat)
           ? fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile)
           : fillStep0WithRetry(page, scope, data));
       });
@@ -768,7 +823,7 @@ test.describe('Registration Flow', () => {
         // call, and mcFrCaStep0Labels.continue) that this brand's Continue
         // button is lowercase "Continuer" everywhere, NOT SNG FR-CA's
         // all-caps "CONTINUER" — kept distinct from isFrCaFormat below.
-        await ((isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat)
+        await ((isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat)
           ? fillMobileStep2GenderEmailCA(page, scope, data,
               (isFrCaFormat || isMcFrCaFormat) ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined,
               isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue', (isFrCaFormat || isMcFrCaFormat))
@@ -791,7 +846,7 @@ test.describe('Registration Flow', () => {
         // that's the same pre-existing site-side issue, not a new bug.
         await (usesAbAddressShape
           ? fillMobileStep3AddressAB(page, scope, data)
-          : (isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat)
+          : (isCanadianMobileFormat || isPcCaFormat || isPcComFormat || isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isMcFrCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat)
           ? fillMobileStep3AddressCA(page, scope, data,
               (isFrCaFormat || isMcFrCaFormat) ? 'Adresse' : 'Start typing your address',
               (isFrCaFormat || isMcFrCaFormat), isMcFrCaFormat ? 'Continuer' : isFrCaFormat ? 'CONTINUER' : 'Continue',
@@ -835,7 +890,7 @@ test.describe('Registration Flow', () => {
           : (isCanadianMobileFormat || isMcFrCaFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'], false,
               (isFrCaFormat || isMcFrCaFormat) ? 'Non' : 'No')
-          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat || isI36NoBingoFormat || isZiComFormat || isPslUkFormat || isPslCaFormat || isPscUkFormat || isPscCaFormat || isLmsUkFormat || isLmsCaFormat || isSgUkFormat || isSgCaFormat)
+          : (isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isMcComFormat || isMcCaFormat || isLpCaFormat || isI36NoBingoFormat || isZiComFormat || isPslUkFormat || isPslCaFormat || isPscUkFormat || isPscCaFormat || isLmsUkFormat || isLmsCaFormat || isSgUkFormat || isSgCaFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat)
           ? fillMobileStep5Final(page, scope, ['over_18', 'gdpr', 'terms_accept'])
           : fillMobileStep5Final(page, scope));
       });
@@ -907,7 +962,7 @@ test.describe('Registration Flow', () => {
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
           : isPcComFormat
           ? fillStep0WithRetry(page, scope, data, generateUaeMobile)
-          : (isI36ComFormat || isZiComFormat)
+          : (isI36ComFormat || isZiComFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat)
           ? fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile)
           // MC/CA and MC/FR-CA: country already auto-detects correctly (no
           // 'Canada' label needed, unlike SNG AB/CA) — just needs a
@@ -934,7 +989,7 @@ test.describe('Registration Flow', () => {
         // firstName/lastName/email/gender labels NOT yet independently
         // confirmed for MC FR-CA, reusing SNG FR-CA's frCaStep1Labels as a
         // starting guess (same language, correct via real failures if wrong).
-        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isMcFrCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat)
+        await fillStep1(page, scope, data, ((isCanadianMobileFormat && !isOntarioFormat) || isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isMcFrCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat)
           ? ((isFrCaFormat || isMcFrCaFormat) ? scope.getByLabel('Adresse').first() : scope.getByPlaceholder('Start typing your address').first())
           : undefined, (isFrCaFormat || isMcFrCaFormat) ? frCaStep1Labels : undefined,
           (isFrCaFormat || isMcFrCaFormat) ? (data.gender === 'Female' ? 'Femme' : 'Homme') : undefined);
@@ -989,7 +1044,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat, isFrCaFormat ? 'CONTINUER' : 'Continue',
               isFrCaFormat ? /nom d'utilisateur/i : /username/i)
           : isMcFrCaFormat ? fillComAddress(page, scope, data, 'Adresse', true, 'Code postal', 'Ville', 'Continuer', /nom d.utilisateur/i, /saisir l.adresse manuellement/i)
-          : (isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat) ? fillComAddress(page, scope, data)
+          : (isMcComFormat || isI36ComFormat || isZiComFormat || isMcCaFormat || isPcCaFormat || isPcComFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat) ? fillComAddress(page, scope, data)
           : fillStep2(page, scope, data));
       });
 
@@ -1017,7 +1072,7 @@ test.describe('Registration Flow', () => {
               isFrCaFormat)
           : isMcFrCaFormat
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'], /nom d.utilisateur/i, /mot de passe/i, true)
-          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat || isI36NoBingoFormat || isZiComFormat || isPslUkFormat || isPslCaFormat || isPscUkFormat || isPscCaFormat || isLmsUkFormat || isLmsCaFormat || isSgUkFormat || isSgCaFormat)
+          : (isMcComFormat || isMcCaFormat || isPcUkFormat || isPcCaFormat || isPcComFormat || isLpUkFormat || isLpCaFormat || isI36NoBingoFormat || isZiComFormat || isPslUkFormat || isPslCaFormat || isPscUkFormat || isPscCaFormat || isLmsUkFormat || isLmsCaFormat || isSgUkFormat || isSgCaFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat)
           ? fillStep3(page, scope, data, ['over_18', 'gdpr', 'terms_accept'])
           : fillStep3(page, scope, data));
       });

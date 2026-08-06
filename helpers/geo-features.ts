@@ -1218,6 +1218,49 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: true, // unconfirmed — same as above
     },
 
+    // COM — onboarded 2026-08-05, tested from a confirmed South Africa IP
+    // (verified via ipinfo.io: Johannesburg, ZA). A genuine clone of UK on
+    // every structural point checked live: identical 3-category header
+    // taxonomy (Online Slots/Live Casino/Casino Games), same real off-canvas
+    // hamburger sidebar (confirmed present), no gdprBingo checkbox (no Bingo
+    // vertical, same as UK). Real Log In/Join buttons in header, both
+    // advance to a real /#account modal — but this modal is a plain React
+    // popup, NOT a shadow-DOM web component like SG/Simba's SkillOnNet
+    // platform, confirming LP runs on a genuinely different underlying
+    // platform. Despite the confirmed South Africa IP, the homepage's own
+    // promo banner shows a static "100% up to €100" bonus in EUR, not ZAR —
+    // same "currency stays fixed regardless of real IP, only the mobile
+    // country-code field auto-detects" split already documented on PC COM.
+    // No test account exists for this market — hasTestAccount: false,
+    // login.spec.ts self-skips on that flag alone; registration IS
+    // exercised via isLpComFormat (South Africa mobile format), same as
+    // every other brand's COM market onboarded this session.
+    COM: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-05: /blog/ 404s (unlike UK, which has a real one)
+      hasPromotionsPage: true, promotionsPath: 'casino-promotions/', // confirmed live 2026-08-05: /casino-promotions/ returns 200, same slug as UK
+      hasPromotionsIconInHeader: true, // confirmed live: real "Promotions" link with icon inside <header>, same as UK
+      featuresPath: 'casino-features/', // confirmed live 2026-08-05: /casino-features/ returns 200, same slug as UK
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-05: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-05: 404s
+      currencySymbol: '€', // confirmed live 2026-08-05: homepage bonus banner reads "100% up to €100" — a fixed EUR default, NOT ZAR, despite this session's confirmed South Africa IP (see top-of-block comment)
+      contactEmail: 'support@lordping.com', // confirmed live 2026-08-05: real mailto link on /contact/, same address as UK
+      paymentMethodsPath: 'payment-options/', // confirmed live 2026-08-05: /payment-options/ returns 200 — same non-default slug override as UK (common 'payment-methods/' 404s here too)
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-05: zero facebook/twitter/instagram links found homepage-wide — genuinely different from UK, which has real social links
+      hasSocialMedia: false,
+      searchTerm: 'Book', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/casino-games/'], // carried over from UK's confirmed "Book" finding on the same underlying catalog and identical taxonomy — not independently re-confirmed this session, verify on first real run
+      gameTileHrefSubstrings: ['/online-slots/', '/live-casino/', '/casino-games/'], // confirmed live 2026-08-05: same 3-category taxonomy as UK (Online Slots/Live Casino/Casino Games header tabs)
+      hasGameFilterCarousel: false, // carried over from UK's confirmed finding (0 GamesSlider-style elements) — not independently re-verified this session
+      hasFeedbackForm: true, // confirmed live 2026-08-05: real "Report a problem" link found on /contact/, same as UK
+      hasGameCategoryNav: true, // confirmed live 2026-08-05: same 3-category taxonomy as UK — reuses isLpUkFormat (widened to include COM) in game-category-navigation.spec.ts, not a new dedicated branch
+      hasLoginRegistration: true, // confirmed live 2026-08-05: real LOG IN/JOIN buttons in header, genuinely functional — registration is exercised via isLpComFormat (South Africa mobile format), only the actual login test itself is skipped (see hasTestAccount)
+      hasTestAccount: false, // no COM test account provided this session (per explicit instruction) — login.spec.ts self-skips on this flag alone, independent of hasLoginRegistration
+      hasAccountModal: true, // confirmed live 2026-08-05: clicking JOIN advances the URL to /#account with a real, fillable mobile/DOB/password form (plain React popup, not a shadow-DOM component — see top-of-block comment)
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-05: /payment-options/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+    },
+
     // ES — onboarding started 2026-07-29, confirmed live against
     // www.lordping.es. Real UI is genuinely localized (Spanish) — unlike UK,
     // needs uiLocalized: true / locale: 'es'. Uses the same shared platform-
@@ -1449,6 +1492,50 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: false, // confirmed live 2026-07-30: blog-search.spec.ts's whole flow assumes a sidebar-driven entry point this brand doesn't have (no hamburger/toggle found at all) — same conservative default as other blogs whose search widget doesn't independently work; skip cleanly rather than force-fitting the sidebar-based flow onto a brand with a different footer-only nav
       hasFunctionalBlogLogin: false, // confirmed live 2026-07-31: clicking Login/Join on /blog/ changes the URL hash to #account but renders 0 real .modal-content elements — the exact same button on the main site opens a real, working modal (1 found) — a genuine gap isolated to the blog's own separate platform, not a login-wide issue
     },
+
+    // COM — onboarded 2026-08-05, tested from a confirmed South Africa IP
+    // (verified via ipinfo.io: Johannesburg, ZA). A genuine clone of UK on
+    // every point checked live: identical `.main-tabs` header taxonomy
+    // (Home/Slots/Scratch Cards/Casino, same nested New Slots/Best Slots/
+    // Jackpots/etc. dropdown structure), same real native-web-component
+    // account modal, real "Report a problem" link confirmed on /contact/
+    // (independently re-checked via real browser render, not just a raw-
+    // bundle text match — same false-positive risk already caught and
+    // ruled out on PSC COM below). Despite the confirmed South Africa IP,
+    // bonus copy on this same platform family (see PSC COM) renders in
+    // EUR, not ZAR — this brand is NOT on the SkillOnNet platform SG/LMS
+    // share, so no IP-based currency detection applies here. No test
+    // account exists for this market — hasTestAccount: false,
+    // login.spec.ts self-skips on that flag alone; registration IS
+    // exercised via isPslComFormat (South Africa mobile format).
+    COM: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-05: /blog/ 404s, same as UK
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-05: /promotions/ returns 200, same slug as UK (NOT 'casino-promotions/', which 404s)
+      hasPromotionsIconInHeader: false, // confirmed live: header-line only has logo/search/login/join, same as UK
+      featuresPath: null, // confirmed live 2026-08-05: both 'casino-features/' and 'features/' 404, same as UK
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-05: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no Bingo vertical on this brand at all, kept as the common placeholder, same as UK
+      currencySymbol: '€', // confirmed live 2026-08-05 via the SAME platform family's PSC COM bonus copy ("Min. deposit: €10", "Spin Value: €0.25") — a fixed EUR default regardless of this session's confirmed South Africa IP, NOT independently re-verified specifically on PSL's own COM bonus copy this session (PSL/PSC share the identical non-SkillOnNet platform) — verify on first real run
+      contactEmail: 'support@primeslots.com', // confirmed live 2026-08-05: real mailto link on /contact/, same address as UK
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-05: /payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-05: zero facebook/twitter/instagram links found homepage-wide — genuinely different from UK, which has one real Facebook link
+      hasSocialMedia: false,
+      searchTerm: 'Wild', searchResultHrefSubstrings: ['/slots/', '/scratch-cards/', '/casino/'], // carried over from UK's confirmed "Wild" finding on the same underlying catalog and identical taxonomy — not independently re-confirmed this session, verify on first real run
+      gameTileHrefSubstrings: ['/slots/', '/scratch-cards/', '/casino/'], // confirmed live 2026-08-05 via `.main-tabs` DOM dump — same 3-category taxonomy as UK
+      hasGameFilterCarousel: false, // carried over from UK's confirmed finding (0 GamesSlider_wrapper elements) — not independently re-verified this session
+      hasFeedbackForm: true, // confirmed live 2026-08-05 via a real browser render of /contact/ (not just a raw-bundle text match): real "Report a problem" link present, same as UK
+      hasGameCategoryNav: true, // confirmed live 2026-08-05: same 4-tab taxonomy as UK — reuses isPslUkFormat (brand-scoped, no GEO restriction) in game-category-navigation.spec.ts, not a new dedicated branch
+      hasSidebarMenu: false, // confirmed live 2026-08-05: no hamburger/off-canvas sidebar exists at all, same as UK — this platform never had one
+      hasLoginRegistration: true, // confirmed live 2026-08-05: real "Log in"/"Join" buttons in header, genuinely functional — registration is exercised via isPslComFormat (South Africa mobile format), only the actual login test itself is skipped (see hasTestAccount)
+      hasTestAccount: false, // no COM test account provided this session (per explicit instruction) — login.spec.ts self-skips on this flag alone, independent of hasLoginRegistration
+      hasAccountModal: true, // confirmed live 2026-08-05: clicking Join advances the URL to /#account with a real, fillable form (same native web-component modal as UK)
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-05: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK's shape)
+    },
+
     // CA (English Canada) — onboarding started 2026-07-31, confirmed live
     // against www.primeslots.com/en-CA/. Same underlying PSL platform as UK
     // (non-SkillOnNet, native web-component account modal, 3-category
@@ -1577,6 +1664,53 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
       hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with PSL's shape)
     },
+
+    // COM — onboarded 2026-08-05, tested from a confirmed South Africa IP
+    // (verified via ipinfo.io: Johannesburg, ZA). A genuine clone of UK on
+    // every point checked live: identical `.main-tabs` header taxonomy
+    // (Home/Scratch Cards/Slots/Casino, Scratch Cards still leads), same
+    // real native-web-component account modal. Confirmed NO feedback form
+    // — a raw curl of /contact/ initially matched "Report a problem" text,
+    // but a real browser render of the SAME page shows it's NOT actually
+    // present (a false-positive from an un-rendered raw-bundle string,
+    // same class of gotcha as static-HTML-only checks elsewhere in this
+    // file) — same hasFeedbackForm: false outcome as UK, independently
+    // re-confirmed via real render rather than trusted from curl alone.
+    // Real bonus copy shows EUR ("Min. deposit: €10", "Spin Value:
+    // €0.25"), NOT ZAR, despite the confirmed South Africa IP — this
+    // brand is NOT on the SkillOnNet platform SG/LMS share, so no
+    // IP-based currency detection applies here (same fixed-EUR pattern as
+    // LP COM). No test account exists for this market — hasTestAccount:
+    // false, login.spec.ts self-skips on that flag alone; registration IS
+    // exercised via isPscComFormat (South Africa mobile format).
+    COM: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-05: /blog/ 301-redirects to the homepage — no distinct page, same as UK's 404
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-05: /promotions/ returns 200, same slug as UK
+      hasPromotionsIconInHeader: false, // confirmed live: header only has Search/Home/Scratch Cards/Slots/Casino tabs, same as UK
+      featuresPath: null, // confirmed live 2026-08-05: /features/ 404s, same as UK
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-05: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-05: 404s — no Bingo vertical on this brand at all, same as UK
+      currencySymbol: '€', // confirmed live 2026-08-05: real bonus copy reads "Min. deposit: €10", "Spin Value: €0.25" — a fixed EUR default regardless of this session's confirmed South Africa IP (see top-of-block comment)
+      contactEmail: 'support@primescratchcards.com', // confirmed live 2026-08-05: real mailto link on /contact/, same address as UK
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-05: /payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-05: zero facebook/twitter/instagram links found homepage-wide, same as UK
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/scratch-cards/', '/slots/', '/casino/'], // carried over from UK's confirmed "Casino" finding on the same underlying catalog and identical taxonomy — not independently re-confirmed this session, verify on first real run
+      gameTileHrefSubstrings: ['/scratch-cards/', '/slots/', '/casino/'], // confirmed live 2026-08-05 via `.main-tabs` DOM dump — same 3-category taxonomy as UK, Scratch Cards first
+      hasGameFilterCarousel: false, // carried over from UK's confirmed finding — not independently re-verified this session
+      hasFeedbackForm: false, // confirmed live 2026-08-05 via a real browser render of /contact/ (see top-of-block comment) — no "Report a problem" link actually renders, same as UK
+      hasGameCategoryNav: true, // confirmed live 2026-08-05: same 4-tab taxonomy as UK — reuses isPslUkFormat (widened to include PSC, brand-scoped with no GEO restriction) in game-category-navigation.spec.ts, not a new dedicated branch
+      hasSidebarMenu: false, // confirmed live 2026-08-05: no hamburger/off-canvas sidebar exists at all, same as UK
+      hasLoginRegistration: true, // confirmed live 2026-08-05: real Log in/Join buttons in header, genuinely functional — registration is exercised via isPscComFormat (South Africa mobile format), only the actual login test itself is skipped (see hasTestAccount)
+      hasTestAccount: false, // no COM test account provided this session (per explicit instruction) — login.spec.ts self-skips on this flag alone, independent of hasLoginRegistration
+      hasAccountModal: true, // confirmed live 2026-08-05: clicking Join advances the URL to /#account with a real, fillable form (same native web-component modal as UK)
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-05: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK's shape)
+    },
+
     // CA (English Canada) — onboarding started and completed 2026-08-03,
     // confirmed live against www.primescratchcards.com/en-CA/. Same
     // underlying platform as PSC UK (real login redirects to
@@ -1690,6 +1824,49 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
       hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
       hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with PSL/PSC's shape)
+    },
+
+    // COM — onboarded 2026-08-05, tested from a confirmed South Africa IP
+    // (verified via ipinfo.io: Johannesburg, ZA). Same underlying
+    // architecture as UK/CA: real off-canvas sidebar (nav#top-nav,
+    // hamburger trigger id="menu-X"), same 5-link taxonomy check
+    // (isLmsUkFormat, no GEO restriction so this applies automatically —
+    // the sidebar's real DOM also has the fuller "Our Features"
+    // group/VIP Lounge, same as UK, but the existing dedicated branch only
+    // checks the core 5, consistent with UK's own existing coverage). SON_CONFIG
+    // confirms currency ZAR/"R" for this South Africa session — same
+    // genuine IP-based currency detection already confirmed on SG's COM
+    // market (this brand shares the same underlying SkillOnNet platform
+    // family). No test account exists for this market — hasTestAccount:
+    // false, login.spec.ts self-skips on that flag alone; registration IS
+    // exercised via isLmsComFormat (South Africa mobile format), same as
+    // every other brand's COM market onboarded this session.
+    COM: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-05: /blog/ 301-redirects to the homepage — no distinct page, no real link found anywhere in the sidebar/footer
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-05: real sidebar link, /promotions/ returns 200
+      hasPromotionsIconInHeader: false, // confirmed live: header only has Search/Login/Join — no separate Promotions entry outside the sidebar, same as UK/CA
+      featuresPath: null, // confirmed live 2026-08-05: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-05: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-05: 404s — no Bingo vertical on this brand at all
+      currencySymbol: 'R', // confirmed live 2026-08-05: SON_CONFIG currency code "ZAR", symbol "R" for this South Africa session — same real per-session, IP-geolocated value already confirmed on SG's own COM market (shared SkillOnNet platform family)
+      contactEmail: 'support@luckymeslots.com', // confirmed live 2026-08-05: real mailto link on /contact/, same address as UK/CA
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-05: /payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-05: zero facebook/twitter/instagram links found homepage-wide, same as UK/CA
+      hasSocialMedia: false,
+      searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/progressive-jackpots/', '/table-games/', '/live-casino/'], // carried over from UK/CA's confirmed "Casino" finding on the same underlying catalog and identical taxonomy — not independently re-confirmed this session, verify on first real run
+      gameTileHrefSubstrings: ['/online-slots/', '/progressive-jackpots/', '/table-games/', '/live-casino/'], // confirmed live 2026-08-05 via nav#top-nav DOM dump — same taxonomy as UK/CA
+      hasGameFilterCarousel: false, // carried over from UK/CA's confirmed finding (0 GamesSlider-style elements) — not independently re-verified this session
+      hasFeedbackForm: false, // confirmed live 2026-08-05 via a real test run: contact-us-page.spec.ts's CU-01 Step 6 genuinely found NO "Report a problem" link when exercised for real (an earlier reading of this same run's results table mistook a self-skip "Pass" marker for a real confirmed find — corrected here) — same as UK/CA, no feedback form on this market
+      hasGameCategoryNav: true, // confirmed live 2026-08-05: same sidebar taxonomy as UK/CA — reuses isLmsUkFormat (no GEO restriction) in game-category-navigation.spec.ts, not a new dedicated branch
+      hasSidebarMenu: true, // confirmed live 2026-08-05: real off-canvas sidebar (nav#top-nav, hamburger trigger id="menu-X"), same architecture as UK/CA
+      hasLoginRegistration: true, // confirmed live 2026-08-05: real Log in/Join Now buttons in header, genuinely functional — registration is exercised via isLmsComFormat (South Africa mobile format), only the actual login test itself is skipped (see hasTestAccount)
+      hasTestAccount: false, // no COM test account provided this session (per explicit instruction) — login.spec.ts self-skips on this flag alone, independent of hasLoginRegistration
+      hasAccountModal: true, // confirmed live 2026-08-05: clicking Join Now advances the URL to /#account with a real, fillable form
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-05: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK/CA's shape)
     },
 
     // CA — onboarded 2026-08-04, confirmed live against
@@ -1923,6 +2100,154 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
       hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
       hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK's shape)
+    },
+
+    // DK — onboarded 2026-08-05, confirmed live against www.simbagames.dk
+    // via curl + a real browser probe (son-auth-modals shadow DOM, nav#top-nav
+    // DOM dump). Real "da" locale (SON_CONFIG locale:"DA", lang:"da", real
+    // Danish header copy "Søg efter spil"/"Opret Konto"/"LOG PÅ"). A
+    // genuinely NARROWER 5-link sidebar taxonomy than UK/CA's 7 — real
+    // Spilleautomater/Kort- og bordspil/Live dealer/Roulette spil/Video
+    // Poker (same "/video-pocker/" URL typo) links confirmed in nav#top-nav,
+    // but no Promotions, no Game List, no VIP Lounge link anywhere (needs
+    // its own isSgDkFormat branch in game-category-navigation.spec.ts,
+    // narrower than isSgUkFormat's 7-link block). Registration confirmed
+    // live to ask for a real Danish CPR number (personalID field,
+    // placeholder "XXXXXX-XXXX") as Step 0 before the familiar mobile/DOB
+    // fields — same regulation-driven pattern as GC/MC/LMS's own DK
+    // markets, skipped via isSgDkFormat in registration.spec.ts rather than
+    // building a from-scratch CPR-aware fill flow for one GEO. No test
+    // account exists yet for this market (same "no working DK account"
+    // situation as GC/MC/LMS DK).
+    DK: {
+      locale: 'da', uiLocalized: true, // confirmed live 2026-08-05: SON_CONFIG locale:"DA"/lang:"da", real Danish header/nav copy
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-05: /blog/ 301-redirects to the UNRELATED www.simbagames.co.uk domain entirely (not even this GEO's own shared platform blog like CA), and no blog link found anywhere in the footer or sidebar — not a real feature for this market
+      hasPromotionsPage: false, promotionsPath: null, // confirmed live 2026-08-05: /promotions/ 301-redirects straight to the homepage ("/") — no distinct page, same "redirects to homepage" pattern already confirmed on MC DK
+      hasPromotionsIconInHeader: false, // no Promotions page exists at all for this GEO (see hasPromotionsPage) — consistent by necessity
+      featuresPath: null, // confirmed live 2026-08-05: /features/ 404s. A real "Sådan spiller du" (How to Play) nav link exists at a differently-named path, but it's a distinct real page, not this brand's "Features" concept — left as no Features page
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-05: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-05: 404s (/bingo/ itself also 404s) — no Bingo vertical on this brand at all, same as UK/CA
+      currencySymbol: 'kr', // confirmed live 2026-08-05: SON_CONFIG currency symbol "kr", and real bonus copy on the homepage reads "Min: 100kr", "maks bonus 200kr." — gameModalCurrencyText NOT independently verified this session (no game info modal opened live); default to "kr" and verify on first real run, since GC/MC's own DK markets show a "kr" vs "DKK" split specifically inside the game info modal
+      contactEmail: 'support@simbagames.com', // confirmed live 2026-08-05: real "Kontakt os døgnet rundt på support@simbagames.com" copy on /contact/ — same address as UK/CA, not DK-specific
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-05: /payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-05: zero facebook/twitter/instagram links found in the footer, same as UK/CA
+      hasSocialMedia: false,
+      searchTerm: 'Book of Dead', searchResultHrefSubstrings: ['/slots/', '/cards-and-tables/'], // confirmed live 2026-08-05 via a real category-page DOM dump: the Danish sidebar links (Spilleautomater/Kort- og bordspil/Live dealer/Roulette spil/Video Poker) are Danish-URL LANDING pages only — every individual game tile underneath still resolves to the same underlying English hrefs as UK/CA ("/slots/book-of-dead/", "/cards-and-tables/lightning-roulette/", etc.), with Kort-og-bordspil/Live-dealer/Roulette-spil/Video-Poker all four sharing the single "/cards-and-tables/" catalog just pre-filtered differently per landing page
+      gameTileHrefSubstrings: ['/slots/', '/cards-and-tables/'], // confirmed live 2026-08-05 via real category-page DOM dumps (see searchResultHrefSubstrings note) — only 2 real substrings, NOT the 5 Danish nav paths themselves (those are landing pages, not game hrefs); this is why the first onboarding attempt's game-info-modal/search specs failed against the Danish paths before this fix
+      hasGameFilterCarousel: false, // confirmed live 2026-08-05: 0 [class*="GamesSlider_wrapper"] elements found on the homepage
+      hasFeedbackForm: false, // confirmed live 2026-08-05: /contact/ only has Chat/Email support entries, no "Report a problem" link — same as UK/CA
+      hasGameCategoryNav: true, // confirmed live 2026-08-05: real 5-link Danish sidebar taxonomy (see gameTileHrefSubstrings) — needs its own dedicated isSgDkFormat branch in game-category-navigation.spec.ts, narrower than isSgUkFormat's 7-link UK/CA block
+      hasSidebarMenu: true, // confirmed live 2026-08-05: real off-canvas sidebar (nav#top-nav, hamburger trigger id="menu-X"), same architecture as UK/CA
+      hasLoginRegistration: true, // confirmed live 2026-08-05: real "LOG PÅ"/"Opret Konto" buttons in header, genuinely functional (registration advances to a real CPR field, see hasTestAccount/registration.spec.ts's isSgDkFormat)
+      hasTestAccount: false, // no DK test account provided yet, same "no working DK account" situation as GC/MC/LMS's own DK markets
+      hasAccountModal: true, // confirmed live 2026-08-05: clicking "Opret Konto" advances the URL to /#account with a real, fillable form (personalID + password fields confirmed via shadow-DOM probe)
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-05: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK/CA's shape)
+    },
+
+    // SE — onboarded 2026-08-05, confirmed live against se.simbagames.com
+    // via curl + a real browser probe (son-auth-modals shadow DOM,
+    // nav#top-nav DOM dump). Real "sv" locale (SON_CONFIG locale:"SV",
+    // lang:"sv", real Swedish header copy "Sök spel"/"Öppna
+    // konto"/"INLOGGNING"). NOT a Pay N Play market unlike most other
+    // brands' SE sites (SON_CONFIG "pnp":{"enabled":false}). The NARROWEST
+    // taxonomy of any SG market so far: just "Spelautomater" (/slots/, same
+    // English href as UK/CA/DK's own Slots link) plus "Game List"
+    // (/game-list/) — no Card & Table Games, Live Dealer, Roulette, Video
+    // Poker, Promotions, or VIP Lounge link anywhere in the sidebar.
+    //
+    // hasLoginRegistration set to false — a genuinely SPLIT situation,
+    // confirmed live via real browser probes of BOTH buttons: "Öppna konto"
+    // (Register) DOES advance to a real /#account modal with a fillable
+    // personnummer (personalID, placeholder "XXXXXXXX-XXXX") + password
+    // form, same regulation-driven shape as SG/GC/MC/LMS's own DK CPR
+    // markets — but "INLOGGNING" (Login) opens a COMPLETELY DIFFERENT
+    // widget, a BankID QR-code screen ("Skanna QR-koden med din mobila
+    // BankID-app"), not a traditional form at all — no Forgot Password
+    // link, no Members-Login-style swap, nothing p2/login-widget.spec.ts or
+    // registration-widget.spec.ts can meaningfully exercise. Since both P2
+    // specs and p1/login.spec.ts's real-login attempt gate on this single
+    // flag, and none of the three apply for this GEO anyway (no
+    // personnummer generator exists to complete registration either),
+    // false is the accurate call here — same reasoning as PC SE, just for
+    // a different pair of structural reasons. hasAccountModal stays TRUE
+    // because p1/game-info-modal.spec.ts and p1/search.spec.ts's own
+    // registration-modal checks go through the REGISTER button specifically
+    // (confirmed live, both pass clean) — only login.spec.ts/registration.spec.ts/
+    // the two P2 widget specs are affected by hasLoginRegistration itself.
+    SE: {
+      locale: 'sv', uiLocalized: true, // confirmed live 2026-08-05: SON_CONFIG locale:"SV"/lang:"sv", real Swedish header/nav copy
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-05: /blog/ technically 200s but has ZERO real links anywhere on this GEO's own site (no sidebar, no footer) — same "orphaned page" pattern as CA's blog
+      hasPromotionsPage: false, promotionsPath: null, // confirmed live 2026-08-05: /promotions/ 301-redirects straight to the homepage ("/") — no distinct page, same pattern as DK
+      hasPromotionsIconInHeader: false, // no Promotions page exists at all for this GEO (see hasPromotionsPage) — consistent by necessity
+      featuresPath: null, // confirmed live 2026-08-05: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-05: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-05: 404s (/bingo/ itself also 404s) — no Bingo vertical on this brand at all, same as UK/CA/DK
+      currencySymbol: 'kr', // confirmed live 2026-08-05: SON_CONFIG currency code "SEK", symbol "kr"
+      contactEmail: 'support@simbagames.com', // confirmed live 2026-08-05: real "via support@simbagames.com" copy on /contact/ — same address as UK/CA/DK, not SE-specific
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-05: /payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-05: zero facebook/twitter/instagram links found in the footer, same as UK/CA/DK
+      hasSocialMedia: false,
+      searchTerm: 'Book of Dead', searchResultHrefSubstrings: ['/slots/'], // NOT independently re-confirmed this session — carried over from UK/CA/DK's confirmed "Book of Dead" finding on the same underlying catalog; verify on first real run
+      gameTileHrefSubstrings: ['/slots/'], // confirmed live 2026-08-05 via nav#top-nav DOM dump — this GEO's own single real category ("Spelautomater"/"Våra spel" both point to /slots/); Game List (/game-list/) is a sidebar entry, not a game-category vertical itself
+      hasGameFilterCarousel: false, // confirmed live 2026-08-05: 0 [class*="GamesSlider_wrapper"] elements found on the homepage
+      hasFeedbackForm: false, // confirmed live 2026-08-05: /contact/ only has Chatt/E-post support entries, no "Rapportera ett problem" link — same as UK/CA/DK
+      hasGameCategoryNav: true, // confirmed live 2026-08-05: real 2-link sidebar (Spelautomater + Game List) — needs its own dedicated isSgSeFormat branch in game-category-navigation.spec.ts, the narrowest of any SG market so far
+      hasSidebarMenu: true, // confirmed live 2026-08-05: real off-canvas sidebar (nav#top-nav, hamburger trigger id="menu-X"), same architecture as UK/CA/DK
+      hasLoginRegistration: false, // see top-of-block comment — Login is a BankID QR widget (no traditional secondary controls to test) and Registration is personnummer-gated with no generator this session; both real buttons exist and are clickable, but neither is a "traditional login/registration" p1/login.spec.ts, p1/registration.spec.ts, or the P2 widget specs can meaningfully exercise
+      hasTestAccount: false, // no SE test account/personnummer exists this session
+      hasAccountModal: true, // confirmed live 2026-08-05: clicking "Öppna konto" advances the URL to /#account with a real, fillable form (personalID + password fields confirmed via shadow-DOM probe)
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-05: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK/CA/DK's shape)
+    },
+
+    // COM — onboarded 2026-08-05, closes out SG's full 5-market roster
+    // (UK/COM/CA/DK/SE). Confirmed live against www.simbagames.com, tested
+    // from a confirmed South Africa IP (verified via ipinfo.io: Johannesburg,
+    // ZA). A genuine clone of UK on every point checked live: identical
+    // 7-link sidebar taxonomy (Promotions/Games/Online Slots/Card & Table
+    // Games/Live Dealer/Roulette/Video Poker/Game List/VIP Lounge, same
+    // "video-pocker" URL typo), same support@simbagames.com contact address,
+    // real header LOGIN/Register buttons — reuses isSgUkFormat unchanged in
+    // game-category-navigation.spec.ts, same as CA. No test account exists
+    // for this market (per explicit instruction this session) — hasTestAccount:
+    // false, login.spec.ts self-skips on that flag alone. Registration IS
+    // exercised, though, using the same auto-detect-from-real-IP pattern
+    // already established for MC/PC's own COM markets (SON_CONFIG confirms
+    // currency ZAR/"R" for this South Africa session) — added isSgComFormat
+    // to registration.spec.ts using generateSouthAfricanMobile(), same
+    // no-house-number CA-shaped address step and no-Bingo 3-checkbox consent
+    // set as every other COM market onboarded so far.
+    COM: {
+      locale: 'en', uiLocalized: false, // confirmed live 2026-08-05: SON_CONFIG locale:"EN"/lang:"en"
+      hasBlog: false, blogPath: null, // confirmed live 2026-08-05: /blog/ 301-redirects to the UNRELATED www.simbagames.co.uk domain entirely (same as DK), and no blog link found anywhere in this GEO's own footer (unlike UK, whose footer genuinely links to it) — same "orphaned/not-this-GEO's-feature" pattern as CA/DK
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 2026-08-05: real sidebar link, /promotions/ returns 200 (unlike DK/SE, where it redirects to the homepage)
+      hasPromotionsIconInHeader: false, // confirmed live: header only has Search/Register/Login — Promotions is sidebar-only, same as UK/CA
+      featuresPath: null, // confirmed live 2026-08-05: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live 2026-08-05: 404s — kept as the common placeholder, skips cleanly
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-05: 404s (/bingo/ itself also 404s) — no Bingo vertical on this brand at all
+      currencySymbol: 'R', // confirmed live 2026-08-05: SON_CONFIG currency code "ZAR", symbol "R" for this South Africa session — a real per-session, IP-geolocated value (same auto-detect pattern as MC/PC's own COM markets), NOT a fixed brand-wide default; a live homepage crawl also showed some static promotional copy still in "€", a real per-context inconsistency similar to other brands' currency quirks, not something this field targets
+      contactEmail: 'support@simbagames.com', // confirmed live 2026-08-05: real mailto link on /contact/ — same address as UK/CA/DK/SE
+      paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-05: /payment-methods/ returns 200 — the common default, no override needed
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-05: zero facebook/twitter/instagram links found in the footer, same as every other SG market
+      hasSocialMedia: false,
+      searchTerm: 'Book of Dead', searchResultHrefSubstrings: ['/slots/', '/cards-and-tables/', '/live-dealer/', '/roulette/', '/video-pocker/'], // carried over from UK/CA's confirmed "Book of Dead" finding on the same underlying catalog and identical taxonomy — not independently re-confirmed this session, verify on first real run
+      gameTileHrefSubstrings: ['/slots/', '/cards-and-tables/', '/live-dealer/', '/roulette/', '/video-pocker/'], // confirmed live 2026-08-05 via nav#top-nav DOM dump — byte-identical taxonomy to UK/CA
+      hasGameFilterCarousel: false, // confirmed live 2026-08-05: 0 [class*="GamesSlider_wrapper"] elements found on the homepage
+      hasFeedbackForm: false, // NOT independently re-confirmed this session (contact page not directly probed for a feedback link) — carried over from UK/CA/DK/SE's confirmed finding, verify on first real run
+      hasGameCategoryNav: true, // confirmed live 2026-08-05: same 7-link sidebar taxonomy as UK/CA — reuses isSgUkFormat (already GEO-guarded to exclude only DK/SE) in game-category-navigation.spec.ts, not a new dedicated branch
+      hasSidebarMenu: true, // confirmed live 2026-08-05: real off-canvas sidebar (nav#top-nav, hamburger trigger id="menu-X"), same architecture as UK/CA
+      hasLoginRegistration: true, // confirmed live 2026-08-05: real LOGIN/Register buttons in header, genuinely functional — registration is exercised via isSgComFormat (South Africa mobile format), only the actual login test itself is skipped (see hasTestAccount)
+      hasTestAccount: false, // no COM test account provided this session (per explicit instruction) — login.spec.ts self-skips on this flag alone, independent of hasLoginRegistration
+      hasAccountModal: true, // confirmed live 2026-08-05: clicking Register advances the URL to /#account with a real, fillable mobile/DOB/password form (no personnummer/CPR-style field, unlike DK/SE)
+      hasPaymentMethodsPage: true, // confirmed live 2026-08-05: /payment-methods/ returns 200
+      hasBlogDesktopSearch: false, // no blog exists at all for this GEO (see hasBlog) — set false for consistency
+      hasBlogSearch: false, // no blog exists at all for this GEO — set false for consistency
+      hasFunctionalBlogLogin: false, // no blog exists at all for this GEO — set false for consistency (field is moot but kept aligned with UK/CA's shape)
     },
   },
 
