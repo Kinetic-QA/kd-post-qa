@@ -4,8 +4,11 @@ dist/
 
 ### Playwright generated output ###
 test-results/
+test-results-*/
 playwright-report/
+playwright-report-*/
 .playwright/
+Test Reports/
 
 ### Test report files ###
 *.xlsx

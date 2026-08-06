@@ -9,6 +9,17 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-06
+
+### Changed
+
+- **Test reports now save into a tidy, dated folder per brand and country** — everything from a test run (the Excel report, the visual report, screenshots, error videos) now lands in `Test Reports/<Brand>/<Country>/<Date>/` instead of one shared folder that got wiped clean every time a new test started. This means a report from one country/brand no longer gets accidentally deleted the moment testing starts on a different one.
+- **The visual test report now opens itself reliably after a run finishes.** Previously it would sometimes claim to be ready but the page wouldn't actually load when clicked. It now opens the finished report file directly, which works every time regardless of which terminal or tool the test was run from.
+
+### Fixed
+
+- **Confirmed Slingo (SC) UK's sign-up check still passes cleanly on desktop** after the report-folder changes above — no regressions.
+
 ## [Unreleased] - 2026-08-05 (session 3)
 
 ### Fixed
