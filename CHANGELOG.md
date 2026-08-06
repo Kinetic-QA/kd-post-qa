@@ -19,6 +19,9 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - **Confirmed Slingo (SC) UK's sign-up check still passes cleanly on desktop** after the report-folder changes above — no regressions.
+- **Fixed a real bug on Ice36 (I36) international (.com), mobile only: tapping the bottom "PLAY" button did nothing.** On a real phone, tapping this button opens the sign-in/sign-up screen right away. Our automated check was clicking it the way a computer mouse would, which the button's real code doesn't respond to — it only listens for an actual finger-tap-style touch. Switched the check to send a real touch tap instead of a mouse click, and it now opens the sign-in screen every time, just like it does for a real player.
+- **Fixed pages sometimes being marked as broken when they were just loading slowly.** A few checks across the whole test suite (not just one brand) were only waiting 15 seconds for a page to finish loading before giving up and calling it a failure. On a slower connection, that wasn't always enough time, even though the page loaded fine a few seconds later. Doubled that wait to 30 seconds so a normal slow page load doesn't get mistaken for a broken one.
+- Re-ran Ice36 (I36) international (.com), Ireland, Canada, and Spain (all desktop + mobile together) after the above fixes: all four markets came back clean with zero real site issues found. A handful of checks needed a second try before passing on Ireland and Canada (one-off slow field loading during sign-up, recovered automatically), which is expected and not a sign of anything broken.
 
 ## [Unreleased] - 2026-08-05 (session 3)
 
