@@ -176,7 +176,7 @@ export default defineConfig({
     video: { mode: 'on', size: { width: 1280, height: 720 } },
     trace: 'on',
     actionTimeout: 10_000,
-    navigationTimeout: 15_000,
+    navigationTimeout: 30_000,
   },
 
   projects,

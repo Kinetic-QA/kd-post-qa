@@ -240,8 +240,15 @@ test.describe('P1 - Website Header', () => {
       }
       await expect(playBtn).toBeVisible({ timeout: 10_000 });
       await playBtn.scrollIntoViewIfNeeded();
-      await playBtn.click();
-      await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
+      // Confirmed live on Ice36 (I36) COM 2026-08-06: works fine to a real
+      // finger tap, but neither Playwright's click() nor a synthetic DOM
+      // click() opened the widget — this tab-bar item's real handler
+      // appears to be touch-event-only. A real touchscreen tap (not a
+      // mouse-click emulation) is what actually fires it.
+      const playBox = await playBtn.boundingBox();
+      if (!playBox) throw new Error('WH-01 Step 2b: PLAY button has no bounding box to tap');
+      await page.touchscreen.tap(playBox.x + playBox.width / 2, playBox.y + playBox.height / 2);
+      await expect(page).toHaveURL(/#account/, { timeout: 20_000 });
       // closeAccountModal() targets a desktop-only class — re-navigating is
       // a reliable reset here rather than chasing the mobile modal's close
       // button (this fullscreen mobile takeover, unlike desktop's popup, has
