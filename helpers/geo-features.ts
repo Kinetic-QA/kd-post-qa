@@ -2290,6 +2290,43 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: false, // confirmed live: clicking the blog search icon does not reveal a working search input — consistent with the same platform-wide non-functional blog search already confirmed on SNG UK/CA and MC UK
       searchRequiresSidebarOpen: true, // confirmed live: the page's only a[href="#search"] element is the sidebar's "Search game" item, sitting off-canvas (left: -418px) until the hamburger is opened — no separate header search icon exists at all, unlike every other brand onboarded so far
     },
+    // COM — onboarding started 2026-08-05, tested from a real South Africa
+    // VPN. Same underlying platform as UK, but a genuinely different,
+    // NO-bingo taxonomy (Casino Games/Online Slots/Slingo/Instant Win Games/
+    // Jackpots only — confirmed live via curl: /bingo-rooms/, /crash-games/,
+    // /keno/, /bingo/ all 404 here, unlike UK's bingo-first set) — this
+    // international site apparently isn't licensed for real-money Bingo the
+    // way the UK site is. No test account exists yet for this market
+    // (confirmed with user 2026-08-05) — hasTestAccount: false, only
+    // login.spec.ts's real successful-login test skips.
+    COM: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live via curl: /blog/ 404s, unlike UK
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via curl: 200
+      featuresPath: null, // confirmed live via curl: /features/ 404s, same as UK
+      mobileAppPath: 'mobile-app/', // confirmed live via curl: 200 (unlike UK's 404) — real page exists here
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live via curl: 404, no such link anywhere
+      currencySymbol: '€', // confirmed via SON_CONFIG currency:"EUR" — genuinely different from UK's £
+      contactEmail: 'support@zingobingo.com', // confirmed live via curl: this GEO's own SON_CONFIG support_email, NOT UK's support@zingobingo.co.uk
+      aboutUsPath: 'about/', // confirmed live via curl: 200, same as UK
+      helpPath: 'faqs/', // confirmed live via curl: 200, same as UK ('help/' 404s)
+      casinoPath: 'casino-games/', // confirmed live via curl: 200, same as UK ('casino/' 404s)
+      slotsPath: 'online-slots/', // confirmed live via curl: 200, same as UK
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live via curl: zero facebook/twitter/instagram links found homepage-wide (unlike UK's 3 real social links)
+      hasSocialMedia: false,
+      searchTerm: 'Slots', searchResultHrefSubstrings: ['/online-slots/', '/casino-games/', '/slingo/'], // NOT independently confirmed via a completed in-app search this session — this market has no Bingo Rooms category, so UK's 'Bingo' term is skipped in favor of a category this GEO actually has; verify on first real run and correct if GS-01 fails
+      gameTileHrefSubstrings: ['/online-slots/', '/casino-games/', '/slingo/', '/instant-win-games/', '/jackpots/'], // confirmed live via curl: no /bingo-rooms/ or /crash-games/ or /keno/ here, unlike UK — a genuinely narrower taxonomy for this market
+      hasGameFilterCarousel: false, // carried over from UK's confirmed same-platform component-naming gap (MainBannerSlider_slider/Slider_slider, not GamesSlider_wrapper) — verify on first real run
+      hasFeedbackForm: true, // carried over from UK's confirmed widget behavior on the same platform — verify on first real failed-login attempt
+      hasGameCategoryNav: true, // confirmed live via curl: real Casino Games/Online Slots/Slingo/Instant Win Games/Jackpots nav links found
+      hasLoginRegistration: true, // confirmed live via curl: real login/registration markup present
+      hasTestAccount: false, // no real test account for this market yet (confirmed with user 2026-08-05) — login.spec.ts's real successful-login test should skip cleanly
+      hasAccountModal: true, // carried over from UK's confirmed precedent on the same platform family — verify on first real run
+      hasPaymentMethodsPage: true, // confirmed live via curl: /payment-methods/ 200, same default path as UK, no override needed
+      hasBlogDesktopSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasBlogSearch: false, // moot — hasBlog is false for this market, no blog to search
+      searchRequiresSidebarOpen: true, // carried over from UK's confirmed same-platform behavior (no separate header search icon, only the sidebar's off-canvas "Search game" item) — verify on first real run
+    },
   },
 
   // ── Ice36 (I36) ────────────────────────────────────────────────────────────
@@ -2332,6 +2369,174 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasBlogSearch: true, // unconfirmed — same as above
       hasRegulationLogos: false, // confirmed live via curl: zero <son-license-logos> occurrences anywhere in the homepage HTML
       slotsPath: 'slots-jackpots/', // confirmed live via curl: footer/nav "Slots" link is /slots-jackpots/, NOT the default 'slots/'
+    },
+    // COM — onboarding started 2026-08-05 against www.ice36.com. Same
+    // auto-detect-from-real-IP pattern already confirmed on MC/COM and
+    // PC/COM: this session tested from a real South Africa VPN, so the
+    // registration mobile/address format needs to match South Africa
+    // (generateSouthAfricanMobile, same generator used by SNG's ROW format
+    // when last onboarded from South Africa) rather than a fixed GEO — swap
+    // to whatever VPN is actually in use for a future session, don't assume
+    // South Africa carries forward. No test account exists yet for this
+    // market (user confirmed 2026-08-05) — hasTestAccount: false, only
+    // login.spec.ts's real successful-login test skips; the widget itself
+    // is still inspected.
+    COM: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live via curl: /blog/ 404s on COM, unlike UK
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via curl: 200
+      featuresPath: null, // confirmed live via curl: /features/ 404s, same as UK
+      mobileAppPath: 'mobile-app/', // confirmed live via curl: 404s, same as UK
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live via curl: 404, no Bingo vertical, same as UK
+      currencySymbol: '$', // real IP auto-detect (South Africa VPN this session) — not independently confirmed via a rendered price yet, correct on first real run if wrong
+      contactEmail: 'support@ice36.com', // confirmed live via curl: same SON_CONFIG support_email as UK
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live via curl: zero facebook/twitter/instagram links found homepage-wide, same as UK
+      hasSocialMedia: false,
+      searchTerm: 'Slots', searchResultHrefSubstrings: ['/slots-jackpots/'], // carried over from UK, NOT independently confirmed via a completed in-app search this session — verify on first real run
+      gameTileHrefSubstrings: ['/slots-jackpots/', '/casino/', '/live-casino/'], // confirmed live via curl: same taxonomy as UK (/slots-jackpots/, /casino/, /live-casino/ all 200)
+      hasGameFilterCarousel: true, // confirmed live via curl: 3 [class*="GamesSlider_wrapper"] elements found on homepage
+      hasFeedbackForm: false, // carried over from UK's confirmed widget behavior on the same platform — verify on first real failed-login attempt
+      hasContactPageFeedbackLink: true, // carried over from UK — verify on first real run
+      hasGameCategoryNav: true, // confirmed live via curl: same category paths resolve as UK
+      hasLoginRegistration: true, // confirmed live via curl: real Login/Join markup present
+      hasTestAccount: false, // no real test account for this market yet (confirmed with user 2026-08-05) — login.spec.ts's real successful-login test should skip cleanly
+      hasAccountModal: true, // carried over from UK/MC precedent on the same platform family — verify on first real run
+      hasPaymentMethodsPage: true, paymentMethodsPath: 'payment-options/', // confirmed live via curl: /payment-options/ 200, /payment-methods/ 404s, same as UK
+      hasBlogDesktopSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasBlogSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasRegulationLogos: false, // confirmed live via curl: zero <son-license-logos> occurrences
+      slotsPath: 'slots-jackpots/', // confirmed live via curl: same as UK, NOT the default 'slots/'
+    },
+    // IE — onboarding started 2026-08-05, tested from a real Ireland VPN.
+    // Real test account provided this session
+    // (TEST_CREDENTIALS_I36_IE_USERNAME/PASSWORD) — hasTestAccount: true,
+    // not yet independently confirmed via a completed real login this
+    // session; correct via real failures if wrong.
+    IE: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live via curl: /blog/ 404s on IE, same as COM (unlike UK)
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via curl: 200
+      featuresPath: null, // confirmed live via curl: /features/ 404s, same as UK/COM
+      mobileAppPath: 'mobile-app/', // confirmed live via curl: 404s, same as UK/COM
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live via curl: 404, no Bingo vertical, same as UK/COM
+      currencySymbol: '€', // real Irish market — not independently confirmed via a rendered price yet, correct on first real run if wrong
+      contactEmail: 'support@ice36.com', // confirmed live via curl: same SON_CONFIG support_email as UK/COM
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live via curl: zero facebook/twitter/instagram links found homepage-wide, same as UK/COM
+      hasSocialMedia: false,
+      searchTerm: 'Slots', searchResultHrefSubstrings: ['/slots-jackpots/'], // carried over from UK/COM, NOT independently confirmed via a completed in-app search this session — verify on first real run
+      gameTileHrefSubstrings: ['/slots-jackpots/', '/casino/', '/live-casino/'], // confirmed live via curl: same taxonomy as UK/COM (/slots-jackpots/, /casino/, /live-casino/ all 200)
+      hasGameFilterCarousel: true, // confirmed live via curl: 3 [class*="GamesSlider_wrapper"] elements found on homepage
+      hasFeedbackForm: false, // carried over from UK/COM's confirmed widget behavior on the same platform — verify on first real failed-login attempt
+      hasContactPageFeedbackLink: true, // carried over from UK/COM — verify on first real run
+      hasGameCategoryNav: true, // confirmed live via curl: same category paths resolve as UK/COM
+      hasLoginRegistration: true, // confirmed live via curl: real Login/Join markup present
+      hasTestAccount: true, // real test account provided this session (jck@test.com) — not yet independently confirmed via a completed real login
+      hasAccountModal: true, // carried over from UK/COM/MC precedent on the same platform family — verify on first real run
+      hasPaymentMethodsPage: true, paymentMethodsPath: 'payment-options/', // confirmed live via curl: /payment-options/ 200, /payment-methods/ 404s, same as UK/COM
+      hasBlogDesktopSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasBlogSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasRegulationLogos: false, // confirmed live via curl: zero <son-license-logos> occurrences
+      slotsPath: 'slots-jackpots/', // confirmed live via curl: same as UK/COM, NOT the default 'slots/'
+    },
+    // CA — onboarding started 2026-08-05, tested from a real Canada VPN.
+    // Real test account provided this session
+    // (TEST_CREDENTIALS_I36_CA_USERNAME/PASSWORD) — hasTestAccount: true,
+    // not yet independently confirmed via a completed real login this
+    // session; correct via real failures if wrong.
+    CA: {
+      locale: 'en', uiLocalized: false,
+      hasBlog: false, blogPath: null, // confirmed live via curl: /blog/ 404s on CA, same as COM/IE (unlike UK)
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via curl: 200
+      featuresPath: null, // confirmed live via curl: /features/ 404s, same as UK/COM/IE
+      mobileAppPath: 'mobile-app/', // confirmed live via curl: 404s, same as UK/COM/IE
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live via curl: 404, no Bingo vertical, same as UK/COM/IE
+      currencySymbol: '$', // real Canadian market — not independently confirmed via a rendered price yet, correct on first real run if wrong
+      contactEmail: 'support@ice36.com', // confirmed live via curl: same SON_CONFIG support_email as UK/COM/IE
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live via curl: zero facebook/twitter/instagram links found homepage-wide, same as UK/COM/IE
+      hasSocialMedia: false,
+      searchTerm: 'Slots', searchResultHrefSubstrings: ['/slots-jackpots/'], // carried over from UK/COM/IE, NOT independently confirmed via a completed in-app search this session — verify on first real run
+      gameTileHrefSubstrings: ['/slots-jackpots/', '/casino/', '/live-casino/'], // confirmed live via curl: same taxonomy as UK/COM/IE (/slots-jackpots/, /casino/, /live-casino/ all 200)
+      hasGameFilterCarousel: true, // confirmed live via curl: 3 [class*="GamesSlider_wrapper"] elements found on homepage
+      hasFeedbackForm: false, // carried over from UK/COM/IE's confirmed widget behavior on the same platform — verify on first real failed-login attempt
+      hasContactPageFeedbackLink: true, // carried over from UK/COM/IE — verify on first real run
+      hasGameCategoryNav: true, // confirmed live via curl: same category paths resolve as UK/COM/IE
+      hasLoginRegistration: true, // confirmed live via curl: real Login/Join markup present
+      hasTestAccount: true, // real test account provided this session (smt@test.com) — not yet independently confirmed via a completed real login
+      hasAccountModal: true, // carried over from UK/COM/IE/MC precedent on the same platform family — verify on first real run
+      hasPaymentMethodsPage: true, paymentMethodsPath: 'payment-options/', // confirmed live via curl: /payment-options/ 200, /payment-methods/ 404s, same as UK/COM/IE
+      hasBlogDesktopSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasBlogSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasRegulationLogos: false, // confirmed live via curl: zero <son-license-logos> occurrences
+      slotsPath: 'slots-jackpots/', // confirmed live via curl: same as UK/COM/IE, NOT the default 'slots/'
+    },
+    // ES — onboarding started 2026-08-05, tested from a real Spain VPN. A
+    // genuinely Spanish-language site (<html lang="es">, localized support
+    // email) but, unlike MC ES, most URL slugs stayed in English
+    // (about-us/, contact/, help/, responsible-gaming/, payment-options/ —
+    // no translated Spanish equivalents found via curl) — only the game
+    // category taxonomy is genuinely different from every other I36 market
+    // (tragaperras/ruleta/ruleta-en-vivo/blackjack/megaways/slingo/
+    // video-bingo, NOT slots-jackpots/casino/live-casino). Real test
+    // account provided this session
+    // (TEST_CREDENTIALS_I36_ES_USERNAME/PASSWORD, DOB 01-01-1990) —
+    // hasTestAccount: true, not yet independently confirmed via a
+    // completed real login this session; correct via real failures if
+    // wrong.
+    ES: {
+      locale: 'es', uiLocalized: true, // confirmed live: <html lang="es">, real Spanish nav copy expected via registration.spec.ts's generic isSpanishFormat flow
+      hasBlog: false, blogPath: null, // confirmed live via curl: /blog/ 404s, same as every other I36 market except UK
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via curl: 200 — real nav link, NOT translated (unlike MC ES's 'promociones/')
+      featuresPath: null, // confirmed live via curl: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live via curl: 404s
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live via curl: 404, no such link anywhere
+      currencySymbol: '€', // real Spanish market
+      contactEmail: 'soporte@ice36.es', // confirmed live via curl: this GEO's own localized SON_CONFIG support_email, NOT the shared support@ice36.com used by UK/COM/IE/CA
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live via curl: zero facebook/twitter/instagram links found homepage-wide
+      hasSocialMedia: false,
+      searchTerm: 'Bonanza', searchResultHrefSubstrings: ['/tragaperras/'], // real confirmed game slug (tragaperras/bonanza/) — a category-name term was deliberately avoided, same reasoning as MC ES's searchTerm note (search indexes game titles, not category names)
+      gameTileHrefSubstrings: ['/tragaperras/', '/casino/', '/ruleta-en-vivo/', '/blackjack/', '/megaways/', '/slingo/', '/video-bingo/'], // confirmed live via curl: genuinely different taxonomy from every other I36 market — slots-jackpots/live-casino BOTH 404 here
+      hasGameFilterCarousel: true, // confirmed live via curl: 3 [class*="GamesSlider_wrapper"] elements found on homepage
+      hasFeedbackForm: false, // carried over from UK/COM/IE/CA's confirmed widget behavior on the same platform — verify on first real failed-login attempt
+      hasContactPageFeedbackLink: true, // carried over from UK/COM/IE/CA — verify on first real run
+      hasGameCategoryNav: true, // confirmed live via curl: real Tragaperras/Casino/Ruleta/Ruleta en Vivo/Blackjack/Megaways/Slingo/Video Bingo nav links found
+      hasLoginRegistration: true, // confirmed live via curl: real login/registration markup present
+      hasTestAccount: true, // real test account provided this session (jnta@test.com) — not yet independently confirmed via a completed real login
+      hasAccountModal: true, // carried over from UK/COM/IE/CA/MC precedent on the same platform family — verify on first real run
+      hasPaymentMethodsPage: true, paymentMethodsPath: 'payment-options/', // confirmed live via curl: /payment-options/ 200, /payment-methods/ 404s — NOT translated (unlike MC ES's 'metodos-de-pago/')
+      hasBlogDesktopSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasBlogSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasRegulationLogos: false, // confirmed live via curl: zero <son-license-logos> occurrences
+      slotsPath: 'tragaperras/', // confirmed live via curl: genuinely different from every other I36 market's slots-jackpots/, NOT the default 'slots/' either
+    },
+    // DK — onboarding started 2026-08-05, tested from a real Denmark VPN. No
+    // test account exists yet for this market (confirmed with user
+    // 2026-08-05) — hasTestAccount: false, only login.spec.ts's real
+    // successful-login test skips.
+    DK: {
+      locale: 'da', uiLocalized: true, // confirmed live: <html lang="da">, real Danish nav/footer copy expected
+      hasBlog: false, blogPath: null, // confirmed live via curl: /blog/ 404s, same as every other I36 market except UK
+      hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live via curl: 200, not translated
+      featuresPath: null, // confirmed live via curl: /features/ 404s
+      mobileAppPath: 'mobile-app/', // confirmed live via curl: 404s
+      bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live via curl: 404, no such link anywhere
+      currencySymbol: 'kr', // real Danish market — not independently confirmed via a rendered price yet, correct on first real run if wrong
+      contactEmail: 'support@ice36.com', // confirmed live via curl: same shared SON_CONFIG support_email as UK/COM/IE/CA (not localized like ES's soporte@ice36.es)
+      socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live via curl: zero facebook/twitter/instagram links found homepage-wide
+      hasSocialMedia: false,
+      searchTerm: 'Slots', searchResultHrefSubstrings: ['/spillemaskiner/'], // NOT independently confirmed via a completed in-app search this session — verify on first real run and correct if GS-01 fails
+      gameTileHrefSubstrings: ['/spillemaskiner/', '/casino/', '/live-casino/', '/blackjack/', '/roulette/', '/megaways/', '/jackpots/'], // confirmed live via curl: genuinely different, fully-localized taxonomy from UK/COM/IE/CA (slots-jackpots/ 404s here) — richer than ES's set too (live-roulette/live-blackjack/live-baccarat/video-poker/nye also found but not modeled here)
+      hasGameFilterCarousel: true, // confirmed live via curl: 3 [class*="GamesSlider_wrapper"] elements found on homepage
+      hasFeedbackForm: false, // carried over from every other I36 market's confirmed widget behavior on the same platform — verify on first real failed-login attempt
+      hasContactPageFeedbackLink: false, // confirmed live 2026-08-05: unlike UK/COM/IE/CA/ES, no "Rapporter et problem" link exists on /contact/ for this market — genuine per-GEO difference, not a selector bug
+      hasGameCategoryNav: true, // confirmed live via curl: real Spillemaskiner/Casino/Live Casino/Blackjack/Roulette/Megaways/Jackpots nav links found
+      hasLoginRegistration: true, // confirmed live via curl: real login/registration markup present
+      hasTestAccount: false, // no real test account for this market yet (confirmed with user 2026-08-05) — login.spec.ts's real successful-login test should skip cleanly
+      hasAccountModal: true, // carried over from every other I36 market/MC precedent on the same platform family — verify on first real run
+      hasPaymentMethodsPage: true, paymentMethodsPath: 'payment-options/', // confirmed live via curl: /payment-options/ 200, /payment-methods/ 404s, same as UK/COM/IE/CA/ES
+      hasBlogDesktopSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasBlogSearch: false, // moot — hasBlog is false for this market, no blog to search
+      hasRegulationLogos: false, // confirmed live via curl: zero <son-license-logos> occurrences
+      slotsPath: 'spillemaskiner/', // confirmed live via curl: Danish word for "slot machines" — genuinely different from every other I36 market, NOT the default 'slots/' either
     },
   },
 };

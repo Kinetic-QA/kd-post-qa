@@ -201,16 +201,23 @@ export function generateCanadianAddress(): UKAddress {
 }
 
 /**
- * MC FR-CA's registration address field performs REAL geocoding validation
- * (confirmed live 2026-07-23) — unlike SNG/MC's other Canadian markets,
- * which accept any of CA_ADDRESSES's three entries as free text. Random
- * selection here is unsafe: "Bank Street" (Ottawa) reliably resolves to a
- * single confident match and turns the field's status icon green, while
- * "Queen Street West" and "King Street West" are genuinely ambiguous
- * (both names are shared by multiple Canadian cities) and consistently
- * leave the field stuck on a persistent "Adresse invalide" error that
- * blocks registration from completing. Always return the one confirmed-
- * working address rather than picking randomly from CA_ADDRESSES.
+ * MC FR-CA's registration address field performs REAL geocoding validation.
+ * The 2026-07-23 docstring here previously claimed "Bank Street" (Ottawa)
+ * "reliably resolves to a single confident match" while "Queen Street West"/
+ * "King Street West" are genuinely ambiguous — RE-TESTED LIVE 2026-08-05
+ * from a real Canada VPN and that claim no longer holds (or never did):
+ * "Bank Street" now fails identically to the other two, AND a completely
+ * different, unambiguous, real full address ("150 Elgin Street, Ottawa, ON")
+ * fails the exact same way — empty field, red icon, persistent "Adresse
+ * invalide", with Postcode/Ville/Country/Province all still auto-filling
+ * and validating fine regardless. This rules out "which address text" as
+ * the variable entirely — every real address tried fails identically, which
+ * points to the autocomplete's backend/API call itself never succeeding for
+ * an automated session (see the KNOWN OPEN ISSUE comment on MC/FR-CA's
+ * fillComAddress call in registration.spec.ts), not an address-content
+ * problem. Kept as "Bank Street" (a real, valid address) rather than
+ * switched to something fake, since a real address is still the correct
+ * thing to submit even though none of them currently get past this step.
  */
 export function generateMcFrCaAddress(): UKAddress {
   return CA_ADDRESSES[1];
@@ -460,13 +467,19 @@ export function generateNie(): string {
 export function generateEsRegistrationData(): EsRegistrationData {
   const timestamp = Date.now();
   const firstName = randomFrom(ES_FIRST_NAMES);
+  // ES_FIRST_NAMES includes accented names (e.g. "Lucía") — a real name field
+  // accepts these fine, but I36 ES's email validation rejects a non-ASCII
+  // local part outright ("Comprueba que has introducido una dirección de
+  // correo electrónico válida", confirmed live 2026-08-05 on "test_lucía_...").
+  // Strip diacritics for the email only; the name fields keep the real accent.
+  const emailSafeFirstName = firstName.normalize('NFD').replace(/[̀-ͯ]/g, '');
   return {
     nie: generateNie(),
     firstName,
     lastName: randomFrom(ES_LAST_NAMES),
     dob: generateDOBWithSeparator('-'),
     gender: randomFrom(['Masculino', 'Femenino', 'Otro'] as const),
-    email: `test_${firstName.toLowerCase()}_${timestamp}@mailinator.com`,
+    email: `test_${emailSafeFirstName.toLowerCase()}_${timestamp}@mailinator.com`,
     mobile: generateSpanishMobile(),
     username: `TestES_${timestamp}`,
     password: '5Tandard@1',
