@@ -22,6 +22,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Fixed the combined multi-country report losing earlier countries' results.** When running one country, switching VPN, then running the next (e.g. UK then Ireland), the tool that combines them into one final report was silently throwing away the first country's data as soon as the second one started — so the "combined" report only ever showed the last country tested. It now keeps each country's results safely separate as they come in, so nothing gets lost when switching countries.
 - **Fixed the combined report command failing outright on Windows** with a "too many arguments" error, caused by a folder name containing a space that Windows' terminal was splitting into two separate values.
 - **Fixed a rare case where re-running the combined report tool could quietly mix in old, incomplete results from an earlier interrupted run** (e.g. a country's site being down mid-test) without any warning, making the final report look complete when it wasn't. The tool now keeps its own working files completely separate from the finished report, so old leftovers can no longer sneak back in.
+- Re-ran Ice36 (I36) Denmark (desktop + mobile together) as the last remaining market from the recheck a teammate asked for: came back fully clean, zero real site issues found, with no checks needing a retry. This closes out the recheck across all five markets looked at this week (international .com, Ireland, Canada, Spain, and now Denmark).
 
 ## [Unreleased] - 2026-08-06
 
