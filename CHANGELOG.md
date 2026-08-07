@@ -9,6 +9,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-07
+
+### Fixed
+
+- Re-ran Ice36 (I36) Denmark (desktop + mobile together) as the last remaining market from the recheck a teammate asked for: came back fully clean, zero real site issues found, with no checks needing a retry. This closes out the recheck across all five markets looked at this week (international .com, Ireland, Canada, Spain, and now Denmark).
+
 ## [Unreleased] - 2026-08-06
 
 ### Changed
