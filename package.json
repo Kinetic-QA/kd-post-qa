@@ -13,6 +13,7 @@
     "test:ui": "playwright test --ui",
     "report": "playwright show-report",
     "report:excel": "python generate-report.py",
+    "merge-reports": "node merge-reports.cjs",
     "agent": "ts-node src/agent.ts",
     "check-transitions": "ts-node src/check-transitions.ts"
   },
