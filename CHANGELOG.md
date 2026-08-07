@@ -9,6 +9,20 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-07
+
+### Added
+
+- **The test run will now stop itself immediately if a whole country's site is down**, instead of running the full 30+ minute checklist and having every single check fail one by one for the same reason. Before any checks start, it now visits that country's homepage once; if the site shows its "something went wrong" error and it doesn't clear up after a short wait and a page refresh, the run stops right away with a clear message telling you which country's site is unreachable. This does not change how a single, isolated broken feature is handled mid-run — those are still recorded and the run keeps going, this only catches a fully-down site before wasting time on it.
+- **Added step-by-step terminal commands for running tests**, written for both a Mac/Linux-style terminal and Windows PowerShell (see `docs/playwright-run-commands.md`), covering single country runs, combined desktop+mobile runs, and multi-country VPN-switch runs.
+- **Added a plain-English FAQ page** (`docs/FAQ-test-reports.md`) answering common questions about how the test reports and results work.
+
+### Fixed
+
+- **Fixed the combined multi-country report losing earlier countries' results.** When running one country, switching VPN, then running the next (e.g. UK then Ireland), the tool that combines them into one final report was silently throwing away the first country's data as soon as the second one started — so the "combined" report only ever showed the last country tested. It now keeps each country's results safely separate as they come in, so nothing gets lost when switching countries.
+- **Fixed the combined report command failing outright on Windows** with a "too many arguments" error, caused by a folder name containing a space that Windows' terminal was splitting into two separate values.
+- **Fixed a rare case where re-running the combined report tool could quietly mix in old, incomplete results from an earlier interrupted run** (e.g. a country's site being down mid-test) without any warning, making the final report look complete when it wasn't. The tool now keeps its own working files completely separate from the finished report, so old leftovers can no longer sneak back in.
+
 ## [Unreleased] - 2026-08-06
 
 ### Changed

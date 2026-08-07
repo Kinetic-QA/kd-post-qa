@@ -97,6 +97,26 @@ const outputDir = `${reportRoot}/test-results`;
 const reportKey = `${TEST_BRAND}-${geosToRun.join('-')}-${dateStr}`;
 const reportPort = portForKey(reportKey);
 
+// Blob reports feed Playwright's own `merge-reports` command (see
+// merge-reports.cjs) so a VPN-switch run — one `npx playwright test`
+// invocation per GEO, since only one GEO's VPN/IP can be active at a time —
+// can still produce a single Playwright-native HTML report with one real
+// combined duration across every GEO, instead of each invocation only ever
+// showing its own GEO's duration.
+//
+// BUG FIXED 2026-08-07: this used to point every invocation at the SAME
+// shared `_blob-reports/<date>/` folder. Playwright's blob reporter clears
+// its entire output folder at the start of every run (same wipe behaviour
+// as outputDir/test-results) — confirmed live when a UK run followed by an
+// ES run left only ES's zip behind, silently destroying UK's blob before
+// merge-reports.cjs ever got to read it back. Each invocation now gets its
+// own subfolder keyed by its own GEO(s), so starting the next GEO's run
+// only wipes that GEO's (empty, first-time) subfolder and can never touch
+// a previous GEO's already-written zip. merge-reports.cjs was updated to
+// search recursively for zips under the date folder to match.
+const blobDir = `Test Reports/${TEST_BRAND}/_blob-reports/${dateStr}/${geosToRun.join('-')}${TEST_MOBILE ? '-mobile' : ''}`;
+const blobFileName = `${geosToRun.join('-')}${TEST_MOBILE ? '-mobile' : ''}.zip`;
+
 // Each GEO contributes a desktop project and, when TEST_MOBILE is set, its
 // own "<geo>-mobile" project immediately after it — interleaved (UK,
 // UK-mobile, ES, ES-mobile, ...) rather than all desktop projects followed
@@ -161,6 +181,9 @@ export default defineConfig({
     ['json', { outputFile: `${outputDir}/results.json` }],
     ['list'],
     ['./excel-reporter.cjs'],
+    // Additive alongside the reporters above — see blobDir/blobFileName
+    // comment. Consumed by `npm run merge-reports`, not opened directly.
+    ['blob', { outputDir: blobDir, fileName: blobFileName }],
   ],
 
   use: {
