@@ -9,6 +9,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-12
+
+### Notes
+
+- **Reconfirming for the team: Ice36's "Game Info Modal" and "Login Widget" checks are still showing as in-progress on the tracker for a real reason, not a testing gap.** Clicking into a game sometimes shows the site's own generic "Something went wrong" screen instead of the real game details — this happens on every Ice36 market (UK, COM, IE, CA, ES, DK), and it's been reproduced repeatedly on its own, isolated re-runs, so it isn't random flakiness. Separately, the sign-in pop-up (and the search pop-up, which uses the same widget) sometimes doesn't open on the first click — again confirmed on repeated tries, seen on COM/IE/CA/ES/DK as the "Login Widget" check, and on UK specifically as the plain "Login" check (same underlying bug, just caught by a different check on that market). Both issues have already been flagged to the brand owner as platform-wide, but neither has been fixed on the site yet — that's why they're still marked in-progress rather than passing. A teammate is re-running Ice36 to confirm current status; this note is here so anyone pulling the repo has the full context on why those two items aren't green yet.
+
 ## [Unreleased] - 2026-08-07
 
 ### Added
