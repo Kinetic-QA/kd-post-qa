@@ -1,7 +1,7 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
 import type { Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle, resolveMobileAccountButton } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, generateSouthAfricanMobile, RegistrationData, EsRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, generateSouthAfricanMobile, getAutoDetectedMobileGenerator, RegistrationData, EsRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -612,18 +612,23 @@ test.describe('Registration Flow', () => {
       });
     } else if (isRowFormat && isMobile) {
       // ROW mobile — same 5-step shape as UK mobile, with ROW's confirmed
-      // desktop differences carried over: mobile format matching the
-      // tester's real VPN/IP (generateCyprusMobile — confirmed live
-      // 2026-07-22 testing from Cyprus; was generateSouthAfricanMobile when
-      // last onboarded from a South Africa VPN, see that generator's
-      // comment), no house-number field on the address step
-      // (fillMobileStep2GenderEmailROW / fillMobileStep3AddressROW), country
-      // select left alone (reflects the tester's real IP rather than a fixed
-      // GEO), and only 3 consent checkboxes instead of UK's 4.
-      const data = generateROWRegistrationData();
+      // desktop differences carried over: no house-number field on the
+      // address step (fillMobileStep2GenderEmailROW / fillMobileStep3AddressROW),
+      // country select left alone (reflects the tester's real IP rather than
+      // a fixed GEO), and only 3 consent checkboxes instead of UK's 4.
+      // Mobile-number FORMAT is auto-detected from this session's real IP
+      // (see helpers/ip-detect.ts + getAutoDetectedMobileGenerator) instead
+      // of a hardcoded country, since ROW has been tested from Cyprus,
+      // South Africa, and possibly others depending on the VPN in use —
+      // a hardcoded guess here previously caused a flaky run (2026-08-11/12)
+      // when it didn't match the initial data generator's own hardcoded
+      // guess. Falls back to Cyprus (the last confirmed VPN) if detection
+      // fails for any reason.
+      const rowMobileGenerator = getAutoDetectedMobileGenerator(generateCyprusMobile, 'Cyprus');
+      const data = generateROWRegistrationData(rowMobileGenerator);
 
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        await fillStep0WithRetry(page, scope, data, generateCyprusMobile);
+        await fillStep0WithRetry(page, scope, data, rowMobileGenerator);
       });
 
       await runStep('Step 1 of 5: First/Last name → Continue', async () => {
@@ -654,19 +659,20 @@ test.describe('Registration Flow', () => {
     } else if (isRowFormat && !isMobile) {
       // ROW desktop — confirmed live: both the mobile country-code selector
       // and the address step's country select auto-detect from the
-      // tester's real IP (showed "CY"/"Cyprus (+ 357)" [selected] on this
-      // session's Cyprus VPN — was "+27"/"South Africa" when last onboarded
-      // from a South Africa VPN) rather than being fixed, so a mismatched
-      // mobile format gets rejected, and — like IE — the address step has
-      // no house-number field. Country is only verified, never forced,
-      // since "correct" depends on wherever the tester is actually
-      // connecting from, not a single fixed GEO — swap the mobile generator
-      // to match whatever VPN is in use for the session, don't assume
-      // Cyprus carries forward either.
-      const data = generateROWRegistrationData();
+      // tester's real IP rather than being fixed, so a mismatched mobile
+      // format gets rejected, and — like IE — the address step has no
+      // house-number field. Country is only verified, never forced, since
+      // "correct" depends on wherever the tester is actually connecting
+      // from, not a single fixed GEO. Mobile-number format is auto-detected
+      // from this session's real IP (see helpers/ip-detect.ts +
+      // getAutoDetectedMobileGenerator) instead of a hardcoded guess — see
+      // the mobile branch's comment above for why hardcoding this caused a
+      // real flaky run.
+      const rowMobileGenerator = getAutoDetectedMobileGenerator(generateCyprusMobile, 'Cyprus');
+      const data = generateROWRegistrationData(rowMobileGenerator);
 
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
-        await fillStep0WithRetry(page, scope, data, generateCyprusMobile);
+        await fillStep0WithRetry(page, scope, data, rowMobileGenerator);
       });
 
       await runStep('Step 1: Name + Email + Gender → Continue', async () => {

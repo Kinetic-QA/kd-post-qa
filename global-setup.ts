@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { chromium, type Browser, type FullConfig } from '@playwright/test';
 import { assertNoSiteError } from './helpers/common';
+import { detectRealCountry, writeDetectedGeo } from './helpers/ip-detect';
 
 /**
  * Pre-flight check, run once before any spec starts. Visits each unique
@@ -66,6 +67,14 @@ async function globalSetup(config: FullConfig) {
       console.log(`[Pre-flight] Checking ${url} is up...`);
       await checkSiteIsUp(browser, url);
       console.log(`[Pre-flight] ${url} OK.`);
+    }
+
+    const geo = await detectRealCountry(browser);
+    if (geo) {
+      writeDetectedGeo(geo);
+      console.log(`[Pre-flight] Detected real IP country: ${geo.countryCode} (${geo.city ?? '?'}, ${geo.region ?? '?'}) — auto-detect-from-IP registration branches will use this.`);
+    } else {
+      console.log('[Pre-flight] Could not detect real IP country (network issue reaching ipinfo.io) — auto-detect-from-IP registration branches will fall back to their hardcoded default.');
     }
   } finally {
     await browser.close();

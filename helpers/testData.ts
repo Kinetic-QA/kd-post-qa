@@ -11,6 +11,8 @@
  *   - Password          (fixed default: 5Tandard@1)
  */
 
+import { readDetectedGeo } from './ip-detect';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface UKAddress {
@@ -352,6 +354,45 @@ export function generateCyprusMobile(): string {
 }
 
 /**
+ * Maps the real IP country detected once per run by global-setup.ts (see
+ * helpers/ip-detect.ts) to the mobile generator whose format that country's
+ * auto-detected dropdown actually expects. Add a new entry here — and a new
+ * generator above — the first time a session tests one of these markets
+ * from a country not yet listed, rather than letting a stale hardcoded
+ * default silently produce the wrong shape.
+ */
+const MOBILE_GENERATOR_BY_COUNTRY_CODE: Record<string, () => string> = {
+  ZA: generateSouthAfricanMobile,
+  CY: generateCyprusMobile,
+  MT: generateMalteseMobile,
+  AE: generateUaeMobile,
+};
+
+/**
+ * Picks the mobile generator matching whatever country this session's real
+ * IP/VPN actually detected as (see helpers/ip-detect.ts), instead of a
+ * hardcoded guess left over from whichever country a market was last tested
+ * from. Falls back to `fallback` — logging a warning so the mismatch is
+ * visible in the run's console output rather than silently producing
+ * wrong-shaped numbers again — if detection failed or the detected country
+ * has no generator mapped yet.
+ */
+export function getAutoDetectedMobileGenerator(fallback: () => string, fallbackLabel: string): () => string {
+  const geo = readDetectedGeo();
+  if (!geo?.countryCode) {
+    console.warn(`[Mobile format] Real IP country wasn't detected this run — falling back to ${fallbackLabel}. If this market's dropdown auto-detects from IP, check global-setup.ts's pre-flight log for why detection failed.`);
+    return fallback;
+  }
+  const generator = MOBILE_GENERATOR_BY_COUNTRY_CODE[geo.countryCode];
+  if (!generator) {
+    console.warn(`[Mobile format] Detected real IP country "${geo.countryCode}" has no mobile generator mapped yet — falling back to ${fallbackLabel}. Add "${geo.countryCode}" to MOBILE_GENERATOR_BY_COUNTRY_CODE in helpers/testData.ts.`);
+    return fallback;
+  }
+  console.log(`[Mobile format] Detected real IP country "${geo.countryCode}" — using its matching mobile generator instead of ${fallbackLabel}.`);
+  return generator;
+}
+
+/**
  * Generates a random valid Alberta (Canada) mobile number in NANP format:
  * a real Alberta area code (403/587/780/825) + 3-digit exchange (can't
  * start 0/1) + 4-digit subscriber number, 10 digits total, no leading 1.
@@ -562,17 +603,24 @@ export function generateIERegistrationData(): RegistrationData {
 /**
  * Generates registration data for ROW — reuses UK's names/gender/DOB/address
  * pools (registration.spec.ts's ROW branch currently assumes the same form
- * shape as UK's, unconfirmed beyond the mobile-number step) with a South
- * African mobile number, since ROW's country-code selector reflects the
- * tester's real IP rather than a fixed country (see generateSouthAfricanMobile).
+ * shape as UK's, unconfirmed beyond the mobile-number step). ROW's
+ * country-code selector reflects the tester's real IP rather than a fixed
+ * country, so the mobile format has to match whatever's actually detected
+ * this session — pass the SAME generator used by fillStep0WithRetry's retry
+ * loop (via getAutoDetectedMobileGenerator), don't hardcode one here. A
+ * mismatch between this initial value and the retry loop's own generator
+ * previously caused a flaky ROW run (2026-08-11/12): the first attempt used
+ * a South-Africa-shaped number while every retry generated a Cyprus-shaped
+ * one, since only one of the two spots had been updated after ROW was last
+ * re-tested from Cyprus.
  */
-export function generateROWRegistrationData(): RegistrationData {
+export function generateROWRegistrationData(mobileGenerator: () => string = generateSouthAfricanMobile): RegistrationData {
   const firstName = randomFrom(FIRST_NAMES);
   const lastName  = randomFrom(LAST_NAMES);
   const timestamp = Date.now();
 
   return {
-    mobile:    generateSouthAfricanMobile(),
+    mobile:    mobileGenerator(),
     dob:       generateDOB(),
     firstName,
     lastName,
