@@ -79,12 +79,40 @@ class ExcelReporter {
   onTestEnd(test, result) {
     const titlePath = test.titlePath();
     const geo = test.parent?.project()?.name || 'default';
-    const file = titlePath[1] || '';
+    // BUG FIXED 2026-08-13: titlePath[1] is the PROJECT name (e.g. "UK"),
+    // not the file — titlePath is ['', projectName, filePath, ...describe
+    // titles, testTitle]. That put the GEO in the "Test File" column
+    // instead of the actual spec file. test.location.file is the reliable
+    // source instead — made relative to testDir so it reads like
+    // "p1/feedback-form.spec.ts" rather than a full absolute path.
+    const file = path.relative(path.join(__dirname, 'tests'), test.location.file).replace(/\\/g, '/');
     const testName = titlePath[titlePath.length - 1] || '';
     const errors = result.errors || [];
     const rawError = errors.length > 0 ? stripAnsi(errors[0].message || '').replace(/\n/g, ' ').substring(0, 400) : '';
     const errorMsg = rawError ? humanizeError(rawError) : '';
+    // assertNoSiteError (helpers/common.ts) pushes one of these whenever a
+    // "SOMETHING WENT WRONG" glitch appeared and cleared on its own after a
+    // reload — the test still passes, but a real visitor wouldn't get an
+    // automatic reload, so it's worth a side note to dev even on a pass.
+    const selfHealedNotes = (test.annotations || [])
+      .filter(a => a.type === 'self-healed-site-error')
+      .map(a => a.description)
+      .join(' | ');
     const key = geo + '::' + titlePath.join('>');
+    // onTestEnd fires once per attempt and each call REPLACES this key's Map
+    // entry (see the key comment below), so by the time a retry passes, the
+    // first attempt's failure would otherwise be silently overwritten — the
+    // row would just read "PASSED" with nothing showing it was flaky.
+    // Confirmed live: ES's forgot-password test failed once then passed on
+    // retry, and without this the Excel gave no indication why. Carry the
+    // first attempt's error into a note on the final (passing) row instead.
+    const previousAttempt = this._resultsByKey.get(key);
+    let flakyNote = '';
+    if (result.retry > 0 && previousAttempt && previousAttempt.status !== 'passed' && result.status === 'passed') {
+      const firstError = previousAttempt.error || previousAttempt.errorRaw || 'no error message captured';
+      flakyNote = `Flaky — failed on first attempt, passed on retry: ${firstError}`;
+    }
+    const note = [selfHealedNotes, flakyNote].filter(Boolean).join(' | ');
     this._resultsByKey.set(key, {
       geo,
       file,
@@ -94,6 +122,20 @@ class ExcelReporter {
       error: errorMsg,
       errorRaw: rawError,
       retried: result.retry > 0,
+      note,
+      // Mirrors Playwright's own report, which shows "flaky" as a distinct
+      // outcome from "passed" (test.outcome() returns it specifically for
+      // "failed once, passed on retry") — the Status column should say the
+      // same thing the native report does instead of just "PASSED".
+      outcome: test.outcome(),
+      // test.id is Playwright's own hash of file+title+project — the same
+      // id the HTML report's "Copy link" button puts in its
+      // "#?testId=<id>" deep link, so this reproduces that link without
+      // needing to open the report itself. Prefixed with the NETLIFY_BASE_URL
+      // sentinel (not a real URL) because the report isn't deployed yet at
+      // write time — deploy-reports.cjs replaces the sentinel with the real
+      // Netlify URL once the report is actually live.
+      testId: test.id,
     });
   }
 
@@ -423,7 +465,7 @@ class ExcelReporter {
     });
 
     const headerRow = summary.length + 2;
-    const headers = ['Test File', 'Test Name', 'Status', 'Duration (s)', 'What Went Wrong', 'Technical Details'];
+    const headers = ['Test File', 'Test Name', 'Status', 'Duration (s)', 'What Went Wrong', 'Technical Details', 'Side Note (Self-Healed Glitch / Flaky Retry)', 'Shareable Report Link'];
     const hr = ws.getRow(headerRow);
     headers.forEach((h, i) => {
       const cell = hr.getCell(i + 1);
@@ -436,8 +478,8 @@ class ExcelReporter {
     hr.height = 22;
     hr.commit();
 
-    const statusColors = { passed: 'FF0070C0', failed: 'FFC00000', timedOut: 'FFC00000', skipped: 'FFFFC000' };
-    const statusLabels = { passed: 'PASSED', failed: 'FAILED', timedOut: 'TIMED OUT', skipped: 'SKIPPED' };
+    const statusColors = { passed: 'FF0070C0', failed: 'FFC00000', timedOut: 'FFC00000', skipped: 'FFFFC000', flaky: 'FF9C6500' };
+    const statusLabels = { passed: 'PASSED', failed: 'FAILED', timedOut: 'TIMED OUT', skipped: 'SKIPPED', flaky: 'FLAKY' };
 
     rows.forEach((r, idx) => {
       const rowNum = headerRow + 1 + idx;
@@ -446,16 +488,40 @@ class ExcelReporter {
       const testLabel = r.retried
         ? `${r.test} (${r.status === 'passed' ? 'passed after retry' : 'failed even after retry'})`
         : r.test;
-      const vals = [r.file, testLabel, statusLabels[r.status] || r.status.toUpperCase(), r.duration_s, r.error, r.errorRaw];
+      // deploy-reports.cjs finds this by its NETLIFY_BASE_URL sentinel and
+      // swaps it for the real site URL once the report's actually deployed —
+      // see the testId comment in onTestEnd for why the path itself
+      // (<geo>/index.html#?testId=<id>) is stable ahead of that.
+      const shareLink = r.testId ? `NETLIFY_BASE_URL/${r.geo}/index.html#?testId=${r.testId}` : '';
+      // Matches Playwright's own report, which shows "flaky" as its own
+      // outcome rather than folding a failed-then-retried-passed test into
+      // plain "PASSED" — see the outcome comment in onTestEnd.
+      const displayStatus = r.outcome === 'flaky' ? 'flaky' : r.status;
+      const vals = [r.file, testLabel, statusLabels[displayStatus] || displayStatus.toUpperCase(), r.duration_s, r.error, r.errorRaw, r.note || '', shareLink];
       const border = { top: { style: 'thin', color: { argb: 'FFD0D0D0' } }, bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } }, left: { style: 'thin', color: { argb: 'FFD0D0D0' } }, right: { style: 'thin', color: { argb: 'FFD0D0D0' } } };
       vals.forEach((val, ci) => {
         const cell = dr.getCell(ci + 1);
+        if (ci === 7 && val) {
+          cell.value = { text: 'View Result', hyperlink: val };
+          cell.font = { name: 'Arial', size: 10, underline: true, color: { argb: 'FF0563C1' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: shade } };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = border;
+          return;
+        }
         cell.value = val;
         cell.border = border;
         if (ci === 2) {
           cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: statusColors[r.status] || 'FF808080' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: statusColors[displayStatus] || 'FF808080' } };
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (ci === 6 && val) {
+          // Side note stands out even on an otherwise-passed row — amber,
+          // same family as the "skipped" status color, so it reads as
+          // "worth a look" without looking like a failure.
+          cell.font = { name: 'Arial', size: 10, italic: true, color: { argb: 'FF9C6500' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+          cell.alignment = { vertical: 'middle', wrapText: true };
         } else {
           cell.font = { name: 'Arial', size: 10 };
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: shade } };
@@ -465,7 +531,7 @@ class ExcelReporter {
       dr.commit();
     });
 
-    ws.columns = [{ width: 35 }, { width: 45 }, { width: 14 }, { width: 14 }, { width: 50 }, { width: 55 }];
+    ws.columns = [{ width: 35 }, { width: 45 }, { width: 14 }, { width: 14 }, { width: 50 }, { width: 55 }, { width: 55 }, { width: 16 }];
     ws.views = [{ state: 'frozen', ySplit: headerRow, activeCell: `A${headerRow + 1}` }];
   }
 }

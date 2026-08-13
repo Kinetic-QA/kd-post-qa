@@ -6,16 +6,20 @@ import { currentGeoFeatures } from '../../helpers/geo-features';
 /**
  * BN: Banner
  * Scope: Homepage banner visibility, default-collapsed T&C, click-through
- * to login/registration, bonus policy link, and responsive rendering at
- * mobile (750x484) and large desktop (2560x1440) viewports.
+ * to login/registration, and bonus policy link — functional checks only.
+ * Deliberately excludes pixel dimensions, layout/overlap, and viewport
+ * responsiveness — those are visual/UI checks, and this suite is scoped to
+ * functionality only (2026-08-12: removed after a size check on the mobile
+ * banner was flagged as misrepresenting that scope to management). This
+ * applies to every brand, not just the ones on the new banner format —
+ * confirmed live only GC/MC/SNG/SC/PC currently render banner+CTA as one
+ * clickable image, other brands still have them as separate elements, but
+ * Step 3 below (click the banner, expect login/registration to open)
+ * already works either way since it doesn't care about the banner's
+ * internal layout.
  * NOT YET VERIFIED against live DOM — banner selectors are best-effort.
  * Run live and adjust selectors before trusting this in CI.
  */
-
-const MOBILE_VIEWPORT = { width: 375, height: 812 };
-const LARGE_VIEWPORT = { width: 2560, height: 1440 };
-const EXPECTED_MOBILE_BANNER_WIDTH = 750;
-const EXPECTED_MOBILE_BANNER_HEIGHT = 484;
 
 test.describe('P2 - Banner', () => {
 
@@ -150,54 +154,6 @@ test.describe('P2 - Banner', () => {
         record('Bonus policy link present', false);
         console.log('BN-01 bonus policy link not visible on homepage banner');
       }
-    });
-
-    await runStep('Step 5: Mobile banner image asset matches expected 750x484 dimensions', async () => {
-      await page.setViewportSize(MOBILE_VIEWPORT);
-      await page.waitForTimeout(1_000);
-      // Rendered box width scales to the viewport (e.g. ~360px on a 375px
-      // screen), so check the source <img>'s intrinsic natural size instead
-      // of the rendered bounding box, which is what the checklist means by
-      // "renders at expected 750x484 dimensions".
-      // NOTE: as of this writing, live Slingo banners are still 750x360 —
-      // 750x484 is the new banner format already rolled out on other brands
-      // (MC, GC, SNG) but not yet implemented on Slingo. This assertion
-      // intentionally targets the future spec so the test starts passing
-      // once Slingo picks up the new format; a failure here today is an
-      // expected, known pending-rollout gap, not a live bug.
-      // PSC's own banner markup (confirmed live 2026-08-03) is itself the
-      // <img class="banner-bg"> element, not a wrapper div containing a
-      // child <img> like every other brand — banner.locator('img') finds
-      // 0 descendants there and silently reads undefined/undefined instead
-      // of the real (still-wrong-format) size. Check the matched element
-      // itself first before drilling into a child.
-      const banner = page.locator('[class*="Banner" i], [class*="banner" i]').first();
-      const img = (await banner.evaluate(el => el.tagName) === 'IMG') ? banner : banner.locator('img').first();
-      const natural = await img.evaluate((el: HTMLImageElement) => ({
-        width: el.naturalWidth, height: el.naturalHeight,
-      })).catch(() => null);
-      console.log(`BN-01 mobile banner image natural size: ${natural?.width}x${natural?.height}`);
-      const matches = !!natural
-        && Math.abs(natural.width - EXPECTED_MOBILE_BANNER_WIDTH) < 50
-        && Math.abs(natural.height - EXPECTED_MOBILE_BANNER_HEIGHT) < 50;
-      record('Mobile banner image matches expected 750x484 dimensions', matches);
-    });
-
-    await runStep('Step 6: Banner is readable without overlap/truncation at mobile viewport', async () => {
-      const bannerText = page.locator('[class*="Banner" i], [class*="banner" i]')
-        .locator('p, [class*="text" i], [class*="Text" i]').first();
-      const overflow = await bannerText.evaluate(el => {
-        return el.scrollWidth > el.clientWidth + 5 || el.scrollHeight > el.clientHeight + 5;
-      }).catch(() => false);
-      record('Banner text has no overlap/truncation on mobile', !overflow);
-    });
-
-    await runStep('Step 7: Banner is responsive at large viewport (2560x1440)', async () => {
-      await page.setViewportSize(LARGE_VIEWPORT);
-      await page.waitForTimeout(1_000);
-      const banner = page.locator('[class*="Banner" i], [class*="banner" i]').first();
-      await expect(banner).toBeVisible({ timeout: 10_000 });
-      await page.setViewportSize({ width: 1280, height: 720 });
     });
 
     } finally {

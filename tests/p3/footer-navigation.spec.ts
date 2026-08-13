@@ -83,7 +83,25 @@ test.describe('P3 - Footer Navigation', () => {
       // Some categories/pages don't exist for every GEO (e.g. no Bingo nav on
       // Slingo ROW) — detect absence and skip that one item instead of a hard
       // timeout, without weakening the check for GEOs where it IS present.
-      const exists = await link.isVisible({ timeout: 3_000 }).catch(() => false);
+      let exists = await link.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!exists) {
+        // Confirmed live on UK 2026-08-12: after the ~12 sequential footer
+        // navigations preceding this one, the Affiliates page can flash
+        // "SOMETHING WENT WRONG" for several seconds before self-recovering
+        // (the earlier footerStep's own assertNoSiteError call reloads and
+        // fixes it, but that reload resets this page and can still be
+        // settling when THIS link check runs). A check landing mid-glitch
+        // reads as "link not present for this GEO" even though the link is
+        // genuinely there once the page settles — so before accepting an
+        // absence, rule out "site was mid-recovery" and give it one more try.
+        const hadSiteError = await page.getByText('SOMETHING WENT WRONG', { exact: false })
+          .isVisible({ timeout: 500 }).catch(() => false);
+        if (hadSiteError) {
+          console.log('RETRY | ' + label + ' | site error present during existence check, retrying after recovery');
+          await assertNoSiteError(page);
+          exists = await link.isVisible({ timeout: 5_000 }).catch(() => false);
+        }
+      }
       if (!exists) {
         record(`${label} (skipped — link not present for this GEO)`, true);
         console.log('SKIP | ' + label + ' | link not found for this GEO');

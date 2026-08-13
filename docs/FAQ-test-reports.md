@@ -36,6 +36,8 @@ There are three places, all generated directly by Playwright itself (not by our 
 
 **For management specifically:** if the ask is "show us a number that comes straight from Playwright, not anything custom-built," the report webpage's summary header or the results data file's total-duration value are the two to point to — both come entirely from Playwright itself. Our Excel report shows this too, but it's reading the same underlying data Playwright already recorded — it doesn't calculate anything new.
 
+⚠️ **Exception — VPN-switch multi-country runs:** the above is only accurate for a single run (one country, or countries that ran back-to-back with no gap). When countries are run one at a time with a real VPN switch in between (see `docs/playwright-run-commands.md` sections 2–3) and then combined with `merge-reports.cjs`, the combined report's "duration" includes the real-world gap between countries (VPN switching, confirming, anything else that happened in between) — it is **not** actual test-running time in that case. See `docs/merged-report-duration-caveat.md` for the full explanation. For a VPN-switch run, trust the Excel workbook's Grand Total Duration instead.
+
 ---
 
 *Last updated: 2026-08-07*
