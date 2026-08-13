@@ -207,7 +207,19 @@ export async function assertNoSiteError(page: Page): Promise<void> {
   await page.waitForTimeout(2_000);
   const stillBroken = await page.getByText('SOMETHING WENT WRONG', { exact: false })
     .isVisible({ timeout: 500 }).catch(() => false);
-  if (!stillBroken) return;
+  if (!stillBroken) {
+    // Site glitched and recovered on its own once reloaded — the test still
+    // passes (a real bug would have persisted through the reload too), but
+    // this is worth surfacing to dev: a real visitor on this page wouldn't
+    // get an automatic reload. Recorded as an annotation, not a failure, so
+    // excel-reporter.cjs can flag it as a side note without affecting
+    // pass/fail counts.
+    test.info().annotations.push({
+      type: 'self-healed-site-error',
+      description: `"SOMETHING WENT WRONG" appeared on ${page.url()} but cleared after a page reload.`,
+    });
+    return;
+  }
   throw new Error('Site showed "SOMETHING WENT WRONG" — persisted through polling and a page reload, likely a real issue.');
 }
 

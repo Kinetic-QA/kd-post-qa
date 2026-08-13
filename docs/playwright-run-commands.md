@@ -59,6 +59,11 @@ TEST_BRAND=SC TEST_GEO=ES TEST_ENV=live TEST_MOBILE=true EXCEL_REPORT_FILE=sc-co
 
 # 3. Repeat for each remaining GEO the same way...
 ```
+TEST_BRAND=SC TEST_GEO=UK TEST_ENV=live TEST_MOBILE=true EXCEL_REPORT_FILE=sc-combined-2026-08-12.xlsx npx playwright test tests/p1 tests/p2 tests/p3
+TEST_BRAND=SC TEST_GEO=ES TEST_ENV=live TEST_MOBILE=true EXCEL_REPORT_FILE=sc-combined-2026-08-12.xlsx npx playwright test tests/p1 tests/p2 tests/p3
+TEST_BRAND=SC TEST_GEO=ROW TEST_ENV=live TEST_MOBILE=true EXCEL_REPORT_FILE=sc-combined-2026-08-12.xlsx npx playwright test tests/p1 tests/p2 tests/p3
+TEST_BRAND=SC TEST_GEO=IE TEST_ENV=live TEST_MOBILE=true EXCEL_REPORT_FILE=sc-combined-2026-08-12.xlsx npx playwright test tests/p1 tests/p2 tests/p3
+TEST_BRAND=SC TEST_GEO=SE TEST_ENV=live TEST_MOBILE=true EXCEL_REPORT_FILE=sc-combined-2026-08-12.xlsx npx playwright test tests/p1 tests/p2 tests/p3
 
 PowerShell (same two steps — swap the date in `EXCEL_REPORT_FILE` for today's):
 

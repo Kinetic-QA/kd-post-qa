@@ -9,6 +9,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-13
+
+### Added
+
+- **Test reports can now be shared with the team as a simple link, instead of only living on one person's computer.** After a test run, `npm run deploy-reports` uploads that day's reports (screenshots, videos, and pass/fail results) to a website anyone can open in a browser — no special software or account needed. The Excel report gets a new "Shareable Report Link" column so each row's "View Result" click jumps straight to that exact test's result on the shared site, not just a general list.
+- **Excel now clearly flags a "flaky" test** — one that failed once but then passed when automatically retried — instead of just showing it as a plain "PASSED" with nothing to explain it. Those rows now show "FLAKY" and a note explaining what went wrong on the first try, matching what Playwright's own report already shows.
+
+### Fixed
+
+- **Fixed the "Test File" column in Excel showing the country code (e.g. "UK") instead of the actual test file name.** It now correctly shows things like `p1/feedback-form.spec.ts`.
+- **Fixed the shared report links for mobile test results leading to a "page not found" error.** Mobile and desktop results for the same country share one report page behind the scenes; the links now point to the right place.
+- **Fixed shared report links all landing on the same generic page instead of jumping to the specific test that was clicked.** This was caused by an Excel formatting quirk that silently dropped the "jump to this test" part of the link when saving.
+- **Fixed a formatting bug where every row in a report's side-note column showed a yellow highlight, even rows with nothing to say** — only rows that actually have a note (like a flaky-test explanation) are highlighted now.
+
+---
+
 ## [Unreleased] - 2026-08-12
 
 ### Fixed
