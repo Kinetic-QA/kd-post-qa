@@ -736,16 +736,29 @@ test.describe('Registration Flow', () => {
       // Name+Email+Gender) across separate steps. Step 0 (mobile/DOB) is
       // identical to desktop and reuses fillStep0WithRetry unchanged.
       const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
-      // SNG CA/ON (confirmed live 2026-07-20/21): the DOB field rejects UK's
-      // DD/MM/YYYY — its own validation message states the format it wants
-      // is dot-separated, year-first (YYYY.MM.DD). AB uses its own DOB
-      // shape via generateAbRegistrationData already, so this only applies
-      // to CA/ON's otherwise-generic data object. Address is also
-      // overridden, but NOT the same shape for both: CA's real address step
-      // has no house-number field (see fillStep2CA), while ON's DOES (same
-      // AB-shaped form — see generateOntarioAddress's docstring).
+      // SNG CA/ON — CORRECTED 2026-08-24: the 2026-07-20/21 finding below
+      // was wrong (or the widget changed since). Live char-by-char tracing
+      // of the real #dateOfBirth field proved it's a self-formatting
+      // DD/MM/YYYY mask that auto-inserts "/" and auto-pads a lone digit
+      // with a leading zero — NOT a literal dot-separated YYYY.MM.DD text
+      // field. Feeding it generateCanadianDOB()'s year-first digits made
+      // the mask consume the year's own digits as day+month, and shove the
+      // real month/day into the year slot — e.g. "1998.05.20" typed in
+      // came out as "19/09/8052". generateRegistrationData() already
+      // defaults data.dob to the correct DD/MM/YYYY shape (generateDOB()),
+      // so CA/ON simply don't need an override any more. AB uses its own
+      // DOB shape via generateAbRegistrationData already, unaffected.
+      // FR-CA's field is a genuinely different widget (confirmed via a
+      // real screenshot showing a dash "Année-Mois-Jour" placeholder) and
+      // still needs its own generator — not re-verified against this same
+      // live-tracing method this session, so left as-is. PC/CA and MC/CA
+      // below ALSO still use generateCanadianDOB() — their YYYY.MM.DD
+      // claims came from independent live confirmations (placeholder text/
+      // shadow-DOM inspection) on a possibly different platform, not
+      // re-checked this session either, so not changed without evidence.
       if (isCanadianMobileFormat || isPcCaFormat || isMcCaFormat || isMcFrCaFormat) {
-        data.dob = (isFrCaFormat || isMcFrCaFormat) ? generateFrCaDOB() : generateCanadianDOB();
+        if (isFrCaFormat || isMcFrCaFormat) data.dob = generateFrCaDOB();
+        else if (!isCanadianMobileFormat) data.dob = generateCanadianDOB(); // PC/CA, MC/CA only
         data.address = isOntarioFormat ? generateOntarioAddress() : generateCanadianAddress();
       }
       // LP/CA — confirmed live 2026-07-29: the DOB field's own placeholder
@@ -916,16 +929,15 @@ test.describe('Registration Flow', () => {
       });
     } else {
       const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
-      // SNG CA/ON (confirmed live 2026-07-20/21): the DOB field rejects UK's
-      // DD/MM/YYYY — its own validation message states the format it wants
-      // is dot-separated, year-first (YYYY.MM.DD). AB uses its own DOB
-      // shape via generateAbRegistrationData already, so this only applies
-      // to CA/ON's otherwise-generic data object. Address is also
-      // overridden, but NOT the same shape for both: CA's real address step
-      // has no house-number field (see fillStep2CA), while ON's DOES (same
-      // AB-shaped form — see generateOntarioAddress's docstring).
+      // SNG CA/ON — CORRECTED 2026-08-24: see the identical desktop-path
+      // comment above for the full root-cause writeup (live char-by-char
+      // tracing proved the real #dateOfBirth field is a self-formatting
+      // DD/MM/YYYY mask, not literally YYYY.MM.DD). generateRegistrationData()
+      // already defaults data.dob to the correct DD/MM/YYYY shape, so
+      // CA/ON no longer need an override. FR-CA keeps its own generator
+      // (genuinely different widget, confirmed via a real screenshot).
       if (isCanadianMobileFormat) {
-        data.dob = isFrCaFormat ? generateFrCaDOB() : generateCanadianDOB();
+        if (isFrCaFormat) data.dob = generateFrCaDOB();
         data.address = isOntarioFormat ? generateOntarioAddress() : generateCanadianAddress();
       }
       // MC/CA confirmed live 2026-07-22: same DOB-format rejection as SNG CA

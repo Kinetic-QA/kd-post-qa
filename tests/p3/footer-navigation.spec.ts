@@ -147,7 +147,8 @@ test.describe('P3 - Footer Navigation', () => {
 
     // ── Steps 4-5: Slots → /slots/ ───────────────────────────────────────
     const slotsPath = currentGeoFeatures().slotsPath ?? 'slots/';
-    await footerStep(`Slots -> /${slotsPath}`, 'Slots', `/${slotsPath}`);
+    const slotsLinkText = currentGeoFeatures().slotsLinkText ?? 'Slots';
+    await footerStep(`${slotsLinkText} -> /${slotsPath}`, slotsLinkText, `/${slotsPath}`);
 
     // ── Steps 6-7: Bingo → /bingo/ ───────────────────────────────────────
     await footerStep('Bingo -> /bingo/', 'Bingo', '/bingo/');
