@@ -9,6 +9,25 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-24
+
+### Fixed
+
+- **Slingo's ROW Help page FAQ was being skipped in every test run, even though it has a real, working FAQ section.** An earlier check (done with a tool that can't see anything JavaScript adds to a page) wrongly concluded the FAQ didn't exist yet. Confirmed live in a real browser that it does — the check now runs and passes.
+- **SpinGenie's "Online Slots" footer link was being reported as missing on UK, Canada, Ireland, Ontario, and French Canada — even though it's right there on the page.** The checklist was only looking for a link labeled exactly "Slots," but this brand's real footer says "Online Slots" (French Canada says "Machines à sous"). The check now looks for the label each market actually uses.
+- **SpinGenie Canada and Ontario's sign-up form was silently getting a garbled birthdate and getting stuck.** The birthdate box on this form types itself out automatically as you enter numbers (day/month/year, with slashes appearing on their own) — the checklist was typing the date in the wrong order (year first), which the box misread and turned into nonsense. It now types the date in the order the box actually expects, and sign-up completes normally.
+- **Two tracking-verification checks (Google Analytics tag, Meta Pixel) could crash an entire test run if they were included by mistake**, instead of quietly skipping the way every other "not applicable right now" check does. They only ever work as part of a specific ticket-driven check, not a general run — they now skip cleanly instead of blocking everything else in the run.
+- **The "Summary" tab in the Excel report now appears as the very first tab**, instead of buried at the end after every country's own tab — much easier to find at a glance.
+
+### Known open items (carrying into tomorrow)
+
+- **SpinGenie Canada's sign-up form still needs a closer look** — today's full run showed it as timed out (worth re-confirming it's fully resolved after the birthdate fix above, not just partially). French Canada's sign-up form also timed out in today's run and needs the same kind of investigation — it may or may not share the same root cause.
+- **Other brands/markets that also claim a special year-first birthdate format for Canada** (French Canada, Prime Casino, Mega Casino, Lord Ping, Prime Scratch Cards, and a few others) were **not** re-checked today — only SpinGenie's Canada/Ontario markets were. Since today's root cause turned out to be a stale assumption nobody had re-verified, the same risk likely applies to those too.
+- **The "Payment method strip" check failed on French Canada and Spain today** (both desktop and mobile) — the page isn't showing any payment method logos where the check expects them. Worth a quick manual look before flagging it as a real site problem.
+- **The "Game info" pop-up check failed once on Ontario mobile** — didn't navigate to the expected page in time. Could be a one-off slow-loading blip; worth a second run to confirm.
+
+---
+
 ## [Unreleased] - 2026-08-13
 
 ### Added

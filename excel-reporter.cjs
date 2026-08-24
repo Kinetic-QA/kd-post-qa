@@ -249,7 +249,13 @@ class ExcelReporter {
     // runs, not just the one that just finished.
     const existingSummary = wb.getWorksheet('Summary');
     if (existingSummary) wb.removeWorksheet(existingSummary.id);
-    this._writeSummarySheet(wb);
+    const summaryWs = this._writeSummarySheet(wb);
+    // Workbook tab order is driven by each sheet's orderNo (see ExcelJS's
+    // own `worksheets` getter), which addWorksheet always assigns as
+    // "last + 1" — there's no options.orderNo override at creation time.
+    // Setting it lower than every GEO sheet's here is what actually pins
+    // Summary to the first tab position once written to disk.
+    summaryWs.orderNo = -1;
 
     if (!appendFile) {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 23);
@@ -415,6 +421,7 @@ class ExcelReporter {
     });
 
     ws.columns = [{ width: 42 }, { width: 45 }];
+    return ws;
   }
 
   _writeSheet(ws, rows) {
