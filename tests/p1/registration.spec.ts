@@ -1,7 +1,7 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
 import type { Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle, resolveMobileAccountButton } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateCanadianMobile, generateCanadianDOB, generateFrCaDOB, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, generateSouthAfricanMobile, getAutoDetectedMobileGenerator, RegistrationData, EsRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateCanadianMobile, generateDOBParts, formatDOBForPlaceholder, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, generateSouthAfricanMobile, getAutoDetectedMobileGenerator, RegistrationData, EsRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -736,45 +736,19 @@ test.describe('Registration Flow', () => {
       // Name+Email+Gender) across separate steps. Step 0 (mobile/DOB) is
       // identical to desktop and reuses fillStep0WithRetry unchanged.
       const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
-      // SNG CA/ON — CORRECTED 2026-08-24: the 2026-07-20/21 finding below
-      // was wrong (or the widget changed since). Live char-by-char tracing
-      // of the real #dateOfBirth field proved it's a self-formatting
-      // DD/MM/YYYY mask that auto-inserts "/" and auto-pads a lone digit
-      // with a leading zero — NOT a literal dot-separated YYYY.MM.DD text
-      // field. Feeding it generateCanadianDOB()'s year-first digits made
-      // the mask consume the year's own digits as day+month, and shove the
-      // real month/day into the year slot — e.g. "1998.05.20" typed in
-      // came out as "19/09/8052". generateRegistrationData() already
-      // defaults data.dob to the correct DD/MM/YYYY shape (generateDOB()),
-      // so CA/ON simply don't need an override any more. AB uses its own
-      // DOB shape via generateAbRegistrationData already, unaffected.
-      // FR-CA's field is a genuinely different widget (confirmed via a
-      // real screenshot showing a dash "Année-Mois-Jour" placeholder) and
-      // still needs its own generator — not re-verified against this same
-      // live-tracing method this session, so left as-is. PC/CA and MC/CA
-      // below ALSO still use generateCanadianDOB() — their YYYY.MM.DD
-      // claims came from independent live confirmations (placeholder text/
-      // shadow-DOM inspection) on a possibly different platform, not
-      // re-checked this session either, so not changed without evidence.
+      // DOB no longer needs a per-brand override at all as of 2026-08-25:
+      // fillStep0WithRetry() now reads the live DOB field's own placeholder
+      // and builds a matching string at runtime (see
+      // formatDOBForPlaceholder() in helpers/testData.ts) instead of
+      // guessing a fixed format ahead of time. That per-brand guessing is
+      // exactly what caused repeat failures here — SNG CA/ON/FR-CA alone
+      // went through three separate "confirmed live" format corrections
+      // (2026-07-20, 2026-08-24, 2026-08-25) as the live field kept
+      // differing from whatever was last assumed. Address still needs its
+      // own per-brand override below (the placeholder can't tell us
+      // anything about that field), so that part stays.
       if (isCanadianMobileFormat || isPcCaFormat || isMcCaFormat || isMcFrCaFormat) {
-        if (isFrCaFormat || isMcFrCaFormat) data.dob = generateFrCaDOB();
-        else if (!isCanadianMobileFormat) data.dob = generateCanadianDOB(); // PC/CA, MC/CA only
         data.address = isOntarioFormat ? generateOntarioAddress() : generateCanadianAddress();
-      }
-      // LP/CA — confirmed live 2026-07-29: the DOB field's own placeholder
-      // ("Year-Month-Day") and validation error ("Please enter a valid date
-      // format (YYYY.MM.DD)") match SNG/PC's Canadian DOB shape exactly —
-      // reuses generateCanadianDOB() unchanged. Address shape not yet
-      // independently confirmed, so left as the generic default for now;
-      // correct via a real failure if Step 2 turns out to need the
-      // Canadian province/postal-code shape too.
-      // PSL/CA — confirmed live 2026-07-31: same "Year-Month-Day"
-      // placeholder DOB shape via shadow-DOM form inspection — reuses
-      // generateCanadianDOB() unchanged. Address shape not independently
-      // confirmed this session either, same conservative default-and-fix-on-
-      // failure approach as LP/CA above.
-      if (isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat) {
-        data.dob = generateCanadianDOB();
       }
       await runStep('Step 0: Mobile + Date of Birth → Continue', async () => {
         // SNG AB/CA/ON: country-code dropdown defaults to the tester's real
@@ -929,43 +903,24 @@ test.describe('Registration Flow', () => {
       });
     } else {
       const data = isAlbertaFormat ? generateAbRegistrationData() : generateRegistrationData();
-      // SNG CA/ON — CORRECTED 2026-08-24: see the identical desktop-path
-      // comment above for the full root-cause writeup (live char-by-char
-      // tracing proved the real #dateOfBirth field is a self-formatting
-      // DD/MM/YYYY mask, not literally YYYY.MM.DD). generateRegistrationData()
-      // already defaults data.dob to the correct DD/MM/YYYY shape, so
-      // CA/ON no longer need an override. FR-CA keeps its own generator
-      // (genuinely different widget, confirmed via a real screenshot).
+      // DOB no longer needs a per-brand override at all as of 2026-08-25 —
+      // see the identical comment on the mobile path above for the
+      // full root-cause writeup (fillStep0WithRetry() now reads the live
+      // DOB field's placeholder instead of guessing a fixed format).
+      // Address still needs its own per-brand override, which stays below.
       if (isCanadianMobileFormat) {
-        if (isFrCaFormat) data.dob = generateFrCaDOB();
         data.address = isOntarioFormat ? generateOntarioAddress() : generateCanadianAddress();
       }
-      // MC/CA confirmed live 2026-07-22: same DOB-format rejection as SNG CA
-      // ("Please enter a valid year of birth" on UK-shaped DD/MM/YYYY) — only
-      // the DOB needs overriding here, not the address (MC/CA's address step
-      // uses the generic street/postcode/city shape via fillComAddress, not
-      // SNG CA's province/postal-code shape).
-      // PSL/CA — confirmed live 2026-07-31: same "Year-Month-Day" placeholder
-      // DOB shape via shadow-DOM form inspection — reuses generateCanadianDOB()
-      // unchanged, same conservative default-and-fix-on-failure address
-      // approach as LP/CA.
-      if (isMcCaFormat || isPcCaFormat || isLpCaFormat || isPslCaFormat || isPscCaFormat || isLmsCaFormat || isSgCaFormat || isI36CaFormat) {
-        data.dob = generateCanadianDOB();
-      }
-      // MC/FR-CA: same dash-separated YYYY-MM-DD format as SNG FR-CA
-      // (confirmed live via the field's "Année-Mois-Jour" placeholder) —
-      // reuses generateFrCaDOB() unchanged rather than adding a near-
-      // duplicate generator for the same date format. Address ALSO needs
-      // overriding here (unlike MC/CA/COM, which accept the default
-      // UK-shaped address without complaint) — confirmed live 2026-07-23:
-      // MC FR-CA's address field performs REAL geocoding validation, not
-      // free-text acceptance. generateMcFrCaAddress() (not the random
-      // generateCanadianAddress()) always returns the one CA_ADDRESSES
-      // entry ("Bank Street", Ottawa) confirmed to reliably resolve —
-      // see its docstring in helpers/testData.ts for why the other two
-      // entries are unsafe here specifically.
+      // MC/FR-CA: address ALSO needs overriding here (unlike MC/CA/COM,
+      // which accept the default UK-shaped address without complaint) —
+      // confirmed live 2026-07-23: MC FR-CA's address field performs REAL
+      // geocoding validation, not free-text acceptance.
+      // generateMcFrCaAddress() (not the random generateCanadianAddress())
+      // always returns the one CA_ADDRESSES entry ("Bank Street", Ottawa)
+      // confirmed to reliably resolve — see its docstring in
+      // helpers/testData.ts for why the other two entries are unsafe here
+      // specifically.
       if (isMcFrCaFormat) {
-        data.dob = generateFrCaDOB();
         data.address = generateMcFrCaAddress();
       }
 
@@ -1588,9 +1543,19 @@ async function fillStep0WithRetry(
 
     const dobInput = scope.getByRole('textbox', { name: fieldLabels.dob }).first();
     await expect(dobInput).toBeVisible({ timeout: 10_000 });
+    // Read the field's own placeholder and format a fresh DOB to match it,
+    // rather than trusting data.dob's pre-set string — see
+    // formatDOBForPlaceholder's doc comment for why a fixed per-brand/GEO
+    // format assumption kept going stale (SNG CA/ON/FR-CA alone needed
+    // THREE different "confirmed live" corrections). Generates new digits
+    // each attempt (like the mobile number) rather than reusing data.dob,
+    // since a garbled date is just as good a reason to retry as a rejected
+    // mobile number.
+    const dobPlaceholder = await dobInput.getAttribute('placeholder').catch(() => null);
+    const dobToType = formatDOBForPlaceholder(dobPlaceholder, generateDOBParts());
     await dobInput.click();
     await dobInput.clear();
-    await dobInput.pressSequentially(data.dob, { delay: 80 });
+    await dobInput.pressSequentially(dobToType, { delay: 80 });
     await dobInput.press('Tab');
     await page.waitForTimeout(500);
 

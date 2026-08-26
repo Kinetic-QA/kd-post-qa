@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 import { getLiveUrl, getQAUrl } from './helpers/brand-urls';
+import { getGeoFeatures } from './helpers/geo-features';
 
 // Playwright's own HTML reporter checks process.env.CLAUDECODE and, if set,
 // silently skips starting the report server at all (not just the browser
@@ -134,18 +135,26 @@ const projects = geosToRun.flatMap(geo => {
   // sibling — the project name ("<geo>-mobile") already keeps each test's
   // own subfolder distinct.
   const geoOutputDir = `Test Reports/${TEST_BRAND}/${geo}/${dateStr}/test-results`;
+  // Cloudflare-walled GEOs (helpers/geo-features.ts's needsStealthLaunch)
+  // keep their browser headed — headless is more readily fingerprinted by
+  // Cloudflare bot protection than headed + the stealth plugin, and the
+  // allowlist request for these is still pending a dev reply (2026-08-14).
+  // Every other GEO runs headless now to cut Chromium's RAM footprint,
+  // since evidence review relies on the video/screenshot/trace capture
+  // (see `use.headless` below), not watching the window live.
+  const stealth = getGeoFeatures(TEST_BRAND, geo).needsStealthLaunch === true;
   const geoProjects = [{
     // Named after the GEO (not "chromium") so helpers/geo-features.ts can
     // resolve the active GEO from test.info().project.name in both modes.
     name: geo,
     outputDir: geoOutputDir,
-    use: { ...devices['Desktop Chrome'], baseURL: resolveUrl(TEST_BRAND, geo) },
+    use: { ...devices['Desktop Chrome'], baseURL: resolveUrl(TEST_BRAND, geo), headless: !stealth },
   }];
   if (TEST_MOBILE) {
     geoProjects.push({
       name: `${geo}-mobile`,
       outputDir: geoOutputDir,
-      use: { ...devices['Pixel 5'], baseURL: resolveUrl(TEST_BRAND, geo) },
+      use: { ...devices['Pixel 5'], baseURL: resolveUrl(TEST_BRAND, geo), headless: !stealth },
       // Playwright's mobile emulation (isMobile/hasTouch/deviceScaleFactor)
       // relies on a CDP device-metrics override that's incompatible with
       // resizing the actual OS browser window to match (viewport: null
@@ -187,11 +196,13 @@ export default defineConfig({
   ],
 
   use: {
-    headless: false,
+    // Default only — each GEO project above sets its own headless value
+    // (stealth/Cloudflare-walled GEOs stay headed, everything else headless).
+    headless: true,
     viewport: { width: 1280, height: 720 },
     // Pins the headed Chromium window to DISPLAY3, the right monitor
-    // (bounds: 1920,11 - 1920x1080). Without this, Chromium's default
-    // window placement sometimes lands on one of the other two monitors.
+    // (bounds: 1920,11 - 1920x1080) — only takes effect for the
+    // still-headed stealth GEOs; harmless no-op for headless ones.
     launchOptions: {
       args: ['--window-position=2020,111'],
     },

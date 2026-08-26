@@ -425,11 +425,31 @@ export function generateCanadianMobile(): string {
  * class of date-math edge case for every registration flow, not just one
  * brand/GEO.
  */
-function generateDOBWithSeparator(separator: string): string {
+export interface DOBParts {
+  year: number;
+  month: number;
+  day: number;
+}
+
+/**
+ * Generates the raw year/month/day for a random, clearly-legal-age birthdate
+ * (HARDCODED 1990-2000 range — see generateDOBWithSeparator's doc comment
+ * for why this is fixed rather than current-year-relative). Every DOB
+ * generator in this file funnels through this one source of the actual
+ * random date, so the "legal age" and "valid days-in-month" logic lives in
+ * exactly one place instead of being copy-pasted per separator/field-order
+ * variant.
+ */
+export function generateDOBParts(): DOBParts {
   const year  = 1990 + Math.floor(Math.random() * 11); // 1990-2000 inclusive
   const month = 1 + Math.floor(Math.random() * 12);
   const maxDay = new Date(year, month, 0).getDate();
   const day   = 1 + Math.floor(Math.random() * maxDay);
+  return { year, month, day };
+}
+
+function generateDOBWithSeparator(separator: string): string {
+  const { year, month, day } = generateDOBParts();
   return [
     String(day).padStart(2, '0'),
     String(month).padStart(2, '0'),
@@ -437,46 +457,74 @@ function generateDOBWithSeparator(separator: string): string {
   ].join(separator);
 }
 
+/**
+ * Builds a DOB string matching whatever a real DOB field's placeholder
+ * actually says, instead of guessing a fixed format per brand/GEO/detected-
+ * VPN-country the way generateCanadianDOB()/generateFrCaDOB() below do.
+ *
+ * Those hardcoded per-brand generators have proven repeatedly stale: SNG
+ * CA/ON/FR-CA alone went through THREE separate "confirmed live" format
+ * claims across 2026-07-20, 2026-08-24, and 2026-08-25 as the live field
+ * kept turning out to want something else than last assumed (or genuinely
+ * changed shape between sessions) — the same failure class as the
+ * mobile-country-code dropdown defaulting to the tester's real VPN country
+ * (see fillStep0WithRetry's countryCodeLabel handling), just for dates
+ * instead of phone numbers. Reading the field's own placeholder and
+ * matching it is the same "trust the live DOM, not a fixed assumption"
+ * fix applied there — it self-adapts to DD/MM/YYYY, YYYY.MM.DD,
+ * JJ/MM/AAAA, Année-Mois-Jour, or any other order/separator without
+ * needing a new per-brand branch every time a field turns out different.
+ *
+ * Falls back to the historical default (DD/MM/YYYY) when the placeholder is
+ * missing or doesn't clearly name at least a day/month/year token, so a
+ * brand with no recognizable placeholder text keeps behaving exactly as
+ * before rather than silently producing an unpredictable order.
+ */
+export function formatDOBForPlaceholder(placeholder: string | null | undefined, parts: DOBParts): string {
+  const fallback = () => [
+    String(parts.day).padStart(2, '0'),
+    String(parts.month).padStart(2, '0'),
+    String(parts.year),
+  ].join('/');
+
+  if (!placeholder) return fallback();
+
+  const lower = placeholder.toLowerCase();
+  const separatorMatch = lower.match(/[^a-z0-9]/);
+  const separator = separatorMatch ? separatorMatch[0] : '/';
+
+  // Token lists cover both letter-repeated masks (yyyy/mm/dd, jj/mm/aaaa)
+  // AND spelled-out English/French words — several brands' real DOB fields
+  // (e.g. MC/PC/LP's CA markets) use a literal "Year-Month-Day" placeholder,
+  // not a repeated-letter mask, so 'yyyy' alone would never match those.
+  const yearIdx = Math.min(
+    ...['yyyy', 'aaaa', 'année', 'annee', 'year'].map(t => { const i = lower.indexOf(t); return i === -1 ? Infinity : i; }),
+  );
+  const monthIdx = Math.min(
+    ...['mm', 'mois', 'month'].map(t => { const i = lower.indexOf(t); return i === -1 ? Infinity : i; }),
+  );
+  const dayIdx = Math.min(
+    ...['dd', 'jj', 'jour', 'day'].map(t => { const i = lower.indexOf(t); return i === -1 ? Infinity : i; }),
+  );
+
+  const found = [yearIdx, monthIdx, dayIdx].filter(i => i !== Infinity);
+  if (found.length < 3) return fallback();
+
+  const value: Record<'year' | 'month' | 'day', string> = {
+    year: String(parts.year),
+    month: String(parts.month).padStart(2, '0'),
+    day: String(parts.day).padStart(2, '0'),
+  };
+  const order = (['year', 'month', 'day'] as const)
+    .map(token => ({ token, idx: token === 'year' ? yearIdx : token === 'month' ? monthIdx : dayIdx }))
+    .sort((a, b) => a.idx - b.idx)
+    .map(({ token }) => token);
+
+  return order.map(token => value[token]).join(separator);
+}
+
 function generateDOB(): string {
   return generateDOBWithSeparator('/');
-}
-
-/**
- * SNG CA's registration DOB field (confirmed live 2026-07-20) rejects UK's
- * DD/MM/YYYY format with "Please enter a valid year of birth", then rejects
- * MM/DD/YYYY with "Please enter a valid date format (YYYY.MM.DD)" — the
- * field's own error message states the format it actually wants:
- * dot-separated, year-first. Confirmed working live with this exact shape.
- */
-export function generateCanadianDOB(): string {
-  const year  = 1990 + Math.floor(Math.random() * 11); // 1990-2000 inclusive — see generateDOBWithSeparator's doc comment for why this is hardcoded, not currentYear-relative
-  const month = 1 + Math.floor(Math.random() * 12);
-  const maxDay = new Date(year, month, 0).getDate();
-  const day   = 1 + Math.floor(Math.random() * maxDay);
-  return [
-    String(year),
-    String(month).padStart(2, '0'),
-    String(day).padStart(2, '0'),
-  ].join('.');
-}
-
-/**
- * SNG FR-CA's registration DOB field — confirmed live 2026-07-21 via a real
- * browser screenshot (Reeve): the registration widget's date field shows a
- * placeholder of "Année-Mois-Jour" (Year-Month-Day), DASH-separated — NOT
- * CA's dot-separated YYYY.MM.DD. Don't reuse generateCanadianDOB() for
- * FR-CA on the assumption the two share a format; they don't.
- */
-export function generateFrCaDOB(): string {
-  const year  = 1990 + Math.floor(Math.random() * 11); // 1990-2000 inclusive — see generateDOBWithSeparator's doc comment for why this is hardcoded, not currentYear-relative
-  const month = 1 + Math.floor(Math.random() * 12);
-  const maxDay = new Date(year, month, 0).getDate();
-  const day   = 1 + Math.floor(Math.random() * maxDay);
-  return [
-    String(year),
-    String(month).padStart(2, '0'),
-    String(day).padStart(2, '0'),
-  ].join('-');
 }
 
 /**

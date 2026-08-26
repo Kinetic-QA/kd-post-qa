@@ -944,6 +944,8 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link
       aboutUsPath: 'about/', // confirmed live: footer "About us" link is /about/, NOT the common '/about-us/' default — a genuine brand-specific slug difference
       helpPath: 'faqs/', // confirmed live: footer "Help" link is /faqs/, NOT the common '/help/' default
+      privacyPath: 'privacy-policy/', // confirmed live 2026-08-26: real slug is longer than the shared '/privacy/' default — was causing footer-navigation.spec.ts's FN-01 to fail on every PC GEO despite the link working correctly (see also CA/IE/COM's same override)
+      termsPath: 'terms-conditions/', // confirmed live 2026-08-26: real slug is longer than the shared '/terms/' default — was causing footer-navigation.spec.ts's FN-01 to fail on every PC GEO despite the link working correctly (see also CA/IE/COM's same override)
       socialMedia: { twitter: 'primecasinouk', facebook: 'primecasinouk', instagram: 'primecasinouk' }, // confirmed live homepage-wide (not scoped to <footer> — these live elsewhere in the page)
       hasSocialMedia: true,
       searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // NOT independently confirmed via a completed in-app search this session — the search icon click didn't reveal a working input in the time available; verify before trusting this fully on first real run
@@ -984,9 +986,11 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       contactPath: 'contacto/', // confirmed live: genuinely translated, not the English default
       aboutUsPath: 'sobre-nosotros/', // confirmed live: real translated footer link
       helpPath: 'faqs/', // confirmed live: footer "Ayuda" link is /faqs/ — same untranslated slug as UK, not further translated
+      privacyPath: 'politica-privacidad/', // confirmed live 2026-08-26: real translated slug, common '/privacy/' default 404s here — was causing footer-navigation.spec.ts's FN-01 to fail
+      termsPath: 'terminos-condiciones/', // confirmed live 2026-08-26: real translated slug, common '/terms/' default 404s here — was causing footer-navigation.spec.ts's FN-01 to fail
       paymentMethodsPath: 'metodos-pago/', // confirmed live: real translated slug, common 'payment-methods/' default would 404 here
       responsibleGamingPath: 'juego-mas-seguro/', // confirmed live: real translated footer link, same slug already confirmed for GC ES
-      affiliatesPath: 'afiliados/', // confirmed live: footer "Afiliados" link genuinely translates this slug, common 'affiliates/' default would 404 here
+      affiliatesPath: 'affiliates/', // confirmed live 2026-08-26: link LABEL is translated ("Afiliados") but the URL slug itself is not — real href is /affiliates/, the common default. Was 'afiliados/' (stale/incorrect), causing footer-navigation.spec.ts's FN-01 to fail
       socialMedia: { twitter: null, facebook: null, instagram: null }, // no social icons found homepage-wide this session — verify on first real run, may just need a different container scope
       hasSocialMedia: false,
       searchTerm: 'Casino', searchResultHrefSubstrings: ['/slots-online/', '/ruleta-en-vivo/', '/otros-juegos/', '/juegos-rapidos/'], // NOT independently confirmed via a completed in-app search this session — same caveat as UK, verify before trusting fully
@@ -1025,6 +1029,8 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link, same shared address as UK
       aboutUsPath: 'about/', // confirmed live: footer "About us" link is /about/, same as UK — NOT the common '/about-us/' default
       helpPath: 'faqs/', // confirmed live: footer "Help" link is /faqs/, same as UK
+      privacyPath: 'privacy-policy/', // confirmed live 2026-08-26: real slug is longer than the shared '/privacy/' default, same override as UK — was causing footer-navigation.spec.ts's FN-01 to fail
+      termsPath: 'terms-conditions/', // confirmed live 2026-08-26: real slug is longer than the shared '/terms/' default, same override as UK — was causing footer-navigation.spec.ts's FN-01 to fail
       socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide (whole-page check, not just footer-scoped) — genuinely different from UK, which does have real icons
       hasSocialMedia: false,
       searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // NOT independently confirmed via a completed in-app search this session — same caveat as UK, verify before trusting fully
@@ -1064,6 +1070,8 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link, same shared address as UK/CA
       aboutUsPath: 'about/', // confirmed live: footer "About us" link is /about/, same as UK/CA
       helpPath: 'faqs/', // confirmed live: footer "Help" link is /faqs/, same as UK/CA
+      privacyPath: 'privacy-policy/', // confirmed live 2026-08-26: real slug is longer than the shared '/privacy/' default, same override as UK/CA — was causing footer-navigation.spec.ts's FN-01 to fail
+      termsPath: 'terms-conditions/', // confirmed live 2026-08-26: real slug is longer than the shared '/terms/' default, same override as UK/CA — was causing footer-navigation.spec.ts's FN-01 to fail
       socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide, same gap as CA
       hasSocialMedia: false,
       searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // NOT independently confirmed via a completed in-app search this session — same caveat as UK/CA, verify before trusting fully
@@ -1103,6 +1111,8 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       contactEmail: 'support@primecasino.com', // confirmed live on /contact/ — real mailto link, same shared address as UK/CA/IE
       aboutUsPath: 'about/', // confirmed live: footer "About us" link is /about/, same as UK/CA/IE
       helpPath: 'faqs/', // confirmed live: footer "Help" link is /faqs/, same as UK/CA/IE
+      privacyPath: 'privacy-policy/', // confirmed live 2026-08-26 (via UK/CA/IE's confirmed pattern — COM's real geo-detected domain redirects for an un-VPN'd probe, so verify directly on next real UAE-VPN run): real slug is longer than the shared '/privacy/' default, same override as UK/CA/IE — was causing footer-navigation.spec.ts's FN-01 to fail
+      termsPath: 'terms-conditions/', // confirmed live 2026-08-26: real slug is longer than the shared '/terms/' default, same override as UK/CA/IE — was causing footer-navigation.spec.ts's FN-01 to fail
       socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live: zero social links found homepage-wide, same gap as CA/IE
       hasSocialMedia: false,
       searchTerm: 'Casino', searchResultHrefSubstrings: ['/online-slots/', '/live-casino/', '/table-games/', '/instant-win/'], // NOT independently confirmed via a completed in-app search this session — same caveat as UK/CA/IE, verify before trusting fully

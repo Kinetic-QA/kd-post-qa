@@ -39,3 +39,7 @@ Thumbs.db
 
 # Local Netlify folder
 .netlify
+
+# GUI dashboard — not ready for the team yet, local-only until it is
+# (decided by Reeve 2026-08-26; remove this line when it's ready to share)
+gui/
