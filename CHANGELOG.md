@@ -9,6 +9,42 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-26
+
+### Fixed
+
+- **Prime Casino's Terms & Conditions and Privacy Policy footer links were being reported as broken on UK, Canada, Ireland, the international site, and Spain — even though both links work fine.** The checklist had the wrong web address pattern saved for this brand; it's been corrected to match the site's real page addresses (including Spain's own Spanish-language addresses).
+- **Prime Casino Spain's "Affiliates" footer link was also being reported as broken.** The checklist had a Spanish-translated web address saved for it, but the real link keeps the English address even though the label on the page is in Spanish. Corrected.
+- **Prime Casino's "RNG Certified" footer badge was being reported as broken.** Unlike the other regulation logos in that row, this one downloads a certificate file instead of opening a web page — the checklist didn't know how to handle a downloaded file and treated it as a failure. It now recognizes this is a download and checks it properly.
+- **Prime Casino's Features page check would occasionally fail and need a second attempt (flaky) even though nothing was actually wrong.** It was giving the page a fixed 2-second window to finish moving to the next page instead of actually waiting for it to get there, and after reloading the page partway through the check, it forgot to dismiss the cookie banner a second time — which could then block the next click. Both fixed.
+- **SpinGenie Ontario's mobile game-info check could occasionally click the wrong thing** — a game tile near the bottom of the screen could be hidden behind the app's fixed bottom menu bar (Search/Menu/Promotions), and the click would land on that bar instead of the game. The check now measures where that bar actually sits on screen and scrolls clear of it first.
+- **Sign-up birthdate checks across markets kept needing separate fixes as sites changed** (SpinGenie Canada/Ontario/French Canada alone needed three rounds of "confirmed live" corrections). Instead of guessing each market's date format ahead of time, the checklist now reads the hint shown right on the birthdate box and types the date to match — so it can't go stale again the same way.
+
+### Changed
+
+- **Test browsers now run invisibly in the background instead of popping open a visible Chrome window**, freeing up a meaningful amount of memory during multi-market runs — except for the couple of markets that need the visible-browser trick to get past extra bot-protection, which are unaffected.
+- **Cleared out roughly 63GB of old completed test-run folders and duplicate report copies that had piled up on disk.** Going forward, once a day's combined report is safely built, the raw files it was built from are automatically deleted instead of being kept around as a permanent duplicate copy.
+
+---
+
+## [Unreleased] - 2026-08-25
+
+### Confirmed
+
+- **Re-ran SpinGenie Canada's and French Canada's full sign-up flows live against a real Canada connection, and both passed clean end-to-end**, including the birthdate step that was previously getting stuck on both markets. This confirms the birthdate typing-order fix from 2026-08-24 actually solved the problem on both markets, not just in review — both were still open questions as of yesterday.
+
+### Added
+
+- **The GUI's multi-country test runner can now ping a private Slack channel** every time it starts a country, finishes one and needs you to switch your VPN, stops early, or wraps up the whole run — so you get the "switch VPN now" alert on your phone too, not just as a desktop pop-up. Off by default; turned on by adding a Slack webhook link to the settings file.
+- **Those Slack alerts now include a quick pass/fail count**, e.g. "42 passed, 0 failed," pulled straight from that run's report — no need to open the report just to see if something broke.
+- **The Slack bot can now show a custom name and picture** instead of a plain default icon, so it's recognizable at a glance in the channel.
+
+### Changed
+
+- **Cleaned up the "run complete" Slack message** — it no longer shows the raw file path to the Excel report (e.g. `/combined-reports/PC-2026-08-25.xlsx`), since that's not clickable or useful as plain text. This is a placeholder for a proper "See the full report" link, coming later.
+
+---
+
 ## [Unreleased] - 2026-08-24
 
 ### Fixed

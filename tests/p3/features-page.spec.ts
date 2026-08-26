@@ -90,13 +90,27 @@ test.describe('P3 - Features Page', () => {
       const learnMoreLink = featureLink();
       await expect(learnMoreLink).toBeVisible({ timeout: 10_000 });
       const href = await learnMoreLink.getAttribute('href') ?? '';
+      const expectedPath = href.replace(/^https?:\/\/[^/]+/, '');
       await learnMoreLink.click();
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2_000);
-      expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
+      // waitForURL, not waitForLoadState + a fixed timeout — confirmed live
+      // 2026-08-26 on PC COM: this is a client-side navigation, so
+      // waitForLoadState('domcontentloaded') can resolve against the
+      // already-loaded hub page instead of the new one, leaving only a flat
+      // 2s guess as the real wait. Flaky under normal latency variance
+      // (failed first attempt still on /features/, passed on retry) —
+      // waitForURL actually waits for the destination instead of guessing.
+      await page.waitForURL(url => url.pathname.includes(expectedPath), { timeout: 10_000 });
+      expect(page.url()).toContain(expectedPath);
       await page.goto(featuresPath, { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(1_000);
+      // Confirmed live 2026-08-26 on PC COM: this full reload re-mounts
+      // <son-cookie-consent>, same as beforeEach's initial navigation — only
+      // re-dismissing the campaign popup here left it able to intercept
+      // Step 2's click, causing Playwright's actionability retry to
+      // eventually time out (a real, reproducible flake, not one-off
+      // latency).
+      await dismissCookieConsent(page);
       await dismissCampaignPopup(page);
     });
 
@@ -104,10 +118,10 @@ test.describe('P3 - Features Page', () => {
       const inlink = featureLink();
       await expect(inlink).toBeVisible({ timeout: 10_000 });
       const href = await inlink.getAttribute('href') ?? '';
+      const expectedPath = href.replace(/^https?:\/\/[^/]+/, '');
       await inlink.click();
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2_000);
-      expect(page.url()).toContain(href.replace(/^https?:\/\/[^/]+/, ''));
+      await page.waitForURL(url => url.pathname.includes(expectedPath), { timeout: 10_000 });
+      expect(page.url()).toContain(expectedPath);
     });
 
     } finally {

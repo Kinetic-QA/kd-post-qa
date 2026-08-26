@@ -98,6 +98,19 @@ if (result.status !== 0) {
 const indexPath = path.join(outputFolder, 'index.html');
 console.log(`\nCombined report ready: ${indexPath}`);
 
+// Only delete the raw sources once the merged report is confirmed on disk —
+// outputFolder now holds everything (including trace data) that blobDir's
+// per-GEO zips and mergeInputDir's flattened copies contained, so keeping
+// them around after a successful merge is pure duplication (this is what
+// was ballooning Test Reports/<brand>/_blob-reports — confirmed live
+// 2026-08-26, raw blobs + merged report each holding a full copy of the
+// same trace data).
+if (fs.existsSync(indexPath)) {
+  fs.rmSync(mergeInputDir, { recursive: true, force: true });
+  fs.rmSync(blobDir, { recursive: true, force: true });
+  console.log(`Cleaned up raw blob sources: ${blobDir}, ${mergeInputDir}`);
+}
+
 // Detached + unref'd for the same reason as excel-reporter.cjs's report-open
 // call — this script's own process exiting shouldn't kill the "start" call
 // on Windows before it dispatches.

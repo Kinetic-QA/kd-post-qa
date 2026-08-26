@@ -223,8 +223,43 @@ test.describe('P1 - Game Information Modal', () => {
       // there, and on some pages the resulting point falls fully outside
       // the viewport instead. Nudge the page up slightly afterward so the
       // target sits comfortably below the header before clicking.
-      await page.evaluate(() => window.scrollBy(0, -120));
-      await page.waitForTimeout(200);
+      // Confirmed live on SNG ON mobile 2026-08-24 (reproduced identically
+      // on retry): applying this nudge unconditionally instead pushed a
+      // candidate that scrollIntoViewIfNeeded() had already placed near the
+      // BOTTOM of the viewport into the sticky bottom nav bar (Menu/Search/
+      // Promotions/Play Now) — force:true bypasses Playwright's own
+      // actionability checks, but the resulting click still lands on
+      // whatever's actually on top at that pixel, so it silently hit the
+      // footer's "Search game" link (href="#search") both times instead of
+      // the game tile underneath. Same root cause and same fix already
+      // applied to Step 10's identical nudge below (see its own comment) —
+      // only nudge when the candidate is actually near the TOP.
+      const preNudgeBox = await link.boundingBox().catch(() => null);
+      if (preNudgeBox && preNudgeBox.y >= 0 && preNudgeBox.y < 150) {
+        await page.evaluate(() => window.scrollBy(0, -120));
+        await page.waitForTimeout(200);
+      }
+      // Guarding the -120 nudge above was NOT enough on SNG ON mobile
+      // (reconfirmed 2026-08-25, still landing on "#search" every time) —
+      // the candidate never needed the top nudge in the first place; it was
+      // ALREADY sitting under the fixed [class*="MobileFooter"] bottom nav
+      // bar before any nudge ran, because that bar is position:fixed and
+      // always covers the same slice of the viewport regardless of scroll
+      // position. A hardcoded pixel guess for its height would be exactly
+      // the kind of brittle per-brand assumption that's caused repeat
+      // failures elsewhere in this file — read its REAL live bounding box
+      // instead and scroll down just enough to clear it whenever they
+      // overlap. Harmless no-op on desktop / brands with no MobileFooter
+      // (locator resolves to nothing, boundingBox() returns null).
+      if (isMobile) {
+        const footerBox = await page.locator('[class*="MobileFooter"]').first().boundingBox().catch(() => null);
+        const linkBox = await link.boundingBox().catch(() => null);
+        if (footerBox && linkBox && (linkBox.y + linkBox.height) > footerBox.y) {
+          const clearance = (linkBox.y + linkBox.height) - footerBox.y + 20;
+          await page.evaluate((px) => window.scrollBy(0, px), clearance);
+          await page.waitForTimeout(200);
+        }
+      }
       await hoverRevealAncestor(link);
       await page.waitForTimeout(300);
       await link.click({ force: true });
@@ -389,6 +424,26 @@ test.describe('P1 - Game Information Modal', () => {
         if (!postHoverBox || postHoverBox.y < 0 || postHoverBox.y > vh || postHoverBox.x < 0 || postHoverBox.x > vw) {
           console.log(`GIM-01 Step 10 attempt ${attempt}: hover shifted candidate outside viewport (x=${postHoverBox?.x}, y=${postHoverBox?.y}), retrying with a different tile`);
           continue;
+        }
+        // Confirmed live on SNG ON mobile 2026-08-25: this y<vh/y>0 check
+        // alone isn't enough — a candidate can sit fully WITHIN those
+        // bounds yet still be visually covered by the fixed
+        // [class*="MobileFooter"] bottom nav bar (position:fixed, so it
+        // overlaps the same viewport slice regardless of scroll position).
+        // force:true still resolves the click to whatever's actually on
+        // top at that pixel, so it silently landed on the footer's
+        // "Search game" link (href="#search") both times instead of the
+        // tile underneath — same root cause already fixed for Step 1's
+        // click above (see its comment); apply the same live-footer-box
+        // check here rather than retrying candidates that will all fail
+        // the same way if they're all in that same footer band.
+        if (isMobile) {
+          const footerBox = await page.locator('[class*="MobileFooter"]').first().boundingBox().catch(() => null);
+          if (footerBox && (postHoverBox.y + postHoverBox.height) > footerBox.y) {
+            const clearance = (postHoverBox.y + postHoverBox.height) - footerBox.y + 20;
+            await page.evaluate((px) => window.scrollBy(0, px), clearance);
+            await page.waitForTimeout(200);
+          }
         }
         try {
           await link.click({ force: true, timeout: 5_000 });

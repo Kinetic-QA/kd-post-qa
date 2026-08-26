@@ -105,7 +105,16 @@ test.describe('P2 - Footer Regulations', () => {
         }
         const isSameOrigin = resolved.origin === currentOrigin;
         const expectedHost = resolved.hostname;
-        const label = `Regulation logo -> ${expectedHost}${isSameOrigin ? ' (same tab)' : ''}`;
+        // Some regulation logos (e.g. PC's "RNG iTech Labs CERTIFIED" badge)
+        // link straight to a certificate FILE (.pdf) instead of a regulator
+        // webpage — confirmed live 2026-08-26 on PC UK/CA/COM/ES/IE/SE:
+        // https://aws-origin.image-tech-storage.com/common/rng/RNG_Certificate_*.pdf.
+        // Clicking that triggers a browser download, not a page navigation,
+        // so the popup/same-tab branches below never see a real URL to
+        // assert against (popup.url() reads back essentially empty). Verify
+        // via the 'download' event instead of a page navigation for these.
+        const isDownloadLink = /\.(pdf|jpe?g|png)$/i.test(resolved.pathname);
+        const label = `Regulation logo -> ${expectedHost}${isSameOrigin ? ' (same tab)' : isDownloadLink ? ' (file download)' : ''}`;
         let popup: import('@playwright/test').Page | undefined;
         try {
           const link = page.locator(`${REGULATION_LOGO_LINKS}[href="${href}"]`).first();
@@ -116,7 +125,14 @@ test.describe('P2 - Footer Regulations', () => {
           // footer-social-media-strip.spec.ts.
           await dismissCampaignPopup(page);
 
-          if (isSameOrigin) {
+          if (isDownloadLink) {
+            const [download] = await Promise.all([
+              page.waitForEvent('download', { timeout: 15_000 }),
+              link.click(),
+            ]);
+            expect(download.url()).toContain(expectedHost);
+            await download.cancel().catch(() => {});
+          } else if (isSameOrigin) {
             // Same-origin links (e.g. self-exclusion) navigate the current
             // tab via the SPA's own routing rather than opening a new tab —
             // verify via the query/hash fragment that actually identifies
