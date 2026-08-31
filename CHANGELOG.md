@@ -9,6 +9,17 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-08-31
+
+### Fixed
+
+- **Lord Ping's "category navigation" check was occasionally reporting the wrong page as broken.** On a slower page load, the check would look at the address bar a little too early — before the click had actually finished loading the next page — and mistakenly report it as pointing to the wrong place. Given a bit more time to catch up, this stopped happening.
+- **The same "checked too early" issue was also making Lord Ping's sign-in, footer links, and login-widget checks occasionally need a second attempt to pass.** All given more breathing room before checking the page address.
+- **Lord Ping's footer regulation-logo check could occasionally report zero logos found, even though they were there.** Those logos load in a little after the rest of the footer — the check now waits a bit longer before giving up.
+- **Lord Ping's promotions-page check was flagging a working promo link as broken.** Clicking through to the Welcome Bonus offer correctly lands you on the real bonus page — it's confirmed live and working — but the site then swaps the web address back to the general promotions page afterward. The checklist now recognizes this as expected instead of calling it a failure.
+
+---
+
 ## [Unreleased] - 2026-08-26
 
 ### Fixed

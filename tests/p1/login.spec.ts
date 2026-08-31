@@ -139,7 +139,7 @@ test.describe('P1 - Login', () => {
 
     // ── Step 5: Verify successful login ─────────────────────────────────
     await runStep('Redirected to authenticated session', async () => {
-      await expect(page).toHaveURL(expectedPlaysecureUrlPattern(), { timeout: 15_000 });
+      await expect(page).toHaveURL(expectedPlaysecureUrlPattern(), { timeout: 20_000 });
     });
 
     } finally {

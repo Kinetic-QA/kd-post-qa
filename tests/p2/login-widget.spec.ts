@@ -72,7 +72,7 @@ test.describe('P2 - Login Widget', () => {
       }
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.evaluate((el: HTMLElement) => el.click());
-      await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
+      await expect(page).toHaveURL(/#account/, { timeout: 14_000 });
       await page.waitForTimeout(1_500);
     }
 

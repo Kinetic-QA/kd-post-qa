@@ -144,11 +144,11 @@ test.describe('P1 - Game Category Navigation', () => {
       // later and the real gating assertion below passed). Matches the same
       // up-to-8s window expect.soft(...).toHaveURL() already tolerates, so
       // our own summary log agrees with the actual pass/fail outcome.
-      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 8_000 }).then(() => true).catch(() => false);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 12_000 }).then(() => true).catch(() => false);
       const actualUrl = page.url();
       const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
-      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 12_000 });
     }
 
     function printSummary() {
@@ -324,12 +324,12 @@ test.describe('P1 - Game Category Navigation', () => {
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
       const expectedUrl = siteUrl(hrefPart);
-      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 8_000 }).then(() => true).catch(() => false);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 12_000 }).then(() => true).catch(() => false);
       const actualUrl = page.url();
       const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
       console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
-      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 12_000 });
       // Close the sidebar before the next step re-opens it — avoids a
       // leftover open sidebar's overlay blocking the next click, the same
       // lesson already learned from the unconditional-sidebar-opening bug
@@ -404,7 +404,7 @@ test.describe('P1 - Game Category Navigation', () => {
           });
           results.push({ label: `Themes dropdown: "${visibleText}" → ${expectedSlug} (shows "${controlText}")`, status: passed ? 'Pass' : 'Fail' });
           console.log((passed ? 'PASS' : 'FAIL') + ' | Themes dropdown "' + visibleText + '" | ' + actualUrl);
-          await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+          await expect.soft(page).toHaveURL(expectedUrl, { timeout: 12_000 });
         }
 
         // 3 different themes, confirmed live to each exist and navigate correctly.
@@ -578,12 +578,12 @@ test.describe('P1 - Game Category Navigation', () => {
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
       const expectedUrl = siteUrl(hrefPart);
-      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 8_000 }).then(() => true).catch(() => false);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 12_000 }).then(() => true).catch(() => false);
       const actualUrl = page.url();
       const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
       console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
-      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 12_000 });
     }
 
     async function clickTopTabAndVerify(hrefPart: string, label: string) {
@@ -598,12 +598,12 @@ test.describe('P1 - Game Category Navigation', () => {
       await link.evaluate((el: HTMLElement) => el.click());
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
-      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 8_000 }).then(() => true).catch(() => false);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 12_000 }).then(() => true).catch(() => false);
       const actualUrl = page.url();
       const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
       console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
-      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 12_000 });
     }
 
     // Sub-category links are real anchors always present in the DOM, just
@@ -635,12 +635,12 @@ test.describe('P1 - Game Category Navigation', () => {
       await link.evaluate((el: HTMLElement) => el.click());
       await page.waitForLoadState('domcontentloaded');
       await dismissCampaignPopup(page);
-      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 8_000 }).then(() => true).catch(() => false);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 12_000 }).then(() => true).catch(() => false);
       const actualUrl = page.url();
       const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
       console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
-      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 8_000 });
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 12_000 });
     }
 
     if (isPslUkFormat) {
