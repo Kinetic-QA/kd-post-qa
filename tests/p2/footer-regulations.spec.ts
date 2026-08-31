@@ -70,7 +70,7 @@ test.describe('P2 - Footer Regulations', () => {
       // "0 found" on a slow render (confirmed live: this flaked once).
       const regLogos = page.locator(REGULATION_LOGO_LINKS);
       let count = 0;
-      for (let attempt = 0; attempt < 6; attempt++) {
+      for (let attempt = 0; attempt < 10; attempt++) {
         count = await regLogos.count();
         if (count > 0) break;
         await page.waitForTimeout(500);

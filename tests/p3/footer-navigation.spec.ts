@@ -117,7 +117,7 @@ test.describe('P3 - Footer Navigation', () => {
       // back to the previous page. Wait for the expected path specifically
       // (falling through to the old fixed wait if it never arrives, so a
       // genuine mismatch still reports the real wrong URL below).
-      await page.waitForURL(new RegExp(expectedPath.replace(/\//g, '\\/')), { timeout: 10_000 }).catch(() => {});
+      await page.waitForURL(new RegExp(expectedPath.replace(/\//g, '\\/')), { timeout: 14_000 }).catch(() => {});
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(800);
       await assertNoSiteError(page);
@@ -126,7 +126,7 @@ test.describe('P3 - Footer Navigation', () => {
       record(label, passed);
       console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
       await expect.soft(page).toHaveURL(
-        new RegExp(expectedPath.replace(/\//g, '\\/')), { timeout: 8_000 }
+        new RegExp(expectedPath.replace(/\//g, '\\/')), { timeout: 12_000 }
       );
     }
 
