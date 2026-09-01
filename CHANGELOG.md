@@ -9,6 +9,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-01
+
+### Fixed
+
+- **Prime Scratch Cards' international ("COM") game-info, search, and sign-up checks were being run against the wrong assumption about which currency should show up.** The checklist assumed this market always shows Euros no matter where you're testing from, but it turns out the price shown actually does depend on the real location of whoever's testing — it was only ever checked from one location before, which happened to still show Euros by coincidence. Corrected, and separately confirmed that this brand's international site actually sends UK visitors straight to the UK-specific site, so its sign-up flow needs to be tested from a non-UK connection to see the real international sign-up form.
+- **A rare case of the sign-up form on Prime Scratch Cards' international market needing a bit more time to load the next step before the checklist gave up waiting.** Given more breathing room, same as the earlier fix for Lord Ping.
+
+---
+
 ## [Unreleased] - 2026-08-31
 
 ### Fixed
