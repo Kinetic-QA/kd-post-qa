@@ -1693,13 +1693,30 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
     // same class of gotcha as static-HTML-only checks elsewhere in this
     // file) — same hasFeedbackForm: false outcome as UK, independently
     // re-confirmed via real render rather than trusted from curl alone.
-    // Real bonus copy shows EUR ("Min. deposit: €10", "Spin Value:
-    // €0.25"), NOT ZAR, despite the confirmed South Africa IP — this
-    // brand is NOT on the SkillOnNet platform SG/LMS share, so no
-    // IP-based currency detection applies here (same fixed-EUR pattern as
-    // LP COM). No test account exists for this market — hasTestAccount:
-    // false, login.spec.ts self-skips on that flag alone; registration IS
-    // exercised via isPscComFormat (South Africa mobile format).
+    // CORRECTED 2026-09-01: the 08-05/08-31 "fixed EUR regardless of real
+    // IP" conclusion was wrong. Confirmed via a controlled real-IP swap in
+    // one session: from a UK IP the game info modal showed £ (GBP) and
+    // GIM-01's Step 11 currency check reproducibly failed against the old
+    // hardcoded '€'; switching to a real South Africa IP (ZA, Johannesburg)
+    // brought it right back to €, matching the original 08-05 finding. So
+    // ZAR itself isn't a supported currency here and the site falls back to
+    // EUR specifically for South Africa — but other real IPs (confirmed:
+    // UK → GBP) get their own real currency. This market IS genuinely
+    // IP-based, same as SG/LMS's COM markets (see their own "genuine
+    // IP-based currency detection" notes). currencySymbol below reflects
+    // whichever real IP is actually in use for a given test session — it is
+    // NOT a fixed constant, re-verify and update it whenever testing COM
+    // from a different real IP/VPN (also re-verify REG-01: the ".com"
+    // domain itself redirects a UK IP straight to primescratchcards.co.uk,
+    // which broke REG-01's Step 3 address fill entirely — a real South
+    // Africa IP is needed for COM's actual registration form to render;
+    // confirmed REG-01 passes 8/8 from a real ZA IP). PSL COM's
+    // currencySymbol carries the same "fixed EUR" claim (cross-referenced
+    // from this same block) and has NOT been independently re-checked —
+    // treat it as equally suspect. No test account exists for this market
+    // — hasTestAccount: false, login.spec.ts self-skips on that flag alone;
+    // registration IS exercised via isPscComFormat (South Africa mobile
+    // format).
     COM: {
       locale: 'en', uiLocalized: false,
       hasBlog: false, blogPath: null, // confirmed live 2026-08-05: /blog/ 301-redirects to the homepage — no distinct page, same as UK's 404
@@ -1708,7 +1725,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       featuresPath: null, // confirmed live 2026-08-05: /features/ 404s, same as UK
       mobileAppPath: 'mobile-app/', // confirmed live 2026-08-05: 404s — kept as the common placeholder, skips cleanly
       bingoCardGeneratorPath: 'bingo-card-generator/', // confirmed live 2026-08-05: 404s — no Bingo vertical on this brand at all, same as UK
-      currencySymbol: '€', // confirmed live 2026-08-05: real bonus copy reads "Min. deposit: €10", "Spin Value: €0.25" — a fixed EUR default regardless of this session's confirmed South Africa IP (see top-of-block comment)
+      currencySymbol: '€', // CORRECTED 2026-09-01, confirmed live from a real South Africa IP (ZA, Johannesburg): game info modal shows €, matching the original 08-05 finding — but this is genuinely IP-based (confirmed € swaps to £ from a real UK IP), not a fixed constant. See top-of-block comment; re-verify whenever testing COM from a different real IP/VPN
       contactEmail: 'support@primescratchcards.com', // confirmed live 2026-08-05: real mailto link on /contact/, same address as UK
       paymentMethodsPath: 'payment-methods/', // confirmed live 2026-08-05: /payment-methods/ returns 200 — the common default, no override needed
       socialMedia: { twitter: null, facebook: null, instagram: null }, // confirmed live 2026-08-05: zero facebook/twitter/instagram links found homepage-wide, same as UK

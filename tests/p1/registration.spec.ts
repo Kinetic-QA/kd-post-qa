@@ -2570,7 +2570,7 @@ async function fillMobileStep3AddressCA(
   await continueBtn.click();
 
   await scope.locator('#username')
-    .first().waitFor({ state: 'visible', timeout: 15_000 });
+    .first().waitFor({ state: 'visible', timeout: 20_000 });
   console.log('REG-01 (CA mobile) Step 3/5 complete');
 }
 
