@@ -171,7 +171,10 @@ test.describe('P1 - Website Header', () => {
       // events on the header after a previous step's close, same class of
       // overlay issue already documented elsewhere in this project.
       await loginBtn.click({ force: true });
-      await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
+      // 30s, not 10s — confirmed live on ZI COM 2026-09-02 (South Africa
+      // VPN, higher latency): the modal reliably opens, just sometimes
+      // slower than 10s to mount under real-world connection conditions.
+      await expect(page).toHaveURL(/#account/, { timeout: 30_000 });
       await closeAccountModal();
     });
 
@@ -190,7 +193,7 @@ test.describe('P1 - Website Header', () => {
       // force: true — same leftover <son-auth-modals> overlay issue as
       // Step 1 above.
       await joinBtn.click({ force: true });
-      await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
+      await expect(page).toHaveURL(/#account/, { timeout: 30_000 });
       await closeAccountModal();
     });
 

@@ -223,6 +223,30 @@ export async function assertNoSiteError(page: Page): Promise<void> {
   throw new Error('Site showed "SOMETHING WENT WRONG" — persisted through polling and a page reload, likely a real issue.');
 }
 
+/**
+ * Scroll to the bottom of the page using real (trusted) wheel input instead
+ * of `page.evaluate(() => window.scrollTo(...))`. Confirmed live on Zingo
+ * Bingo (ZI) UK mobile 2026-09-02: this brand's footer regulation-logo
+ * widget (<son-license-logos>) is interaction-gated — it never mounts on a
+ * programmatic scroll (an untrusted DOM API call a script can tell apart
+ * from real input), which is exactly why footer-regulations.spec.ts had
+ * been reporting it as missing since 2026-07-29 even though it's genuinely
+ * present for every real visitor, who always scrolls via trusted input.
+ * `page.mouse.wheel()` dispatches genuine trusted wheel events, matching
+ * what a real user's scroll looks like to the page's own scripts.
+ */
+export async function scrollToBottomTrusted(page: Page): Promise<void> {
+  let lastY = -1;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    await page.mouse.wheel(0, 800);
+    await page.waitForTimeout(150);
+    const y = await page.evaluate(() => window.scrollY + window.innerHeight >= document.body.scrollHeight - 2 ? -1 : window.scrollY);
+    if (y === -1 || y === lastY) break;
+    lastY = y;
+  }
+  await page.waitForTimeout(500);
+}
+
 export async function dismissCookieConsent(page: Page): Promise<void> {
   await assertNoSiteError(page);
   await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});

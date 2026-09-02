@@ -16,7 +16,8 @@
     "merge-reports": "node merge-reports.cjs",
     "deploy-reports": "node deploy-reports.cjs",
     "agent": "ts-node src/agent.ts",
-    "check-transitions": "ts-node src/check-transitions.ts"
+    "check-transitions": "ts-node src/check-transitions.ts",
+    "gui": "ts-node gui/server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",

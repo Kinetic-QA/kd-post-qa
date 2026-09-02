@@ -656,7 +656,11 @@ test.describe('P1 - Search', () => {
       // react to), so Step 10's search click actually lands back on
       // #account instead of #search. PSL shares the identical modal/close
       // mechanism, so included preemptively too.
-      if (['SG', 'PSC', 'PSL'].includes((process.env.TEST_BRAND ?? 'SC').toUpperCase())) {
+      // Confirmed live on Zingo Bingo (ZI) UK 2026-09-02, mobile viewport
+      // only: same stuck-router symptom (Step 10's sidebar search link is
+      // off-canvas/unclickable even with force:true because the sidebar
+      // never actually opens) — the same reload before Step 10 fixes it.
+      if (['SG', 'PSC', 'PSL', 'ZI'].includes((process.env.TEST_BRAND ?? 'SC').toUpperCase())) {
         await page.goto('', { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(1_000);
       }

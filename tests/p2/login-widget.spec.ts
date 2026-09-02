@@ -72,7 +72,10 @@ test.describe('P2 - Login Widget', () => {
       }
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.evaluate((el: HTMLElement) => el.click());
-      await expect(page).toHaveURL(/#account/, { timeout: 14_000 });
+      // 30s, not 14s — confirmed live on ZI COM 2026-09-02 (South Africa
+      // VPN, higher latency): the modal reliably opens, just sometimes
+      // slower than 14s to mount under real-world connection conditions.
+      await expect(page).toHaveURL(/#account/, { timeout: 30_000 });
       await page.waitForTimeout(1_500);
     }
 
