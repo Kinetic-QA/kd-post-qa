@@ -129,6 +129,17 @@ test.describe('P1 - Game Information Modal', () => {
         const candidate = links.nth(i);
         const href = await candidate.getAttribute('href').catch(() => null);
         if (href && navHrefs.has(new URL(href, page.url()).href)) continue;
+        // Confirmed live on Zingo Bingo (ZI) COM 2026-09-02: a homepage
+        // section's "Show all" link (e.g. /online-slots/new/, from the "New
+        // Slots" section header) matches gameTileHrefSubstrings the same way
+        // a real game tile does, and isn't caught by the navHrefs exclusion
+        // above since it lives in the page body, not the nav bar/sidebar —
+        // it then gets treated as a real game link and clicking it plain-
+        // navigates to a category listing page instead of opening the
+        // #gamepage/ modal. No real game is ever slugged exactly "new", so
+        // exclude that trailing path segment generically rather than special-
+        // casing this one brand.
+        if (href && /\/new\/?($|[?#])/.test(href)) continue;
         // Confirmed live on MC/DK: without this, a bounded caller-side retry
         // loop calling findGameLink() again after a failed click just gets
         // the SAME deterministic candidate back every time (nothing about
@@ -146,6 +157,22 @@ test.describe('P1 - Game Information Modal', () => {
         // below-the-fold candidates for no benefit — dropped that upper
         // bound; box.y <= 100 stays to avoid a sticky-header duplicate.
         if (!box || box.y <= 100 || box.width <= 30) continue;
+        return candidate;
+      }
+      // Confirmed live on Zingo Bingo (ZI) COM 2026-09-02: when every
+      // candidate above gets skipped (e.g. all 30 checked fail the box
+      // check), this final fallback used to return the raw, unfiltered
+      // links.first() — which on this brand's homepage is the "New Slots"
+      // section's own "Show all" link (/online-slots/new/), silently
+      // reintroducing the exact nav/"/new/" links the loop above exists to
+      // exclude. Apply the same href-based exclusions to the fallback
+      // instead of skipping them.
+      for (let i = 0; i < count; i++) {
+        const candidate = links.nth(i);
+        const href = await candidate.getAttribute('href').catch(() => null);
+        if (href && navHrefs.has(new URL(href, page.url()).href)) continue;
+        if (href && /\/new\/?($|[?#])/.test(href)) continue;
+        if (href && excludeHrefs?.has(href)) continue;
         return candidate;
       }
       return links.first();

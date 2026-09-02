@@ -88,7 +88,10 @@ test.describe('P1 - Login', () => {
       }
       await expect(loginBtn).toBeVisible({ timeout: 10_000 });
       await loginBtn.evaluate((el: HTMLElement) => el.click());
-      await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
+      // 30s, not 10s — confirmed live on ZI COM 2026-09-02 (South Africa
+      // VPN, higher latency): the modal reliably opens, just sometimes
+      // slower than 10s to mount under real-world connection conditions.
+      await expect(page).toHaveURL(/#account/, { timeout: 30_000 });
       await page.waitForTimeout(1_500);
       // SNG FR-CA (confirmed live 2026-07-21): the URL updates to #account
       // and the modal backdrop dims the page well before the modal's actual

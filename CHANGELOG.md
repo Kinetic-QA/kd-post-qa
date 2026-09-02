@@ -9,6 +9,26 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-02
+
+### Added
+
+- **Zingo Bingo (ZI) now has real sign-in test accounts for both the UK and international ("COM") sites**, so the previously-skipped "successful login" checks now actually run on both markets.
+
+### Fixed
+
+- **Zingo Bingo's compliance/regulation logos (GamCare, GamStop, UK Gambling Commission, GambleAware, etc.) were being reported as missing on phones — they were never actually missing.** This had been flagged as a real site problem since late July. It turns out the checklist was scrolling the page in a way real visitors never do, and this brand's logo row only loads in for a genuine scroll — so the check simply never triggered it. Fixed to scroll the same way a real person would; all the logos and their links to the regulator sites now check out clean on both phone and desktop, and on both UK and international.
+- **Zingo Bingo's search check could fail on phones** after closing a pop-up mid-test, the same "next click doesn't register until the page gets a fresh reload" issue already fixed for a few other brands — added Zingo Bingo to that same fix.
+- **Zingo Bingo's international ("COM") game-info check could click the wrong thing** — a "Show all" link in the homepage's "New Slots" section was being mistaken for an actual clickable game, sending the check to a listing page instead of opening the game details pop-up. Fixed so that link is correctly skipped in favor of a real game.
+- **Several Zingo Bingo international ("COM") checks were timing out too eagerly while waiting for a pop-up to open** (sign-in, feedback form, header buttons, and a couple of secondary widget checks) — this market's real connection can be a bit slower to respond, and 10–15 seconds wasn't always enough. Given a more realistic 30 seconds to open.
+
+### Known open items
+
+- **A handful of Zingo Bingo international ("COM") checks (feedback form, header login button, registration, and two widget checks) still occasionally don't open their pop-up even after the extra waiting time above.** Matches an already-known, still-unresolved reliability quirk on this same platform (also seen on Ice36) where a button click sometimes just doesn't register the first time. Not something the checklist can paper over — worth a closer look, and worth flagging to the brand owner if it keeps happening.
+- Simba Games (SG) had two one-off flaky checks today (UK login-widget, Canada sign-up) that passed on a second try — nothing broken, just noting it for a closer look tomorrow alongside the Zingo Bingo item above.
+
+---
+
 ## [Unreleased] - 2026-09-01
 
 ### Fixed

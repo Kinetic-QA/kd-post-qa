@@ -1,5 +1,5 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
-import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError } from '../../helpers/common';
+import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, assertNoSiteError, scrollToBottomTrusted } from '../../helpers/common';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
 /**
@@ -54,8 +54,7 @@ test.describe('P2 - Footer Regulations', () => {
     await dismissCookieConsent(page);
     await page.waitForTimeout(3_000);
     await dismissCampaignPopup(page);
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(500);
+    await scrollToBottomTrusted(page);
 
     try {
 
@@ -222,8 +221,7 @@ test.describe('P2 - Footer Regulations', () => {
               await page.waitForLoadState('domcontentloaded');
               await page.waitForTimeout(1_000);
               await dismissCampaignPopup(page);
-              await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-              await page.waitForTimeout(500);
+              await scrollToBottomTrusted(page);
             }
           }
           record(label, true);

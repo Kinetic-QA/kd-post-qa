@@ -2292,10 +2292,9 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
     // SNG/MC (son-cookie-consent, MainMenu_main-menu CSS conventions), but a
     // bingo-first taxonomy with its own category set (Bingo Rooms/Slots/
     // Slingo/Jackpots/Instant Win/Crash Games/Keno/Casino) — no Slingo-style
-    // /slots//casino//bingo/ generic paths, see gameTileHrefSubstrings. No
-    // real test account exists yet (per Reeve/session context) —
-    // hasTestAccount: false, TEST_CREDENTIALS_ZI_UK_USERNAME/PASSWORD not
-    // needed until one is provided.
+    // /slots//casino//bingo/ generic paths, see gameTileHrefSubstrings. Real
+    // test account (chr@test.com) provided by Reeve 2026-09-02 —
+    // TEST_CREDENTIALS_ZI_UK_USERNAME/PASSWORD now set in .env.
     UK: {
       locale: 'en', uiLocalized: false,
       hasBlog: true, blogPath: 'blog/', // confirmed live: sidebar + footer "Blog"/"Read Our Blog" link, 200
@@ -2317,7 +2316,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasFeedbackForm: true, // confirmed live: "Report a problem"-style feedback link present on /contact/ (a[href*="#account/feedback"])
       hasGameCategoryNav: true, // confirmed live: sidebar nav is Home/Promotions/Bingo Rooms/Slots/Slingo/Jackpots/Instant Win/Crash Games/Keno/Casino — a richer, bingo-first taxonomy unlike any brand onboarded so far (see gameTileHrefSubstrings); game-category-navigation.spec.ts's hardcoded category list will need brand-specific handling when that spec runs
       hasLoginRegistration: true, // confirmed live: "Log in"/"Join" buttons present in header (2 login-labeled elements, 1 join-labeled element found)
-      hasTestAccount: false, // confirmed: no TEST_CREDENTIALS_ZI_UK_USERNAME/PASSWORD exists in .env and none was provided this session — skip only login.spec.ts's real successful-login test
+      hasTestAccount: true, // real test account provided by Reeve 2026-09-02 (chr@test.com) — not yet independently confirmed via a completed real login
       hasAccountModal: true, // confirmed live: clicking "Log in" reliably advances the URL to /#account
       hasPaymentMethodsPage: true, // confirmed live: sidebar + footer "Payment Methods"/"Our Payment Methods" link, 200 (default 'payment-methods/' path, no override needed)
       hasBlogDesktopSearch: true, // confirmed live: a real, visible blog search icon exists at desktop width ([data-tk-value="blogSearch"]/[class*="BlogHeader_search"])
@@ -2330,9 +2329,9 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
     // Jackpots only — confirmed live via curl: /bingo-rooms/, /crash-games/,
     // /keno/, /bingo/ all 404 here, unlike UK's bingo-first set) — this
     // international site apparently isn't licensed for real-money Bingo the
-    // way the UK site is. No test account exists yet for this market
-    // (confirmed with user 2026-08-05) — hasTestAccount: false, only
-    // login.spec.ts's real successful-login test skips.
+    // way the UK site is. Real test account (paula01@test.com) provided by
+    // Reeve 2026-09-02 — TEST_CREDENTIALS_ZI_COM_USERNAME/PASSWORD now set
+    // in .env.
     COM: {
       locale: 'en', uiLocalized: false,
       hasBlog: false, blogPath: null, // confirmed live via curl: /blog/ 404s, unlike UK
@@ -2354,7 +2353,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasFeedbackForm: true, // carried over from UK's confirmed widget behavior on the same platform — verify on first real failed-login attempt
       hasGameCategoryNav: true, // confirmed live via curl: real Casino Games/Online Slots/Slingo/Instant Win Games/Jackpots nav links found
       hasLoginRegistration: true, // confirmed live via curl: real login/registration markup present
-      hasTestAccount: false, // no real test account for this market yet (confirmed with user 2026-08-05) — login.spec.ts's real successful-login test should skip cleanly
+      hasTestAccount: true, // real test account provided by Reeve 2026-09-02 (paula01@test.com) — not yet independently confirmed via a completed real login
       hasAccountModal: true, // carried over from UK's confirmed precedent on the same platform family — verify on first real run
       hasPaymentMethodsPage: true, // confirmed live via curl: /payment-methods/ 200, same default path as UK, no override needed
       hasBlogDesktopSearch: false, // moot — hasBlog is false for this market, no blog to search
