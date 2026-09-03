@@ -125,6 +125,10 @@ test.describe('P3 - Blog Search', () => {
       }
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2_500); // wait for campaign popup to appear on blog page
+      // <son-cookie-consent> re-renders on this fresh /blog/ page load and
+      // was left undismissed here — confirmed live on Ice36 UK 2026-09-03,
+      // it silently intercepted the search input click several steps later.
+      await dismissCookieConsent(page);
       await dismissCampaignPopup(page); // dismiss if present before proceeding
       await expect(page).toHaveURL(/\/blog/, { timeout: 15_000 });
     });

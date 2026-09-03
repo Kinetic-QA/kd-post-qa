@@ -17,7 +17,13 @@ test.describe('P2 - Registration Widget', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!currentGeoFeatures().hasLoginRegistration, `No traditional registration widget for this GEO (${test.info().project.name})`);
     await setupCampaignPopupWatcher(page);
-    await page.goto('', { waitUntil: 'domcontentloaded' });
+    // Real-IP GEOs on a slow connection (confirmed live on Ice36 COM
+    // 2026-09-03, tested from South Africa) can exceed the default 30s
+    // navigation timeout on this very first load — one retry with extra
+    // headroom recovers cleanly instead of failing the whole test outright.
+    await page.goto('', { waitUntil: 'domcontentloaded' }).catch(async () => {
+      await page.goto('', { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    });
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_000);
     await dismissCookieConsent(page);
@@ -90,7 +96,10 @@ test.describe('P2 - Registration Widget', () => {
       await membersLoginLink.click();
       await page.waitForTimeout(1_500);
       const usernameInput = page.getByLabel(strings.usernameOrEmailLabel).first();
-      await expect(usernameInput).toBeVisible({ timeout: 10_000 });
+      // 20s, not 10s — same slow real-IP connection margin as
+      // membersLoginLink above (confirmed live on Ice36 COM 2026-09-03,
+      // South Africa connection).
+      await expect(usernameInput).toBeVisible({ timeout: 20_000 });
     });
 
     await runStep('Step 2: "Report a Problem" link opens the Feedback Form', async () => {

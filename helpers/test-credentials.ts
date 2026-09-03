@@ -32,7 +32,7 @@ const KNOWN_GEOS_BY_BRAND: Record<string, string[]> = {
   SG: ['UK', 'CA', 'DK', 'SE', 'COM'],
 };
 
-function credentialsFor(brand: string, geo: string): { username: string; password: string } {
+function credentialsFor(brand: string, geo: string): { username: string; password: string; dob?: string } {
   // Env var names can't contain a hyphen (invalid in a real shell export and
   // not a supported process.env key shape) — GEOs like FR-CA need this
   // sanitized to FR_CA before building the var name.
@@ -50,11 +50,15 @@ function credentialsFor(brand: string, geo: string): { username: string; passwor
       `in helpers/geo-features.ts should be set instead of adding credentials for a GEO with no real test account yet.`
     );
   }
-  return { username, password };
+  // Optional — only a couple of brand/GEO logins (e.g. Ice36 ES) ask for the
+  // account's date of birth as a second step after username/password. Absent
+  // everywhere else, so no fallback/throw when it's missing.
+  const dob = process.env[`TEST_CREDENTIALS_${brand}_${envGeo}_DOB`];
+  return dob ? { username, password, dob } : { username, password };
 }
 
 /** Must be called from inside a running test/hook (uses test.info()). */
-export function currentTestCredentials(): { username: string; password: string } {
+export function currentTestCredentials(): { username: string; password: string; dob?: string } {
   const brand = process.env.TEST_BRAND ?? 'SC';
   // Mobile projects are named "<geo>-mobile" (see playwright.config.ts) —
   // strip the suffix so mobile runs resolve the same per-GEO credentials as
