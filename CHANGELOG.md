@@ -24,7 +24,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Known open items
 
-- Ice36's still-open platform-wide quirks (game details sometimes showing an error screen instead of opening, and sign-in/search pop-ups occasionally not opening on the first click) were checked again today and didn't reproduce on a same-day re-run — still worth keeping an eye on since it's known to come and go, but nothing currently broken.
+- **Correction:** Ice36's platform-wide quirks (game details sometimes showing an error screen instead of opening, and sign-in/search pop-ups occasionally not opening on the first click) are still showing up — the tracker still shows these two checks as partial across the affected markets. An earlier note in this changelog said today's re-run came back clean; that wasn't accurate. Still a known, already-flagged site issue, not something today's fixes touched — nothing new broke, but it's not resolved either.
 
 ---
 
