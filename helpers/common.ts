@@ -495,6 +495,12 @@ export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Pr
     // (blog-page.spec.ts's own poll loop) start scanning for them.
     await page.waitForLoadState('networkidle').catch(() => {});
     await page.waitForTimeout(1_000);
+    // The <son-cookie-consent> element re-renders on every fresh page load,
+    // including this navigation to /blog/ — confirmed live on Ice36 UK
+    // 2026-09-03: leaving it undismissed here silently intercepts pointer
+    // events on later clicks (e.g. the blog search icon), which surfaces
+    // as an unrelated-looking click timeout several steps later.
+    await dismissCookieConsent(page);
     await dismissCampaignPopup(page);
     return;
   }
@@ -511,6 +517,8 @@ export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Pr
   await blogLink.click();
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(1_000);
+  // Same fresh-page re-render as the footer-link branch above.
+  await dismissCookieConsent(page);
   await dismissCampaignPopup(page);
 }
 

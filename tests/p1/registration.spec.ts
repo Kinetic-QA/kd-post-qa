@@ -1,7 +1,7 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
 import type { Page, FrameLocator, Locator } from '@playwright/test';
 import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle, resolveMobileAccountButton } from '../../helpers/common';
-import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateCanadianMobile, generateDOBParts, formatDOBForPlaceholder, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, generateSouthAfricanMobile, getAutoDetectedMobileGenerator, RegistrationData, EsRegistrationData } from '../../helpers/testData';
+import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateCanadianMobile, generateDOBParts, formatDOBForPlaceholder, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, getAutoDetectedMobileGenerator, RegistrationData, EsRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
 
@@ -158,36 +158,36 @@ test.describe('Registration Flow', () => {
     const isPcComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PC'
       && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // I36/COM — onboarding started 2026-08-05, tested from a real South
-    // Africa VPN. Same auto-detect-from-real-IP pattern as MC/COM (Malta)
-    // and PC/COM (UAE) — only the mobile number format needs to match
-    // whatever VPN is actually in use this session (generateSouthAfricanMobile,
-    // same generator SNG's ROW format used the last time it was onboarded
-    // from South Africa) — swap this if a future session tests from
-    // somewhere else, don't assume South Africa carries forward.
+    // Africa VPN; switched to Cyprus 2026-09-03 after South Africa's real
+    // connection proved unreliably slow/flaky for this market's registration
+    // flow. Auto-detects the mobile generator from whatever real IP is
+    // actually in use this session (see getAutoDetectedMobileGenerator's
+    // call site below, falls back to Cyprus) instead of a hardcoded country,
+    // so this doesn't go stale the next time the VPN changes.
     const isI36ComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'I36'
       && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // Zingo Bingo (ZI) COM — onboarding started 2026-08-05, tested from a
-    // real South Africa VPN. Same auto-detect-from-real-IP pattern as I36/
-    // COM (confirmed live: the default UK-shaped mobile number was rejected
-    // after 9+ retry attempts, full 180s timeout) — reuses
-    // generateSouthAfricanMobile, same generator already in use this
-    // session for I36/COM. Swap if a future session tests from a different
-    // VPN, don't assume South Africa carries forward. Also confirmed live
-    // via curl: unlike ZI UK (a genuine bingo-first brand), this market's
-    // nav has NO Bingo Rooms category at all — same 3-checkbox
-    // (over_18/gdpr/terms_accept) consent set as every other no-Bingo
-    // brand/GEO, NOT ZI UK's own 4-checkbox default. This is a per-GEO fact
-    // for this brand specifically, unlike I36's brand-wide isI36NoBingoFormat.
+    // real South Africa VPN; switched to Cyprus 2026-09-03 (South Africa's
+    // real connection confirmed unstable/unreliable for this market, same
+    // reason I36/COM moved). Auto-detects the mobile generator from
+    // whatever real IP is actually in use this session (see
+    // getAutoDetectedMobileGenerator's call site below, falls back to
+    // Cyprus) instead of a hardcoded country. Also confirmed live via curl:
+    // unlike ZI UK (a genuine bingo-first brand), this market's nav has NO
+    // Bingo Rooms category at all — same 3-checkbox (over_18/gdpr/
+    // terms_accept) consent set as every other no-Bingo brand/GEO, NOT ZI
+    // UK's own 4-checkbox default. This is a per-GEO fact for this brand
+    // specifically, unlike I36's brand-wide isI36NoBingoFormat.
     const isZiComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'ZI'
       && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // Simba Games (SG) COM — onboarded 2026-08-05, tested from a confirmed
-    // South Africa IP (verified via ipinfo.io: Johannesburg, ZA). Same
-    // auto-detect-from-real-IP pattern as MC/PC's own COM markets — the
-    // registration widget's mobile-country dropdown reflects whichever
-    // country the tester's real IP resolves to, not a fixed GEO, so
-    // generateSouthAfricanMobile() (not the default UK-shaped generator) is
-    // needed here. Same no-house-number CA-shaped address step and no-Bingo
-    // 3-checkbox consent set as every other COM market onboarded so far.
+    // South Africa IP (verified via ipinfo.io: Johannesburg, ZA); switched
+    // to Cyprus 2026-09-03, same reason and same auto-detect approach as
+    // I36/ZI's own COM markets above — the registration widget's
+    // mobile-country dropdown reflects whichever country the tester's real
+    // IP resolves to, not a fixed GEO. Same no-house-number CA-shaped
+    // address step and no-Bingo 3-checkbox consent set as every other COM
+    // market onboarded so far.
     const isSgComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SG'
       && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // MC/CA — confirmed live 2026-07-22 (correct Canada VPN/IP verified via
@@ -232,12 +232,13 @@ test.describe('Registration Flow', () => {
     const isLpUkFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
       && test.info().project.name.replace(/-mobile$/, '') === 'UK';
     // Lord Ping (LP) COM — onboarded 2026-08-05, tested from a confirmed
-    // South Africa IP (verified via ipinfo.io: Johannesburg, ZA). Same
-    // auto-detect-from-real-IP pattern as every other brand's COM market —
-    // reuses generateSouthAfricanMobile() (same generator SG/COM uses) and
-    // the CA-shaped no-house-number address step. Same no-Bingo taxonomy as
-    // LP UK/CA (Online Slots/Live Casino/Casino Games) — no gdprBingo
-    // checkbox exists here either, same 3-checkbox set.
+    // South Africa IP (verified via ipinfo.io: Johannesburg, ZA). Mobile
+    // generator now auto-detects from whatever real IP is actually in use
+    // this session (see getAutoDetectedMobileGenerator's call site below)
+    // rather than a hardcoded country — same as every other brand's COM
+    // market. Same CA-shaped no-house-number address step, and same
+    // no-Bingo taxonomy as LP UK/CA (Online Slots/Live Casino/Casino Games)
+    // — no gdprBingo checkbox exists here either, same 3-checkbox set.
     const isLpComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
       && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     // Prime Slots (PSL) UK — onboarded 2026-07-30, brand-new brand. Same
@@ -319,12 +320,13 @@ test.describe('Registration Flow', () => {
       && test.info().project.name.replace(/-mobile$/, '') === 'CA';
     // Prime Slots (PSL) COM, Prime Scratch Cards (PSC) COM, Lucky Me Slots
     // (LMS) COM — all onboarded 2026-08-05, tested from a confirmed South
-    // Africa IP (verified via ipinfo.io: Johannesburg, ZA). Same
-    // auto-detect-from-real-IP pattern as every other brand's COM market —
-    // reuse generateSouthAfricanMobile() (same generator SG/LP's own COM
-    // markets use) and the CA-shaped no-house-number address step. Same
-    // no-Bingo taxonomy as each brand's own UK/CA markets — no gdprBingo
-    // checkbox exists on any of these three brands.
+    // Africa IP (verified via ipinfo.io: Johannesburg, ZA). Mobile generator
+    // now auto-detects from whatever real IP is actually in use this
+    // session (see getAutoDetectedMobileGenerator's call site below) rather
+    // than a hardcoded country — same as every other brand's COM market.
+    // Same CA-shaped no-house-number address step, and same no-Bingo
+    // taxonomy as each brand's own UK/CA markets — no gdprBingo checkbox
+    // exists on any of these three brands.
     const isPslComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PSL'
       && test.info().project.name.replace(/-mobile$/, '') === 'COM';
     const isPscComFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'PSC'
@@ -790,8 +792,15 @@ test.describe('Registration Flow', () => {
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
           : isPcComFormat
           ? fillStep0WithRetry(page, scope, data, generateUaeMobile)
+          // Every COM market's real connection was previously assumed fixed
+          // to South Africa — confirmed unreliable/unstable there (I36/ZI
+          // moved to Cyprus 2026-09-03 after repeated flakiness). All COM
+          // brands now auto-detect the mobile generator from whatever real
+          // IP is actually in use this session instead of a hardcoded
+          // country (same pattern ROW already used), so none of these go
+          // stale again the next time the VPN changes.
           : (isI36ComFormat || isZiComFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat)
-          ? fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile)
+          ? fillStep0WithRetry(page, scope, data, getAutoDetectedMobileGenerator(generateCyprusMobile, 'Cyprus'))
           : fillStep0WithRetry(page, scope, data));
       });
 
@@ -938,8 +947,15 @@ test.describe('Registration Flow', () => {
           ? fillStep0WithRetry(page, scope, data, generateMalteseMobile)
           : isPcComFormat
           ? fillStep0WithRetry(page, scope, data, generateUaeMobile)
+          // Every COM market's real connection was previously assumed fixed
+          // to South Africa — confirmed unreliable/unstable there (I36/ZI
+          // moved to Cyprus 2026-09-03 after repeated flakiness). All COM
+          // brands now auto-detect the mobile generator from whatever real
+          // IP is actually in use this session instead of a hardcoded
+          // country (same pattern ROW already used), so none of these go
+          // stale again the next time the VPN changes.
           : (isI36ComFormat || isZiComFormat || isSgComFormat || isLpComFormat || isPslComFormat || isPscComFormat || isLmsComFormat)
-          ? fillStep0WithRetry(page, scope, data, generateSouthAfricanMobile)
+          ? fillStep0WithRetry(page, scope, data, getAutoDetectedMobileGenerator(generateCyprusMobile, 'Cyprus'))
           // MC/CA and MC/FR-CA: country already auto-detects correctly (no
           // 'Canada' label needed, unlike SNG AB/CA) — just needs a
           // NANP-format number; MC/FR-CA additionally needs its own
@@ -1125,6 +1141,33 @@ async function fillEsIdStep(page: Page, scope: Scope, data: EsRegistrationData, 
   console.log('REG-01 (ES) DNI/NIE step complete');
 }
 
+// data.gender is 'Masculino' | 'Femenino' | 'Otro', which matches the on-page
+// wording on other ES brands (e.g. PC ES, GC ES) — but Ice36 ES's own gender
+// buttons read "Hombre"/"Mujer"/"Otro" instead (confirmed live 2026-09-03).
+// The old code silently no-op'd when data.gender wasn't found on the page,
+// so registration submitted with no gender selected and failed validation
+// ("Elige tu género") several steps later with no clue why. Try the exact
+// generated label first, then fall back to this brand's own wording.
+const ES_GENDER_LABEL_FALLBACK: Record<string, string> = {
+  Masculino: 'Hombre',
+  Femenino: 'Mujer',
+  Otro: 'Otro',
+};
+
+async function clickEsGenderOption(scope: Scope, gender: string): Promise<void> {
+  let genderBtn = scope.getByText(gender, { exact: true }).first();
+  if (!(await genderBtn.isVisible({ timeout: 3_000 }).catch(() => false))) {
+    const fallback = ES_GENDER_LABEL_FALLBACK[gender];
+    if (fallback && fallback !== gender) {
+      genderBtn = scope.getByText(fallback, { exact: true }).first();
+    }
+  }
+  if (await genderBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await genderBtn.click({ force: true });
+    await genderBtn.page().waitForTimeout(200);
+  }
+}
+
 async function fillEsPersonalDetails(page: Page, scope: Scope, data: EsRegistrationData): Promise<void> {
   console.log('REG-01 (ES) Paso 1/3 personal details');
 
@@ -1153,11 +1196,7 @@ async function fillEsPersonalDetails(page: Page, scope: Scope, data: EsRegistrat
   await dobInput.fill(data.dob);
   await page.waitForTimeout(200);
 
-  const genderBtn = scope.getByText(data.gender, { exact: true }).first();
-  if (await genderBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await genderBtn.click({ force: true });
-    await page.waitForTimeout(200);
-  }
+  await clickEsGenderOption(scope, data.gender);
 
   // Next screen is the "Paso 2 de 3" address form, identified by its
   // address-search input (placeholder confirmed live: "Comienza a escribir
@@ -1169,14 +1208,18 @@ async function fillEsPersonalDetails(page: Page, scope: Scope, data: EsRegistrat
 async function fillEsAddress(page: Page, scope: Scope): Promise<void> {
   console.log('REG-01 (ES) Paso 2/3 address');
 
-  // The address field is autocomplete-first with a manual-entry fallback
-  // link ("Introducir dirección") — confirmed live. Autocomplete suggestions
-  // depend on a real address existing, which synthetic test data can't
-  // guarantee, so always use the manual path instead.
+  // On most ES brands the address field is autocomplete-first with a
+  // manual-entry fallback link ("Introducir dirección") — confirmed live.
+  // Autocomplete suggestions depend on a real address existing, which
+  // synthetic test data can't guarantee, so always use the manual path
+  // instead. Ice36 ES (confirmed live 2026-09-03) skips the autocomplete
+  // step entirely and shows the manual fields directly, so this link never
+  // appears there — optional, not required, unlike every other click here.
   const manualLink = scope.getByText(/introducir dirección/i).first();
-  await expect(manualLink).toBeVisible({ timeout: 10_000 });
-  await manualLink.click({ force: true });
-  await page.waitForTimeout(1_000);
+  if (await manualLink.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await manualLink.click({ force: true });
+    await page.waitForTimeout(1_000);
+  }
 
   // Manual mode confirmed live: Dirección (street), Código postal, Ciudad,
   // and a Provincia <select> — each needs a real value in its own field,
@@ -1316,11 +1359,7 @@ async function fillEsMobileStep2NationalityDobGender(page: Page, scope: Scope, d
   await dobInput.fill(data.dob);
   await page.waitForTimeout(200);
 
-  const genderBtn = scope.getByText(data.gender, { exact: true }).first();
-  if (await genderBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await genderBtn.click({ force: true });
-    await page.waitForTimeout(200);
-  }
+  await clickEsGenderOption(scope, data.gender);
 
   await clickContinuarAndWait(page, scope, scope.locator('#email').first(), 'mobile-nationality-dob-gender');
   console.log('REG-01 (ES mobile) Paso 2/6 complete');

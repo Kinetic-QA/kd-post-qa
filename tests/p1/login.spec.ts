@@ -67,7 +67,7 @@ test.describe('P1 - Login', () => {
       });
     }
 
-    const { username, password } = currentTestCredentials();
+    const { username, password, dob } = currentTestCredentials();
     const strings = currentLocaleStrings();
     const isMobile = test.info().project.name.endsWith('-mobile');
 
@@ -138,6 +138,29 @@ test.describe('P1 - Login', () => {
       // even though the button is genuinely visible and clickable to a user.
       await loginSubmitBtn.click({ force: true });
       await page.waitForTimeout(4_000);
+    });
+
+    // ── Step 4b: Confirm date of birth, if the site asks for it ──────────
+    // Ice36 ES (confirmed live 2026-09-03) shows a second modal after
+    // username/password asking to reconfirm this account's date of birth
+    // ("¿Cuándo es tu cumpleaños?") before completing login — no other
+    // brand/GEO login does this. Optional: only runs if both the field
+    // appears and a dob is configured for this brand/GEO (see
+    // helpers/test-credentials.ts); otherwise a no-op for every other site.
+    await runStep('Confirm date of birth, if asked', async () => {
+      if (!dob) return;
+      const dobInput = page.getByLabel(/cumpleaños/i).first();
+      if (await dobInput.isVisible({ timeout: 5_000 }).catch(() => false)) {
+        // Field's own placeholder reads "Día-Mes-Año" (DD-MM-YYYY, hyphens),
+        // same convention already confirmed for this site's sign-up DOB
+        // field — dob is stored DD/MM/YYYY in .env, so adapt the separator.
+        await dobInput.click();
+        await dobInput.fill(dob.replace(/\//g, '-'));
+        await page.waitForTimeout(300);
+        const confirmBtn = page.getByRole('button', { name: strings.loginSubmitButton }).first();
+        await confirmBtn.click({ force: true });
+        await page.waitForTimeout(4_000);
+      }
     });
 
     // ── Step 5: Verify successful login ─────────────────────────────────

@@ -9,6 +9,25 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-03
+
+### Added
+
+- **Ice36's Spanish site can now log all the way in.** This site has an extra step that most others don't — after typing your username and password, it also asks you to confirm your date of birth before letting you in. The checklist now handles that extra step when it comes up, using the account's real date of birth.
+
+### Fixed
+
+- **Ice36's blog search and blog page header checks were failing on the UK site because of a cookie pop-up that came back.** The checklist agrees to cookies once on the homepage, but clicking through to the blog page loads a brand-new copy of the page — and the cookie pop-up quietly reappeared there too, sitting on top of the search box and blocking the very next click. It now agrees to cookies again after arriving on the blog page.
+- **Ice36's Spanish sign-up form was silently failing on the gender question.** The checklist was picking "Masculino/Femenino/Otro," but this brand's Spanish site actually shows "Hombre/Mujer/Otro" instead — so no gender ever got selected, and the form quietly rejected the whole sign-up several steps later with no clue why. It now recognizes both wordings.
+- **Ice36's Spanish sign-up form could also get stuck on the address step.** The checklist expected an "enter address manually" link before it could type in a street address, but this brand's Spanish site shows the address boxes right away with no such link — so it kept waiting for something that was never going to appear. It now only clicks that link if it's actually there.
+- **Several brands' international ("COM") sign-up checks assumed testing would always happen from a South Africa connection**, and would quietly type in a South-African-style phone number no matter which country the tester was actually connecting from. Testing from South Africa itself turned out to be genuinely unreliable (slow, dropped connections) for a couple of these brands, so the team is moving those to a Cyprus connection instead — the checklist now automatically matches whichever country it detects, for Ice36, Zingo Bingo, Simba Games, Lord Ping, Prime Slots, Prime Scratch Cards, and Lucky Me Slots, so it won't need this kind of manual fix again the next time the connection changes.
+
+### Known open items
+
+- Ice36's still-open platform-wide quirks (game details sometimes showing an error screen instead of opening, and sign-in/search pop-ups occasionally not opening on the first click) were checked again today and didn't reproduce on a same-day re-run — still worth keeping an eye on since it's known to come and go, but nothing currently broken.
+
+---
+
 ## [Unreleased] - 2026-09-02
 
 ### Added
