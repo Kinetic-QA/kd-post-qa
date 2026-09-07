@@ -9,6 +9,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-07
+
+### Changed
+
+- **Ice36's two long-standing "partial" checks — Game Info Modal and Login Widget — are now marked done on the tracker.** Both had been flagged since mid-August as an occasional real site glitch: clicking into a game sometimes showed a generic error screen instead of the game details, and the sign-in pop-up sometimes didn't open on the first click. Today the checklist was re-run several times over on every single market (UK, international, Ireland, Canada, Spain, Denmark), and it was also checked by hand on the UK site (several games, on both a computer and a phone) — every single check came back clean, with no sign of either problem anywhere. Because this issue only ever showed up occasionally rather than every time, today's clean run across the board doesn't prove it's gone for good, but it's a strong sign it may no longer be happening. Worth keeping an eye out in future re-runs in case it resurfaces.
+
+---
+
 ## [Unreleased] - 2026-09-03
 
 ### Added
