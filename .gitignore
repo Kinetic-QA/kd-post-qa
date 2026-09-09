@@ -43,3 +43,11 @@ Thumbs.db
 # GUI dashboard — not ready for the team yet, local-only until it is
 # (decided by Reeve 2026-08-26; remove this line when it's ready to share)
 gui/
+
+# QA Automated Regression Results dashboard — generated data + staged
+# reports (rebuilt by dashboard/build-data.cjs / deploy-dashboard.cjs from
+# local Test Reports/, not meant to live in git) and its local Netlify
+# site-link state, same reasoning as .netlify above.
+dashboard/public/data.json
+dashboard/public/reports/
+dashboard/.netlify-site.json

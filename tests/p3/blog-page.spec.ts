@@ -175,7 +175,18 @@ test.describe('P3 - Blog Page', () => {
       // category-link poll above — confirmed live on PSL UK 2026-07-31 that
       // Step 2's post-link scan can occasionally race the listing's own
       // content still hydrating right after this goBack.
-      await page.waitForLoadState('networkidle').catch(() => {});
+      // Bounded to 5s (was unbounded, i.e. the default 30s) — confirmed live
+      // on SC UK 2026-09-09 via trace inspection that this brand's blog
+      // pages keep background network chatter going indefinitely (a
+      // Partytown-proxied third-party script), so 'networkidle' never
+      // legitimately fires and was silently eating the full default 30s
+      // timeout here on every run, twice per test counting
+      // navigateToBlogViaSidebar's own networkidle wait — together consuming
+      // 60 of the test's 90s budget and causing BP-01 to time out. Step 2's
+      // own 6-attempt/6s poll loop (clickReadMoreOrFirstPost) already covers
+      // the actual hydration race this wait was added for, so a short grace
+      // window is enough; it no longer needs to be the primary safeguard.
+      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
       await dismissCampaignPopup(page);
     });
 

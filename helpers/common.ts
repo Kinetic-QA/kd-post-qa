@@ -493,7 +493,15 @@ export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Pr
     // domcontentloaded, especially deep into a long sequential run —
     // networkidle gives them a real chance to finish before callers
     // (blog-page.spec.ts's own poll loop) start scanning for them.
-    await page.waitForLoadState('networkidle').catch(() => {});
+    // Bounded to 5s (was unbounded, i.e. the default 30s) — confirmed live
+    // on SC UK 2026-09-09 via trace inspection that this brand's blog pages
+    // keep background network chatter going indefinitely (a
+    // Partytown-proxied third-party script), so 'networkidle' never
+    // legitimately fires and was silently eating the full 30s here on every
+    // run. blog-page.spec.ts's own 6-attempt/6s poll loop already covers the
+    // actual hydration race this wait was added for, so a short grace
+    // window is enough; it no longer needs to be the primary safeguard.
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
     await page.waitForTimeout(1_000);
     // The <son-cookie-consent> element re-renders on every fresh page load,
     // including this navigation to /blog/ — confirmed live on Ice36 UK

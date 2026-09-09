@@ -313,8 +313,13 @@ class ExcelReporter {
     // of what was actually exercised, how much came back clean — a GEO with
     // heavy skips can still be 100% reliable on what it does cover, so these
     // are two separate numbers, not one blended score.
+    //
+    // A "Skipped" check means the spec doesn't apply to this brand/GEO (e.g.
+    // a feature that genuinely doesn't exist on this market) — not a gap in
+    // coverage, so it counts toward Coverage the same as something that
+    // actually ran and passed, instead of dragging the percentage down.
     const ran = grandPassed + grandFailed;
-    const coveragePct = grandTotal > 0 ? Math.round((ran / grandTotal) * 1000) / 10 : 0;
+    const coveragePct = grandTotal > 0 ? Math.round(((ran + grandSkipped) / grandTotal) * 1000) / 10 : 0;
     const reliabilityPct = ran > 0 ? Math.round((grandPassed / ran) * 1000) / 10 : 100;
 
     // "Clean Run" describes the SITE this run — did everything pass. It is
@@ -435,7 +440,12 @@ class ExcelReporter {
     // Automation Reliability metric distinguish "the tooling caught a
     // one-off blip and recovered" from "the tooling is untrustworthy."
     const flaky = rows.filter(r => r.retried && r.status === 'passed').length;
-    const passRate = total > 0 ? `${Math.round(passed / total * 1000) / 10}%` : '0%';
+    // Skipped checks are specs that don't apply to this brand/GEO (e.g. a
+    // feature that genuinely doesn't exist on this market) — not a failure
+    // to exercise them, so they count toward Pass Rate the same as Passed.
+    // The Status column below still labels each row "SKIPPED" — only this
+    // rolled-up percentage treats it as a pass.
+    const passRate = total > 0 ? `${Math.round((passed + skipped) / total * 1000) / 10}%` : '0%';
     const totalDurationS = rows.reduce((sum, r) => sum + (r.duration_s || 0), 0);
     const totalDurationLabel = formatDuration(totalDurationS);
 
