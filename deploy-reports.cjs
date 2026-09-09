@@ -98,14 +98,29 @@ const stagingDir = path.join(os.tmpdir(), `netlify-stage-${brand}-${dateStr}`);
 fs.rmSync(stagingDir, { recursive: true, force: true });
 fs.mkdirSync(stagingDir, { recursive: true });
 
+// Strips the "trace" attachment entry from a staged report's embedded data
+// so its own UI never renders a Trace button in the first place — the .zip
+// itself is already skipped by isTraceAttachment above, but without this
+// the report still listed a trace attachment for every test and showed a
+// button that looked clickable but 404'd. Shelled out (rather than
+// require()'d and awaited) so this script doesn't need converting to async.
+function stripTraceButtonsSync(indexHtmlPath) {
+  const result = spawnSync('node', [path.join(__dirname, 'strip-trace-buttons.cjs'), indexHtmlPath], { encoding: 'utf-8' });
+  if (result.status !== 0) console.error(`Warning: failed to strip trace buttons from ${indexHtmlPath}:`, result.stderr);
+}
+
 console.log(`Staging ${brand} ${dateStr} reports for deploy (trace .zip attachments skipped):`);
 for (const { geo, sourcePath } of staged) {
   console.log(`  - ${geo}  <-  ${sourcePath}`);
-  copyDir(sourcePath, path.join(stagingDir, geo));
+  const dest = path.join(stagingDir, geo);
+  copyDir(sourcePath, dest);
+  stripTraceButtonsSync(path.join(dest, 'index.html'));
 }
 if (hasMerged) {
   console.log(`  - merged  <-  ${mergedDir}`);
-  copyDir(mergedDir, path.join(stagingDir, 'merged'));
+  const mergedDest = path.join(stagingDir, 'merged');
+  copyDir(mergedDir, mergedDest);
+  stripTraceButtonsSync(path.join(mergedDest, 'index.html'));
 }
 
 function dirSizeBytes(dir) {

@@ -9,6 +9,24 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-09
+
+### Added
+
+- **New public results website: "QA Automated Regression Results."** A shareable overview page that shows today's automated test results across every brand at a glance — total passed/failed, a trend chart, and a per-brand pass-rate table — plus links straight into the full detailed report for each country tested. This is separate from the internal tools the team already uses day-to-day.
+
+### Fixed
+
+- **Slingo UK's blog page check was timing out and failing every time**, even though the blog page itself worked completely fine for real visitors. The checklist was waiting for the page's background activity to fully settle down before moving on — but this blog page never fully goes quiet (some behind-the-scenes ad/tracking scripts keep running), so the checklist just sat there waiting until it ran out of time. It now only waits a few seconds for that instead of waiting indefinitely.
+- **Slingo Spain's footer "Payment Options" link check was going to the wrong page.** The checklist was guessing the same web address every brand normally uses, but Slingo's Spanish site actually uses a different, Spanish-language address for that page. It now checks the correct one.
+- **Test report links shared from the results website had a "Trace" button that looked clickable but didn't actually work.** Since we don't upload that extra debugging data (it would make every report several times bigger for something almost nobody needs — the video and screenshots already show what happened), the button is now removed from shared reports instead of being left there to click and do nothing.
+
+### Changed
+
+- **The "% Automated" number on the summary tracker now treats a skipped check as automated, not excluded.** A check gets skipped when it genuinely doesn't apply to a brand/market (e.g. a feature that market doesn't have) — that's not a coverage gap, so it now counts the same as something that ran and passed, instead of being left out of the percentage entirely.
+
+---
+
 ## [Unreleased] - 2026-09-07
 
 ### Changed

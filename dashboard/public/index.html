@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>QA Automated Regression Results</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+
+    <div class="hero">
+      <div class="hero-brand">
+        <span class="logo-chip">
+          <img src="assets/kinetic-logo.svg" alt="Kinetic Digital" class="logo" />
+        </span>
+      </div>
+      <h1>QA Automated Regression Results</h1>
+      <p>An overview of our automated QA regression testing.</p>
+      <span id="generated-note" class="generated-note"></span>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label"><span class="icon">&#128193;</span> Total Runs</div>
+        <div class="stat-value" id="stat-total-runs">&mdash;</div>
+      </div>
+      <button class="stat-card stat-passed stat-clickable" data-filter="passed">
+        <div class="stat-label"><span class="icon">&#9989;</span> Passed</div>
+        <div class="stat-value" id="stat-passed">&mdash;</div>
+      </button>
+      <button class="stat-card stat-failed stat-clickable" data-filter="failed">
+        <div class="stat-label"><span class="icon">&#10060;</span> Failed</div>
+        <div class="stat-value" id="stat-failed">&mdash;</div>
+      </button>
+      <button class="stat-card stat-flaky stat-clickable" data-filter="flaky">
+        <div class="stat-label"><span class="icon">&#128260;</span> Flaky</div>
+        <div class="stat-value" id="stat-flaky">&mdash;</div>
+      </button>
+    </div>
+
+    <section class="card">
+      <div class="chart-split">
+        <div class="chart-pane">
+          <div class="card-header">
+            <span class="icon">&#128200;</span>
+            <h2 id="trend-title">Pass / Fail / Flaky Trend</h2>
+          </div>
+          <div id="trend-chart"></div>
+        </div>
+        <div class="chart-pane chart-pane-donut">
+          <div class="card-header">
+            <span class="icon">&#127760;</span>
+            <h2>Overall Split</h2>
+          </div>
+          <div id="status-donut"></div>
+        </div>
+      </div>
+      <div class="chart-legend">
+        <span class="legend-item" data-series="passed"><span class="legend-swatch swatch-passed"></span>Passed</span>
+        <span class="legend-item" data-series="failed"><span class="legend-swatch swatch-failed"></span>Failed</span>
+        <span class="legend-item" data-series="flaky"><span class="legend-swatch swatch-flaky"></span>Flaky</span>
+      </div>
+    </section>
+
+    <section id="drilldown-card" class="card drilldown-card" hidden>
+      <div class="card-header">
+        <span class="icon" id="drilldown-icon">&#128203;</span>
+        <h2 id="drilldown-title">All Tests</h2>
+        <button id="drilldown-close" class="drilldown-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="runs-table-wrap">
+        <table class="runs-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Brand</th>
+              <th>GEO</th>
+              <th>Test</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="drilldown-tbody"></tbody>
+        </table>
+      </div>
+      <p id="drilldown-empty" class="runs-empty">No matching tests found.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <span class="icon">&#127942;</span>
+        <h2>Brands</h2>
+        <span class="last-run-note" id="brands-note">Every brand tested today</span>
+      </div>
+      <div class="runs-table-wrap">
+        <table class="runs-table">
+          <thead>
+            <tr>
+              <th>Brand</th>
+              <th>GEOs Covered</th>
+              <th>Pass Rate</th>
+              <th>Passed</th>
+              <th>Failed</th>
+              <th>Flaky</th>
+              <th>Last Run</th>
+            </tr>
+          </thead>
+          <tbody id="brands-tbody"></tbody>
+        </table>
+      </div>
+      <p id="brands-empty" class="runs-empty">No brand data yet.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <span class="icon">&#128197;</span>
+        <h2>Today's Run</h2>
+        <span id="last-run-note" class="last-run-note"></span>
+      </div>
+
+      <div id="days-list" class="days-list"></div>
+      <p id="runs-empty" class="runs-empty">No test runs recorded yet.</p>
+    </section>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
