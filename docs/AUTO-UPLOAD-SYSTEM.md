@@ -63,6 +63,26 @@ run" without needing you to repeat information the test run already recorded.
 - It does not delete or overwrite a previous day's uploaded reports — each
   day's reports are staged under their own date folder.
 
+## First-time setup on a new machine (laptop, teammate's computer, etc.)
+
+`git pull` gets you the code, but two things this trigger needs are
+deliberately **not** in git — get both from Reeve before the first time you
+run this on a new machine:
+
+1. **`.env`** — needed for `NETLIFY_AUTH_TOKEN` (Dominik's Netlify account
+   token this project deploys under).
+2. **`dashboard/.netlify-site.json`** — remembers the *existing*
+   `qa-automated-regression-results` site's ID. This one is easy to miss
+   since nothing errors without it — but if it's missing, `deploy-dashboard.cjs`
+   assumes no site exists yet and **creates a brand-new duplicate Netlify
+   site** instead of updating the real one. Place it at exactly
+   `dashboard/.netlify-site.json` (same relative path) before running the
+   trigger for the first time on a new machine.
+
+Both are gitignored on purpose (see `.gitignore`) — same reasoning as
+`.env` itself: machine-specific/sensitive state that shouldn't live in git
+history.
+
 ## Running it manually
 
 If you ever want to trigger this yourself without going through Claude:
