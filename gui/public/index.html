@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>QA Test Center</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+
+    <div class="hero">
+      <div class="hero-brand">
+        <span class="logo-chip">
+          <img src="assets/kinetic-logo.svg" alt="Kinetic Digital" class="logo" />
+        </span>
+        <div class="notify-bar">
+          <button id="notify-toggle" class="notify-btn">&#128276; Desktop Alerts</button>
+          <span id="notify-status" class="notify-status"></span>
+        </div>
+      </div>
+      <h1>QA Test Center</h1>
+    </div>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="dashboard">
+        <span class="tab-icon">&#128202;</span> Dashboard
+      </button>
+      <button class="tab" data-tab="runner">
+        <span class="tab-icon">&#9654;</span> Functional Check
+      </button>
+      <button class="tab" data-tab="visual">
+        <span class="tab-icon">&#128065;</span> Visual Check
+      </button>
+    </nav>
+
+    <div id="tab-dashboard" class="tab-panel active">
+
+      <div class="stat-grid">
+        <button class="stat-card stat-clickable" data-filter="all">
+          <div class="stat-label"><span class="icon">&#128193;</span> Total Runs</div>
+          <div class="stat-value" id="stat-total-runs">&mdash;</div>
+        </button>
+        <button class="stat-card stat-passed stat-clickable" data-filter="passed">
+          <div class="stat-label"><span class="icon">&#9989;</span> Passed</div>
+          <div class="stat-value" id="stat-passed">&mdash;</div>
+        </button>
+        <button class="stat-card stat-failed stat-clickable" data-filter="failed">
+          <div class="stat-label"><span class="icon">&#10060;</span> Failed</div>
+          <div class="stat-value" id="stat-failed">&mdash;</div>
+        </button>
+        <button class="stat-card stat-flaky stat-clickable" data-filter="flaky">
+          <div class="stat-label"><span class="icon">&#128260;</span> Flaky</div>
+          <div class="stat-value" id="stat-flaky">&mdash;</div>
+        </button>
+      </div>
+
+      <section id="drilldown-card" class="card drilldown-card" hidden>
+        <div class="card-header">
+          <span class="icon" id="drilldown-icon">&#128203;</span>
+          <h2 id="drilldown-title">All Tests</h2>
+          <button id="drilldown-close" class="drilldown-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="runs-table-wrap">
+          <table class="runs-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Brand</th>
+                <th>GEO</th>
+                <th>Test</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="drilldown-tbody"></tbody>
+          </table>
+        </div>
+        <p id="drilldown-empty" class="runs-empty">No matching tests found.</p>
+      </section>
+
+      <section class="card">
+        <div class="chart-split">
+          <div class="chart-pane">
+            <div class="card-header">
+              <span class="icon">&#128200;</span>
+              <h2 id="trend-title">Pass / Fail / Flaky Trend</h2>
+            </div>
+            <div id="trend-chart"></div>
+          </div>
+          <div class="chart-pane chart-pane-donut">
+            <div class="card-header">
+              <span class="icon">&#127760;</span>
+              <h2>Overall Split</h2>
+            </div>
+            <div id="status-donut"></div>
+          </div>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item" data-series="passed"><span class="legend-swatch swatch-passed"></span>Passed</span>
+          <span class="legend-item" data-series="failed"><span class="legend-swatch swatch-failed"></span>Failed</span>
+          <span class="legend-item" data-series="flaky"><span class="legend-swatch swatch-flaky"></span>Flaky</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <span class="icon">&#128197;</span>
+          <h2>Test Runs by Date</h2>
+          <span id="last-run-note" class="last-run-note"></span>
+        </div>
+
+        <div id="days-list" class="days-list"></div>
+        <p id="runs-empty" class="runs-empty">No test runs recorded yet &mdash; run a test to see it here.</p>
+      </section>
+
+    </div>
+
+    <div id="tab-runner" class="tab-panel">
+
+      <section class="card">
+        <div class="card-header">
+          <span class="icon">&#9881;&#65039;</span>
+          <h2>Run Configuration</h2>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="brand-select">Brand</label>
+            <select id="brand-select"></select>
+          </div>
+          <div class="field">
+            <label for="device-select">Device</label>
+            <select id="device-select">
+              <option value="desktop">Desktop</option>
+              <option value="mobile">Mobile</option>
+              <option value="both">Desktop + Mobile</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="spec-select">Test Case</label>
+            <select id="spec-select"></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>GEOs</label>
+          <div id="geo-checks" class="geo-checks"></div>
+        </div>
+
+        <div class="run-actions">
+          <button id="run-btn" class="run-btn">&#9654; Run Tests</button>
+          <button id="stop-btn" class="stop-btn" disabled>&#9632; Stop</button>
+        </div>
+      </section>
+
+      <section id="progress-card" class="card" hidden>
+        <div class="card-header">
+          <span class="icon">&#128203;</span>
+          <h2>Run Progress</h2>
+        </div>
+        <div id="run-steps" class="multi-steps"></div>
+
+        <div id="vpn-pause" class="vpn-pause" hidden>
+          <p>Switch your VPN to <strong id="vpn-pause-geo"></strong>, then click Continue.</p>
+          <button id="continue-btn" class="run-btn" disabled>&#9654; Continue</button>
+        </div>
+      </section>
+
+      <section class="console-card">
+        <div class="console-titlebar">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <span class="title">Console Output</span>
+          <span id="status" class="status-pill" style="margin-left:auto;"></span>
+        </div>
+        <pre id="output"></pre>
+      </section>
+
+      <section id="results-card" class="card results-card">
+        <div class="card-header">
+          <span class="icon">&#128203;</span>
+          <h2>Results</h2>
+        </div>
+        <div class="results-body">
+          <span id="status-detail" class="status-pill"></span>
+          <span id="report-link" class="report-link"></span>
+          <span id="excel-link" class="report-link"></span>
+        </div>
+      </section>
+
+    </div>
+
+    <div id="tab-visual" class="tab-panel">
+
+      <nav class="subtabs">
+        <button class="subtab active" data-subtab="compare">Compare</button>
+        <button class="subtab" data-subtab="investigate">Investigate</button>
+      </nav>
+
+      <div id="subtab-compare" class="subtab-panel active">
+
+        <section class="card">
+          <div class="card-header">
+            <span class="icon">&#128065;</span>
+            <h2>Visual Check</h2>
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="visual-mode-select">Comparison Mode</label>
+              <select id="visual-mode-select">
+                <option value="document-vs-site">Document vs Site</option>
+                <option value="asset-vs-site">Asset vs Site</option>
+                <option value="site-vs-site">Site vs Site</option>
+                <option value="campaign-vs-site">Campaign Materials vs Site</option>
+                <option disabled>Mockup vs Site — Coming Soon</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="visual-widget-upload" class="form-grid">
+            <div class="field">
+              <label for="visual-file-input" id="visual-file-label">Document</label>
+              <input type="file" id="visual-file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.svg" />
+            </div>
+            <div class="field">
+              <label for="visual-site-url">Site URL</label>
+              <input type="url" id="visual-site-url" placeholder="https://www.example.com/" />
+            </div>
+          </div>
+
+          <div id="visual-widget-sites" class="form-grid" hidden>
+            <div class="field">
+              <label for="visual-qa-url">QA Site URL</label>
+              <input type="url" id="visual-qa-url" placeholder="https://qa.example.com/" />
+            </div>
+            <div class="field">
+              <label for="visual-prod-url">Production Site URL</label>
+              <input type="url" id="visual-prod-url" placeholder="https://www.example.com/" />
+            </div>
+          </div>
+
+          <div id="visual-widget-campaign" class="form-grid" hidden>
+            <div class="field">
+              <label for="visual-banner-input">Banner Image (optional)</label>
+              <input type="file" id="visual-banner-input" accept=".png,.jpg,.jpeg,.webp,.gif,.svg" />
+            </div>
+            <div class="field">
+              <label for="visual-popup-input">Pop-up Image (optional)</label>
+              <input type="file" id="visual-popup-input" accept=".png,.jpg,.jpeg,.webp,.gif,.svg" />
+            </div>
+            <div class="field visual-field-wide">
+              <label for="visual-tnc-input">T&amp;C Text (optional)</label>
+              <textarea id="visual-tnc-input" rows="4" placeholder="Paste the campaign's Terms &amp; Conditions text here..."></textarea>
+            </div>
+            <div class="field">
+              <label for="visual-campaign-site-url">Site URL</label>
+              <input type="url" id="visual-campaign-site-url" placeholder="https://www.example.com/" />
+            </div>
+            <p class="visual-field-note">Provide at least one of Banner Image, Pop-up Image, or T&amp;C Text.</p>
+          </div>
+
+          <div class="run-actions">
+            <button id="visual-run-btn" class="run-btn">&#9654; Run Comparison</button>
+            <span id="visual-status" class="status-pill"></span>
+          </div>
+          <div id="visual-progress-bar" class="progress-bar-track"><div class="progress-bar-fill"></div></div>
+        </section>
+
+        <section id="visual-results-card" class="card results-card">
+          <div class="card-header">
+            <span class="icon">&#128203;</span>
+            <h2>Comparison Results</h2>
+          </div>
+          <div id="visual-error" class="visual-error" hidden></div>
+          <div id="visual-report-body"></div>
+        </section>
+
+      </div>
+
+      <div id="subtab-investigate" class="subtab-panel">
+
+        <section class="card">
+          <div class="card-header">
+            <span class="icon">&#128269;</span>
+            <h2>Investigate</h2>
+          </div>
+
+          <div class="form-grid">
+            <div class="field visual-field-wide">
+              <label for="investigate-url">Site URL (Production or QA)</label>
+              <input type="url" id="investigate-url" placeholder="https://www.example.com/" />
+            </div>
+            <div class="field visual-field-wide">
+              <label for="investigate-terms">Find text (optional, comma or line separated)</label>
+              <textarea id="investigate-terms" rows="2" placeholder="e.g. Meta Details, T&amp;C, ™&#10;(one per line also works)"></textarea>
+            </div>
+            <div class="field visual-field-wide">
+              <label for="investigate-exclude">Exclude GEOs/paths (optional, comma or line separated)</label>
+              <textarea id="investigate-exclude" rows="2" placeholder="e.g. /ca/, /ie/, /fr-ca"></textarea>
+            </div>
+            <p class="visual-field-note">Useful when a brand serves several GEOs off the SAME domain by path (e.g. brand.com/ca/) instead of a separate ccTLD — any crawled link containing one of these gets skipped entirely.</p>
+          </div>
+
+          <label class="investigate-smart-toggle">
+            <input type="checkbox" id="investigate-smart-match" />
+            Smart match (AI) — also catch reworded/paraphrased mentions, not just exact text
+          </label>
+
+          <div class="run-actions">
+            <button id="investigate-run-btn" class="run-btn">&#9654; Run Investigate</button>
+            <button id="investigate-stop-btn" class="stop-btn" disabled>&#9632; Stop</button>
+            <span id="investigate-status" class="status-pill"></span>
+            <span id="investigate-progress" class="investigate-progress"></span>
+          </div>
+          <div id="investigate-progress-bar" class="progress-bar-track"><div class="progress-bar-fill"></div></div>
+        </section>
+
+        <section id="investigate-results-card" class="card results-card">
+          <div class="card-header">
+            <span class="icon">&#128203;</span>
+            <h2>Crawl Results</h2>
+            <button id="investigate-export-btn" class="investigate-export-btn" disabled>&#11015; Export CSV</button>
+          </div>
+          <p id="investigate-capped-note" class="visual-field-note" hidden></p>
+          <div class="runs-table-wrap">
+            <table class="runs-table">
+              <thead>
+                <tr id="investigate-thead-row">
+                  <th>URL</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="investigate-tbody"></tbody>
+            </table>
+          </div>
+          <p id="investigate-empty" class="runs-empty">Run an investigation to see crawled URLs here.</p>
+        </section>
+
+      </div>
+
+    </div>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
