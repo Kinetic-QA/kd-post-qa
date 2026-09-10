@@ -39,16 +39,68 @@ const PORT = Number(process.env.GUI_PORT) || 4848;
 // falls back to the OS account name so this works with zero setup.
 const RUNNER_NAME = process.env.RUNNER_NAME || os.userInfo().username;
 
-// Mirrors the desktop Notification alerts in app.js so the same VPN-switch
-// and run-finished pings also land on Slack (and your phone). Optional —
-// SLACK_WEBHOOK_URL is unset by default, and a failed post never breaks the
-// run, it just logs and moves on.
-async function notifySlack(text: string): Promise<void> {
+type RunStats = { total: number; passed: number; failed: number; skipped: number };
+
+// One card color per event type, so a fast glance down a busy channel tells
+// you the outcome before reading a word — blue while a run is in progress,
+// green/red once it has a real pass/fail result, gray for a manual stop,
+// amber while it's genuinely waiting on a person (VPN switch).
+const CARD_COLOR = {
+  running: '#2E86DE',
+  success: '#2EB67D',
+  failure: '#E01E5A',
+  stopped: '#8D8D8D',
+  waiting: '#ECB22E',
+} as const;
+
+interface SlackCard {
+  emoji: string;
+  title: string;
+  color: keyof typeof CARD_COLOR;
+  /** Extra mrkdwn line under the title, e.g. a VPN-switch instruction. */
+  body?: string;
+  /** Pass/fail/skip counts, rendered as a row of fields instead of prose. */
+  stats?: RunStats | null;
+  /** Extra context after the runner name, e.g. "Step 2 of 5". */
+  footer?: string;
+}
+
+// Replaced a single growing text line per event (Slack renders consecutive
+// messages from the same bot as one indistinguishable wall of text — see
+// the screenshot Reeve flagged 2026-09-10, unreadable once two people run
+// at once) with a Block Kit card: colored left border by outcome, a bold
+// title, pass/fail/skip as real fields instead of buried in a sentence, and
+// a small context line naming who ran it — same idea as [[RUNNER_NAME]]
+// but visually separated instead of just prefixed in plain text.
+async function notifySlack(card: SlackCard): Promise<void> {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   if (!webhookUrl) return;
+
+  const blocks: Record<string, unknown>[] = [
+    { type: 'section', text: { type: 'mrkdwn', text: `${card.emoji} *${card.title}*` } },
+  ];
+  if (card.body) {
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: card.body } });
+  }
+  if (card.stats && card.stats.total > 0) {
+    blocks.push({
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Passed*\n${card.stats.passed} ✅` },
+        { type: 'mrkdwn', text: `*Failed*\n${card.stats.failed}${card.stats.failed > 0 ? ' ❌' : ''}` },
+        { type: 'mrkdwn', text: `*Skipped*\n${card.stats.skipped}` },
+      ],
+    });
+  }
+  const contextText = `👤 Run by *${RUNNER_NAME}*${card.footer ? `  •  ${card.footer}` : ''}`;
+  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: contextText }] });
+
   try {
     await axios.post(webhookUrl, {
-      text: `[${RUNNER_NAME}] ${text}`,
+      // Fallback shown in notification previews/screen readers — clients
+      // that can't render blocks fall back to this too.
+      text: `${card.emoji} ${card.title} — run by ${RUNNER_NAME}`,
+      attachments: [{ color: CARD_COLOR[card.color], blocks }],
       // Both optional — Slack falls back to the app's own name/icon (set
       // under the app's "App Home" page) when these are unset. icon_emoji
       // (e.g. ":robot_face:") wins over icon_url if both are set.
@@ -66,15 +118,12 @@ async function notifySlack(text: string): Promise<void> {
 
 // Sums the same fixed summary rows excel-reporter.cjs writes into each
 // sheet (row 2 Total, 3 Passed, 4 Failed, 5 Skipped — see scanRunReports
-// below) so the Slack ping can show a one-line pass/fail count without a
+// below) so the Slack card can show real pass/fail fields without a
 // separate parse of the run's stdout. geoFilter narrows to one GEO's
 // sheet(s) (stripping "-mobile"); omit it to sum the whole workbook.
 // Returns null if the workbook isn't there yet or fails to parse — callers
-// fall back to omitting the summary rather than failing the notification.
-async function readExcelSummary(
-  excelPath: string,
-  geoFilter?: string
-): Promise<{ total: number; passed: number; failed: number; skipped: number } | null> {
+// fall back to omitting the stats fields rather than failing the notification.
+async function readExcelSummary(excelPath: string, geoFilter?: string): Promise<RunStats | null> {
   if (!fs.existsSync(excelPath)) return null;
   try {
     const wb = new ExcelJS.Workbook();
@@ -92,13 +141,6 @@ async function readExcelSummary(
   } catch {
     return null;
   }
-}
-
-function formatSummary(s: { total: number; passed: number; failed: number; skipped: number } | null): string {
-  if (!s || s.total === 0) return '';
-  const icon = s.failed > 0 ? '❌' : '✅';
-  const skippedPart = s.skipped > 0 ? `, ${s.skipped} skipped` : '';
-  return ` ${icon} ${s.passed} passed, ${s.failed} failed${skippedPart}`;
 }
 
 const TEST_TIERS = ['p1', 'p2', 'p3'] as const;
@@ -841,7 +883,12 @@ function runNextGeo(session: MultiSession): void {
   session.state = 'running';
   const emit = (data: Record<string, unknown>) => sendSSE(session.res, data);
   emit({ type: 'geo-start', geo, step: session.index + 1, total: session.geos.length });
-  notifySlack(`▶️ Now running *${session.brand} ${geo}* (step ${session.index + 1} of ${session.geos.length})`);
+  notifySlack({
+    emoji: '▶️',
+    title: `Now running ${session.brand} ${geo}`,
+    color: 'running',
+    footer: `Step ${session.index + 1} of ${session.geos.length}`,
+  });
 
   const projectArgs =
     session.device === 'both' ? [] : ['--project', session.device === 'mobile' ? `${geo}-mobile` : geo];
@@ -876,7 +923,7 @@ function runNextGeo(session: MultiSession): void {
     session.proc = null;
     if (session.stoppedByUser) {
       emit({ type: 'stopped' });
-      notifySlack(`⏹️ Test run stopped (${session.brand} ${geo}).`);
+      notifySlack({ emoji: '⏹️', title: `Test run stopped — ${session.brand} ${geo}`, color: 'stopped' });
       session.res.end();
       multiSessions.delete(session.id);
       return;
@@ -889,16 +936,21 @@ function runNextGeo(session: MultiSession): void {
     emit({ type: 'geo-done', geo, exitCode, reportUrl, step: session.index + 1, total: session.geos.length });
 
     const excelPath = path.join(process.cwd(), 'combined-reports', `${session.excelReportFile}.xlsx`);
-    const summary = formatSummary(await readExcelSummary(excelPath, geo));
+    const stats = await readExcelSummary(excelPath, geo);
 
     session.index += 1;
     if (session.index < session.geos.length) {
       session.state = 'awaiting-vpn';
       const nextGeo = session.geos[session.index];
       emit({ type: 'awaiting-vpn', geo: nextGeo, step: session.index + 1, total: session.geos.length });
-      notifySlack(
-        `*${session.brand} ${geo}* finished —${summary}. Switch your VPN to *${nextGeo}* now, then hit Continue in the GUI (step ${session.index + 1} of ${session.geos.length}).`
-      );
+      notifySlack({
+        emoji: stats && stats.failed > 0 ? '❌' : '✅',
+        title: `${session.brand} ${geo} finished`,
+        color: stats && stats.failed > 0 ? 'failure' : 'success',
+        body: `⚠️ Switch your VPN to *${nextGeo}* now, then hit Continue in the GUI.`,
+        stats,
+        footer: `Step ${session.index + 1} of ${session.geos.length} next`,
+      });
     } else {
       finishMultiSession(session);
     }
@@ -924,7 +976,12 @@ function finishMultiSession(session: MultiSession): void {
     session.proc = null;
     if (session.stoppedByUser) {
       emit({ type: 'stopped' });
-      notifySlack(`⏹️ Test run stopped (${session.brand}, during report merge).`);
+      notifySlack({
+        emoji: '⏹️',
+        title: `Test run stopped — ${session.brand}`,
+        color: 'stopped',
+        body: 'Stopped during report merge.',
+      });
       session.res.end();
       multiSessions.delete(session.id);
       return;
@@ -938,13 +995,17 @@ function finishMultiSession(session: MultiSession): void {
       : null;
     const excelPath = path.join(process.cwd(), 'combined-reports', `${session.excelReportFile}.xlsx`);
     const excelUrl = fs.existsSync(excelPath) ? `/combined-reports/${session.excelReportFile}.xlsx` : null;
-    const summary = formatSummary(await readExcelSummary(excelPath));
+    const stats = await readExcelSummary(excelPath);
 
     session.state = 'done';
     emit({ type: 'all-done', exitCode, mergedReportUrl, excelUrl });
-    notifySlack(
-      `🎉 *${session.brand}* run complete — all ${session.geos.length} GEO(s) finished (${session.geos.join(', ')}).${summary}`
-    );
+    notifySlack({
+      emoji: '🎉',
+      title: `${session.brand} run complete`,
+      color: stats && stats.failed > 0 ? 'failure' : 'success',
+      body: `All ${session.geos.length} GEO(s) finished: ${session.geos.join(', ')}`,
+      stats,
+    });
     session.res.end();
     multiSessions.delete(session.id);
   });
@@ -1054,7 +1115,12 @@ app.post('/run/:id/stop', (req, res) => {
     // so end the stream directly instead of waiting on a 'close' that will
     // never fire.
     sendSSE(session.res, { type: 'stopped' });
-    notifySlack(`⏹️ Test run stopped (${session.brand}, while awaiting VPN switch).`);
+    notifySlack({
+      emoji: '⏹️',
+      title: `Test run stopped — ${session.brand}`,
+      color: 'stopped',
+      body: 'Stopped while awaiting VPN switch.',
+    });
     session.res.end();
     multiSessions.delete(session.id);
   }
