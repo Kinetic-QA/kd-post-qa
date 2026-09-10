@@ -15,6 +15,7 @@ import express from 'express';
 import multer from 'multer';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as dotenv from 'dotenv';
@@ -30,6 +31,14 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.GUI_PORT) || 4848;
 
+// Labels every Slack alert with who's running it, so when multiple people
+// run the GUI on their own machines at the same time (e.g. splitting brands
+// across the team), a "SC UK finished" ping is attributable to a person, not
+// just a brand. RUNNER_NAME is an optional per-machine .env override
+// (useful if a shared login makes the OS username generic, e.g. "qa-user");
+// falls back to the OS account name so this works with zero setup.
+const RUNNER_NAME = process.env.RUNNER_NAME || os.userInfo().username;
+
 // Mirrors the desktop Notification alerts in app.js so the same VPN-switch
 // and run-finished pings also land on Slack (and your phone). Optional —
 // SLACK_WEBHOOK_URL is unset by default, and a failed post never breaks the
@@ -39,7 +48,7 @@ async function notifySlack(text: string): Promise<void> {
   if (!webhookUrl) return;
   try {
     await axios.post(webhookUrl, {
-      text,
+      text: `[${RUNNER_NAME}] ${text}`,
       // Both optional — Slack falls back to the app's own name/icon (set
       // under the app's "App Home" page) when these are unset. icon_emoji
       // (e.g. ":robot_face:") wins over icon_url if both are set.
