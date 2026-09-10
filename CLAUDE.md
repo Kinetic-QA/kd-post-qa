@@ -1,5 +1,20 @@
 # CLAUDE.md — kd-post-qa Project Rules
 
+## Test Results Upload Trigger
+
+When the user says **"Done Today's test"** (or a clear variant of it), automatically upload today's GUI test results to the QA Automated Regression Results Netlify site — the user should not have to name a brand or run any commands themselves:
+
+1. Run `node upload-todays-results.cjs` (or `npm run upload-results`) from the repo root.
+2. This script auto-detects which brand(s) actually have a `Test Reports/<brand>/<geo>/<today's date>/` folder — i.e. whatever was actually run in the GUI today — rebuilds the dashboard's data snapshot, and deploys the overview plus each detected brand's per-GEO reports to Netlify.
+3. Report back to the user which brand(s) were uploaded and the live URL(s) (the overview is always `https://qa-automated-regression-results.netlify.app`).
+4. If the script reports no brands found for today's date, tell the user rather than silently doing nothing — it likely means the run used a different date, or hasn't finished writing its report yet.
+
+See `docs/AUTO-UPLOAD-SYSTEM.md` for full detail on how this works.
+
+This is a separate trigger from the Push Trigger below — "Done Today's test" only uploads results to Netlify and does not touch git or CHANGELOG.md.
+
+---
+
 ## Push Trigger
 When the user says **"That's it for today"**, execute the full end-of-session push:
 1. Update CHANGELOG.md (see rules below)
