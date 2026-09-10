@@ -30,6 +30,10 @@ These notes are for getting a second machine (or a new teammate's machine) into 
 - **Saying "Done Today's test" now automatically uploads today's results to the results website.** Previously, sharing today's numbers to the team meant manually running a couple of commands and remembering which brand to type in. Now it's fully automatic — it looks at what was actually tested today and uploads the overview plus every tested brand's detailed report on its own, with no brand name or commands needed. Full details in `docs/AUTO-UPLOAD-SYSTEM.md`, including a diagram of how it works.
 - **Added a step-by-step setup guide (Word document) for teammates who haven't set up this project before.** Walks through installing every piece of software needed from a completely bare computer — Node.js, Git, the code itself, the browser engines the tests drive, and the shared login file — ending with the GUI up and running. Saved at `docs/QA-Test-Center-Setup-Guide.docx`.
 
+### Changed
+
+- **Renamed the "Today's Run" section on the QA Automated Regression Results website to "Run History."** The old label only made sense on days the site was checked the same day tests ran — the section actually lists every day's results, not just today's, so the new name matches what it shows.
+
 ---
 
 ## [Unreleased] - 2026-09-09
