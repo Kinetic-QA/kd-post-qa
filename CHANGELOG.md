@@ -27,6 +27,9 @@ These notes are for getting a second machine (or a new teammate's machine) into 
 6. **Optional environment variables already in `.env`:** `GUI_PORT` (defaults to 4848), `SLACK_WEBHOOK_URL` / `SLACK_BOT_USERNAME` / `SLACK_BOT_ICON_EMOJI` (Slack pings on VPN switch / run finish — silently skipped if unset), `ANTHROPIC_API_KEY` (needed for the GUI's AI-powered visual/text comparison and site-crawler features), `NETLIFY_AUTH_TOKEN` (needed only for the `dashboard/` results-website deploy, not the GUI itself).
 7. **Verified working today:** the GUI was started fresh after the dependency fix and confirmed it responds normally at `localhost:4848` before this was pushed.
 
+- **Saying "Done Today's test" now automatically uploads today's results to the results website.** Previously, sharing today's numbers to the team meant manually running a couple of commands and remembering which brand to type in. Now it's fully automatic — it looks at what was actually tested today and uploads the overview plus every tested brand's detailed report on its own, with no brand name or commands needed. Full details in `docs/AUTO-UPLOAD-SYSTEM.md`, including a diagram of how it works.
+- **Added a step-by-step setup guide (Word document) for teammates who haven't set up this project before.** Walks through installing every piece of software needed from a completely bare computer — Node.js, Git, the code itself, the browser engines the tests drive, and the shared login file — ending with the GUI up and running. Saved at `docs/QA-Test-Center-Setup-Guide.docx`.
+
 ---
 
 ## [Unreleased] - 2026-09-09
