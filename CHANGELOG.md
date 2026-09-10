@@ -27,6 +27,10 @@ These notes are for getting a second machine (or a new teammate's machine) into 
 6. **Optional environment variables already in `.env`:** `GUI_PORT` (defaults to 4848), `SLACK_WEBHOOK_URL` / `SLACK_BOT_USERNAME` / `SLACK_BOT_ICON_EMOJI` (Slack pings on VPN switch / run finish — silently skipped if unset), `ANTHROPIC_API_KEY` (needed for the GUI's AI-powered visual/text comparison and site-crawler features), `NETLIFY_AUTH_TOKEN` (needed only for the `dashboard/` results-website deploy, not the GUI itself).
 7. **Verified working today:** the GUI was started fresh after the dependency fix and confirmed it responds normally at `localhost:4848` before this was pushed.
 
+### Changed
+
+- **Renamed the "Today's Run" section on the QA Automated Regression Results website to "Run History."** The old label only made sense on days the site was checked the same day tests ran — the section actually lists every day's results, not just today's, so the new name matches what it shows.
+
 ---
 
 ## [Unreleased] - 2026-09-09
