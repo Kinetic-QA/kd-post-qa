@@ -9,6 +9,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-10
+
+### Changed
+
+- **Renamed the "Today's Run" section on the QA Automated Regression Results website to "Run History."** The old label only made sense on days the site was checked the same day tests ran — the section actually lists every day's results, not just today's, so the new name matches what it shows.
+
+---
+
 ## [Unreleased] - 2026-09-09
 
 ### Added
