@@ -11,6 +11,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-09-10
 
+### Added
+
+- **The GUI test runner is now shared with the whole team.** This is the on-screen tool that lets someone start an automated test run by clicking buttons (pick a brand, a country, which checks to run) instead of typing commands. It had been kept private on one computer while it was being tried out; today it was double-checked to make sure it will install cleanly on any teammate's computer, and it's now available to everyone through the shared codebase.
+
+#### 🔧 Setup notes for laptop / new-machine sync (technical — for replicating this exact environment)
+
+These notes are for getting a second machine (or a new teammate's machine) into the exact same working state as today's session. Written for the CLI, assuming Node.js is already installed but Playwright is not.
+
+1. **Pull the code.** `git pull origin main` (the GUI folder, `gui/`, is no longer git-ignored — it's now tracked and part of the repo).
+2. **Install dependencies.** `npm install`. This session added `express`, `multer`, and `sharp` as proper direct dependencies (they were previously only installed "by accident" as side effects of another package, `netlify-cli`, pulling them in — a plain `npm install` on a fresh machine would NOT have installed them before this fix, and the GUI would have crashed on startup). After today's fix, a plain `npm install` is enough.
+3. **Install Playwright's browsers.** `npx playwright install` (add `--with-deps` on a brand-new machine to also grab OS-level libraries Playwright needs). This is a one-time step per machine and is separate from `npm install`.
+4. **Restore the `.env` file.** Copy over the `.env-laptop` file (provided separately, zipped, containing the same credentials as this machine's `.env`) and place it at the repo root as `.env`. Without this file, the GUI's AI comparison, Slack notifications, and Netlify uploads won't work, and login-based tests will fail for every brand.
+5. **Start the GUI.** `npm run gui`, then open `http://localhost:4848` in a browser. Leave the terminal window open while using it — closing it stops the local server.
+6. **Optional environment variables already in `.env`:** `GUI_PORT` (defaults to 4848), `SLACK_WEBHOOK_URL` / `SLACK_BOT_USERNAME` / `SLACK_BOT_ICON_EMOJI` (Slack pings on VPN switch / run finish — silently skipped if unset), `ANTHROPIC_API_KEY` (needed for the GUI's AI-powered visual/text comparison and site-crawler features), `NETLIFY_AUTH_TOKEN` (needed only for the `dashboard/` results-website deploy, not the GUI itself).
+7. **Verified working today:** the GUI was started fresh after the dependency fix and confirmed it responds normally at `localhost:4848` before this was pushed.
+
 ### Changed
 
 - **Renamed the "Today's Run" section on the QA Automated Regression Results website to "Run History."** The old label only made sense on days the site was checked the same day tests ran — the section actually lists every day's results, not just today's, so the new name matches what it shows.
