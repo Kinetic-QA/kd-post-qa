@@ -25,6 +25,13 @@ import { BRAND_URLS } from '../helpers/brand-urls';
 import { captureFullPageScreenshot, captureMultipleFrames, captureWithPopupWait, captureSiteText, rasterizeSvgToPng, cropRegion } from './screenshot-capture';
 import { compareVisual, compareText, MODEL, VisualCheckMode, VisualStatus, VisualCompareResult } from './visual-compare';
 import { crawlSite } from './site-crawler';
+// require(), not import — TS's module resolution doesn't match an explicit
+// .cjs extension against a .d.ts declaration file of the same base name
+// (same reasoning as playwright.config.ts's portForKey import).
+const { pruneOldRuns } = require('../helpers/prune-old-runs.cjs') as {
+  pruneOldRuns: (brand: string, geo: string, dateStr: string, keep?: number) => void;
+};
+const { localTimeToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string };
 
 dotenv.config();
 
@@ -493,9 +500,18 @@ app.post('/investigate/:id/stop', (req, res) => {
   res.json({ stopped: true });
 });
 
-function findReportFolder(brand: string, geo: string, dateStr: string): string | null {
+// port, when known, comes straight from the xlsx filename's own suffix (see
+// parseXlsxRunInfo) and names this exact run's report-<port> folder — no
+// guessing needed. Falls back to picking the most-recently-modified
+// report-* folder only for older xlsx files written before that suffix
+// existed, or if the exact folder is somehow missing.
+function findReportFolder(brand: string, geo: string, dateStr: string, port: number | null): string | null {
   const dir = path.join(process.cwd(), 'Test Reports', brand, geo, dateStr);
   if (!fs.existsSync(dir)) return null;
+  if (port != null) {
+    const exact = `report-${port}`;
+    if (fs.existsSync(path.join(dir, exact))) return exact;
+  }
   const candidates = fs.readdirSync(dir, { withFileTypes: true })
     .filter(e => e.isDirectory() && e.name.startsWith('report-'))
     .map(e => e.name);
@@ -505,10 +521,33 @@ function findReportFolder(brand: string, geo: string, dateStr: string): string |
     .sort((a, b) => b.mtime - a.mtime)[0].name;
 }
 
+// Recovers which run this xlsx belongs to. New files are named
+// "<base>_<local-timestamp-with-dashes>_<port>.xlsx" (excel-reporter.cjs) —
+// the timestamp restores cleanly into the exact instant the run finished
+// (no trailing Z: the digits are this machine's own local wall clock, not
+// UTC — see helpers/run-token.cjs — so re-parsing it without a timezone
+// designator correctly lands back on that same local instant), and the
+// port is the same one portForKey() gave that run's report folder. Older
+// files (written before this suffix existed) fall back to the file's own
+// mtime so every run still gets a distinguishable runTime to group/sort
+// same-day reruns by, just without a matched report link.
+function parseXlsxRunInfo(filePath: string, fileName: string): { runTime: string; port: number | null } {
+  const m = fileName.match(/_(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})(?:_(\d+))?\.xlsx$/);
+  if (m) {
+    const [, datePart, hh, mm, ss, ms, portStr] = m;
+    return {
+      runTime: `${datePart}T${hh}:${mm}:${ss}.${ms}`,
+      port: portStr ? Number(portStr) : null,
+    };
+  }
+  return { runTime: fs.statSync(filePath).mtime.toISOString(), port: null };
+}
+
 type RunReport = {
   brand: string;
   geo: string;
   date: string;
+  runTime: string;
   total: number;
   passed: number;
   failed: number;
@@ -589,9 +628,19 @@ async function scanCombinedReports(): Promise<{ reports: RunReport[]; tests: Fla
   if (!fs.existsSync(combinedDir)) return { reports, tests };
 
   for (const file of fs.readdirSync(combinedDir)) {
-    const match = file.match(/^([A-Za-z0-9]+)-(\d{4}-\d{2}-\d{2})\.xlsx$/);
+    // The trailing -<HH-mm-ss> run token (added when /run creates the
+    // session — see excelReportFile) tells us exactly which session this
+    // workbook belongs to; older files written before that token existed
+    // still match via the optional group and fall back to file mtime below.
+    // No trailing Z: the token is this machine's local wall clock, not UTC
+    // (see helpers/run-token.cjs), so re-parsing it without a timezone
+    // designator lands back on that same local instant.
+    const match = file.match(/^([A-Za-z0-9]+)-(\d{4}-\d{2}-\d{2})(?:-(\d{2}-\d{2}-\d{2}))?\.xlsx$/);
     if (!match) continue;
-    const [, brand, date] = match;
+    const [, brand, date, token] = match;
+    const runTime = token
+      ? `${date}T${token.replace(/-/g, ':')}.000`
+      : fs.statSync(path.join(combinedDir, file)).mtime.toISOString();
 
     try {
       const wb = new ExcelJS.Workbook();
@@ -607,7 +656,7 @@ async function scanCombinedReports(): Promise<{ reports: RunReport[]; tests: Fla
         if (sheet.name === 'Summary') return;
         const geo = sheet.name.replace(/-mobile$/, '');
         if (!byGeo.has(geo)) {
-          const folder = findReportFolder(brand, geo, date);
+          const folder = findReportFolder(brand, geo, date, null);
           const reportUrl = folder ? `/reports/${brand}/${geo}/${date}/${folder}/index.html` : null;
           byGeo.set(geo, { total: 0, passed: 0, failed: 0, skipped: 0, flaky: 0, specs: new Set(), reportUrl });
         }
@@ -626,7 +675,7 @@ async function scanCombinedReports(): Promise<{ reports: RunReport[]; tests: Fla
 
       for (const [geo, agg] of byGeo) {
         reports.push({
-          brand, geo, date,
+          brand, geo, date, runTime,
           total: agg.total, passed: agg.passed, failed: agg.failed, skipped: agg.skipped, flaky: agg.flaky,
           specs: [...agg.specs].sort((a, b) => a.localeCompare(b)),
           reportUrl: agg.reportUrl,
@@ -666,15 +715,18 @@ async function scanRunReports(): Promise<{ reports: RunReport[]; tests: FlatTest
         const dateDir = path.join(geoDir, dateEntry.name);
 
         const xlsxFiles = fs.readdirSync(dateDir).filter(f => f.endsWith('.xlsx'));
-        const folder = findReportFolder(brand.name, geo.name, dateEntry.name);
-        const reportUrl = folder
-          ? `/reports/${brand.name}/${geo.name}/${dateEntry.name}/${folder}/index.html`
-          : null;
 
         for (const file of xlsxFiles) {
           try {
+            const filePath = path.join(dateDir, file);
+            const { runTime, port } = parseXlsxRunInfo(filePath, file);
+            const folder = findReportFolder(brand.name, geo.name, dateEntry.name, port);
+            const reportUrl = folder
+              ? `/reports/${brand.name}/${geo.name}/${dateEntry.name}/${folder}/index.html`
+              : null;
+
             const wb = new ExcelJS.Workbook();
-            await wb.xlsx.readFile(path.join(dateDir, file));
+            await wb.xlsx.readFile(filePath);
 
             let total = 0, passed = 0, failed = 0, skipped = 0, flaky = 0;
             const specSet = new Set<string>();
@@ -704,6 +756,7 @@ async function scanRunReports(): Promise<{ reports: RunReport[]; tests: FlatTest
               brand: brand.name,
               geo: geo.name,
               date: dateEntry.name,
+              runTime,
               total,
               passed,
               failed,
@@ -739,6 +792,7 @@ type DayGroup = {
   entries: Array<{
     brand: string;
     geo: string;
+    runTime: string;
     specs: string[];
     passed: number;
     failed: number;
@@ -775,6 +829,7 @@ app.get('/dashboard', async (_req, res) => {
     day.entries.push({
       brand: r.brand,
       geo: r.geo,
+      runTime: r.runTime,
       specs: r.specs,
       passed: r.passed,
       failed: r.failed,
@@ -929,11 +984,17 @@ function runNextGeo(session: MultiSession): void {
       return;
     }
 
-    const folder = findReportFolder(session.brand, geo, session.dateStr);
+    const folder = findReportFolder(session.brand, geo, session.dateStr, null);
     const reportUrl = folder
       ? `/reports/${session.brand}/${geo}/${session.dateStr}/${folder}/index.html`
       : null;
     emit({ type: 'geo-done', geo, exitCode, reportUrl, step: session.index + 1, total: session.geos.length });
+
+    // Trims this brand/GEO/date's older run-*/report-* folders down to the
+    // most recent few now that each rerun keeps its own instead of
+    // overwriting — done right after this run's own folder is confirmed to
+    // exist, so it's never the one folder getting pruned.
+    pruneOldRuns(session.brand, geo, session.dateStr);
 
     const excelPath = path.join(process.cwd(), 'combined-reports', `${session.excelReportFile}.xlsx`);
     const stats = await readExcelSummary(excelPath, geo);
@@ -1034,6 +1095,13 @@ app.get('/run', (req, res) => {
 
   const id = crypto.randomUUID();
   const dateStr = new Date().toISOString().slice(0, 10);
+  // Folded into excelReportFile below so starting a brand-new session for a
+  // brand/date that already ran today gets its OWN combined workbook,
+  // instead of colliding with (and silently replacing GEO tabs in) an
+  // earlier session's workbook from the same day. Every GEO within THIS one
+  // session still shares this single token, so they still land as tabs in
+  // one workbook, same as before.
+  const runToken = localTimeToken();
   const session: MultiSession = {
     id,
     brand,
@@ -1041,10 +1109,9 @@ app.get('/run', (req, res) => {
     device,
     spec,
     dateStr,
-    // Matches merge-reports.cjs's own TEST_BRAND-scoped blob folder naming
-    // convention so the workbook and the merged HTML report are easy to
-    // pair up by name.
-    excelReportFile: `${brand}-${dateStr}`,
+    // Brand+date+runToken — still easy to pair with the merged HTML report
+    // by brand/date, just no longer collides across separate same-day runs.
+    excelReportFile: `${brand}-${dateStr}-${runToken}`,
     index: 0,
     state: 'running',
     res,

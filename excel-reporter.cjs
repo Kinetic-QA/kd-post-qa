@@ -187,7 +187,11 @@ class ExcelReporter {
     // one last) — by the time this runs, the html reporter's onEnd has
     // already finished writing index.html.
     const { portForKey } = require('./helpers/report-port.cjs');
-    const reportKey = `${brand}-${baseGeos.join('-')}-${dateStr}`;
+    // PW_RUN_TOKEN is set once by playwright.config.ts at the start of this
+    // same process and must be folded in here identically, or this reporter
+    // would resolve a different port than the html reporter actually wrote
+    // its report-<port> folder under.
+    const reportKey = `${brand}-${baseGeos.join('-')}-${dateStr}-${process.env.PW_RUN_TOKEN || ''}`;
     const reportPort = portForKey(reportKey);
     const reportIndexPath = path.join(outDir, `report-${reportPort}`, 'index.html');
     if (fs.existsSync(reportIndexPath)) {
@@ -258,7 +262,11 @@ class ExcelReporter {
     summaryWs.orderNo = -1;
 
     if (!appendFile) {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 23);
+      // Local wall-clock timestamp, not UTC (see helpers/run-token.cjs) —
+      // confirmed live 2026-09-11: a UTC-based filename timestamp read as
+      // flat-out wrong hours next to the OS's own "Date modified" column.
+      const { localTimestampToken } = require('./helpers/run-token.cjs');
+      const timestamp = localTimestampToken();
       const uniqueSuites = [...new Set(rows.map(r => r.file).filter(Boolean))];
       const baseName = uniqueSuites.length === 1
         ? uniqueSuites[0]
@@ -273,7 +281,11 @@ class ExcelReporter {
         : baseGeos.length === 1
         ? baseGeos[0].toLowerCase().replace(/[^a-z0-9-]/g, '')
         : 'all-tests';
-      outPath = path.join(outDir, `${baseName}_${timestamp}.xlsx`);
+      // Port suffix lets the GUI/dashboard pair this file back to its own
+      // report-<port> folder deterministically (same reportKey/portForKey
+      // this reporter used above) instead of guessing from folder mtimes —
+      // needed now that same-day reruns each get their own report folder.
+      outPath = path.join(outDir, `${baseName}_${timestamp}_${reportPort}.xlsx`);
     }
 
     await wb.xlsx.writeFile(outPath);

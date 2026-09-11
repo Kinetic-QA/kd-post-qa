@@ -64,6 +64,20 @@ function resolveUrl(brand: string, geo: string): string {
 // One GEO per entry in TEST_GEOS (multi-GEO mode) or just TEST_GEO otherwise.
 const geosToRun = TEST_GEOS && TEST_GEOS.length > 0 ? TEST_GEOS : [TEST_GEO];
 
+// One run token per `npx playwright test` invocation (local HH-mm-ss at
+// config-load time — see helpers/run-token.cjs), bridged to
+// excel-reporter.cjs via env var so both compute the exact same
+// reportKey/port despite running at different points in the process
+// lifecycle (config loads first; the reporter's onEnd runs last, but both
+// execute inside the same Playwright process, so the env var set here is
+// still visible there). Folded into outputDir/reportKey below so a same-day
+// rerun of the same brand/GEO gets its own report folder and its own
+// test-results (screenshots/videos/traces) instead of silently overwriting
+// the previous run's — previously all three were keyed only by date.
+const { localTimeToken } = require('./helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string };
+process.env.PW_RUN_TOKEN = process.env.PW_RUN_TOKEN || localTimeToken();
+const runToken = process.env.PW_RUN_TOKEN;
+
 // All generated output lives under Test Reports/<BRAND>/<GEO>/ (see
 // helpers/brand-urls.ts for the brand -> GEO folders already scaffolded
 // there) instead of a shared top-level test-results/ that Playwright clears
@@ -83,7 +97,7 @@ const dateStr = new Date().toISOString().slice(0, 10);
 const reportRoot = geosToRun.length === 1
   ? `Test Reports/${TEST_BRAND}/${geosToRun[0]}/${dateStr}`
   : `Test Reports/${TEST_BRAND}/_combined-${geosToRun.join('-')}/${dateStr}`;
-const outputDir = `${reportRoot}/test-results`;
+const outputDir = `${reportRoot}/run-${runToken}/test-results`;
 
 // Deterministic port per brand+GEO(s)+date combo (same key every time ->
 // same port every time), baked into both the HTML reporter's own port
@@ -95,7 +109,7 @@ const outputDir = `${reportRoot}/test-results`;
 // same time without one colliding on the other's port. Range 9323-9522 (200
 // slots) keeps it clear of Playwright's own 9323 default while making
 // collisions across brand/GEO/date combos unlikely.
-const reportKey = `${TEST_BRAND}-${geosToRun.join('-')}-${dateStr}`;
+const reportKey = `${TEST_BRAND}-${geosToRun.join('-')}-${dateStr}-${runToken}`;
 const reportPort = portForKey(reportKey);
 
 // Blob reports feed Playwright's own `merge-reports` command (see
@@ -134,7 +148,7 @@ const projects = geosToRun.flatMap(geo => {
   // GEOs run together. Mobile shares the same folder as its desktop
   // sibling — the project name ("<geo>-mobile") already keeps each test's
   // own subfolder distinct.
-  const geoOutputDir = `Test Reports/${TEST_BRAND}/${geo}/${dateStr}/test-results`;
+  const geoOutputDir = `Test Reports/${TEST_BRAND}/${geo}/${dateStr}/run-${runToken}/test-results`;
   // Cloudflare-walled GEOs (helpers/geo-features.ts's needsStealthLaunch)
   // keep their browser headed — headless is more readily fingerprinted by
   // Cloudflare bot protection than headed + the stealth plugin, and the

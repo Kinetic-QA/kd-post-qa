@@ -457,6 +457,50 @@ body {
   border-top: 1px solid var(--border);
 }
 
+.run-count-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.run-subcard {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.run-subcard:first-child {
+  margin-top: 4px;
+}
+
+.run-subcard-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: #fbfbfc;
+  list-style: none;
+}
+
+.run-subcard-summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-subcard[open] .run-subcard-summary .day-chevron {
+  transform: rotate(90deg);
+}
+
+.run-time-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .pill-tag {
   display: inline-block;
   padding: 2px 8px;

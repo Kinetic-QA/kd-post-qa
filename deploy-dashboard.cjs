@@ -202,20 +202,40 @@ function deploy(siteId) {
 
 // --- 5. Backfill the brand's Excel workbook's Shareable Report Link column ---
 function backfillLinks(brand, dateStr, baseUrl) {
-  const excelReportFile = process.env.EXCEL_REPORT_FILE || `${brand}-${dateStr}`;
-  const target = path.join(ROOT, 'combined-reports', excelReportFile.endsWith('.xlsx') ? excelReportFile : `${excelReportFile}.xlsx`);
-  if (!fs.existsSync(target)) {
-    console.log(`\nNo combined workbook found at ${target} — skipping link backfill.`);
+  const combinedDir = path.join(ROOT, 'combined-reports');
+  // A brand/date can now have more than one combined workbook — the GUI
+  // gives every session its own <brand>-<date>-<run-token>.xlsx (see
+  // gui/server.ts's excelReportFile) so same-day reruns don't collide —
+  // so guessing a single "<brand>-<date>.xlsx" name here would silently
+  // miss every one of them. Backfill every matching workbook instead,
+  // unless EXCEL_REPORT_FILE names one file explicitly.
+  const explicit = process.env.EXCEL_REPORT_FILE;
+  const namePattern = new RegExp(`^${brand}-${dateStr}(-\\d{2}-\\d{2}-\\d{2})?\\.xlsx$`);
+  const targets = explicit
+    ? [path.join(combinedDir, explicit.endsWith('.xlsx') ? explicit : `${explicit}.xlsx`)]
+    : fs.existsSync(combinedDir)
+      ? fs.readdirSync(combinedDir).filter(f => namePattern.test(f)).map(f => path.join(combinedDir, f))
+      : [];
+
+  if (targets.length === 0) {
+    console.log(`\nNo combined workbook found for ${brand} ${dateStr} in ${combinedDir} — skipping link backfill.`);
     return;
   }
-  const cmd = `node "${path.join(ROOT, 'backfill-report-links.cjs')}" "${target}"`;
-  const result = spawnSync(cmd, {
-    encoding: 'utf-8',
-    shell: true,
-    env: { ...process.env, TEST_BRAND: brand, TEST_DATE: dateStr, RESOLVED_BASE_URL: `${baseUrl}/reports/${brand}/${dateStr}` },
-  });
-  console.log(result.stdout);
-  if (result.status !== 0) console.error(result.stderr);
+
+  for (const target of targets) {
+    if (!fs.existsSync(target)) {
+      console.log(`\nNo combined workbook found at ${target} — skipping link backfill.`);
+      continue;
+    }
+    const cmd = `node "${path.join(ROOT, 'backfill-report-links.cjs')}" "${target}"`;
+    const result = spawnSync(cmd, {
+      encoding: 'utf-8',
+      shell: true,
+      env: { ...process.env, TEST_BRAND: brand, TEST_DATE: dateStr, RESOLVED_BASE_URL: `${baseUrl}/reports/${brand}/${dateStr}` },
+    });
+    console.log(result.stdout);
+    if (result.status !== 0) console.error(result.stderr);
+  }
 }
 
 (async function main() {
