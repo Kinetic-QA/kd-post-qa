@@ -354,6 +354,63 @@ function renderStatusDonut(days, filter) {
   `;
 }
 
+function renderRunsTable(entries) {
+  const rowsHtml = entries.map(entry => {
+    const link = entry.reportUrl
+      ? `<a class="view-link" href="${escapeHtml(entry.reportUrl)}" target="_blank">View report</a>`
+      : '<span class="none">No report</span>';
+    const specsLabel = entry.specs.length > 0 ? escapeHtml(entry.specs.join(', ')) : '—';
+    return `
+      <tr>
+        <td><span class="pill-tag">${escapeHtml(entry.brand)}</span></td>
+        <td><span class="pill-tag">${escapeHtml(entry.geo)}</span></td>
+        <td class="specs-cell">${specsLabel}</td>
+        <td class="count-passed">${entry.passed}</td>
+        <td class="count-failed">${entry.failed}</td>
+        <td class="count-flaky">${entry.flaky}</td>
+        <td>${link}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <table class="runs-table">
+      <thead>
+        <tr>
+          <th>Brand</th>
+          <th>GEO</th>
+          <th>Tested</th>
+          <th>Passed</th>
+          <th>Failed</th>
+          <th>Flaky</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  `;
+}
+
+// Same day, different timestamp = a separate test session (e.g. SC UK run
+// 3 times in one day) — grouped so the day-card can break them out instead
+// of silently summing 3 runs' worth of brand/GEO rows into one flat list.
+function groupEntriesByRun(entries) {
+  const byRun = new Map();
+  for (const entry of entries) {
+    const key = entry.runTime || 'unknown';
+    if (!byRun.has(key)) byRun.set(key, []);
+    byRun.get(key).push(entry);
+  }
+  // Newest run first, matching the day-card's own newest-first ordering.
+  return [...byRun.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+}
+
+function formatRunTime(iso) {
+  const d = new Date(iso);
+  if (!iso || Number.isNaN(d.getTime())) return 'Unknown time';
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 function renderDaysList(days) {
   const listEl = document.getElementById('days-list');
   const emptyEl = document.getElementById('runs-empty');
@@ -370,50 +427,47 @@ function renderDaysList(days) {
     details.className = 'day-card';
     if (i === 0) details.open = true;
 
-    const rowsHtml = day.entries.map(entry => {
-      const link = entry.reportUrl
-        ? `<a class="view-link" href="${escapeHtml(entry.reportUrl)}" target="_blank">View report</a>`
-        : '<span class="none">No report</span>';
-      const specsLabel = entry.specs.length > 0 ? escapeHtml(entry.specs.join(', ')) : '—';
-      return `
-        <tr>
-          <td><span class="pill-tag">${escapeHtml(entry.brand)}</span></td>
-          <td><span class="pill-tag">${escapeHtml(entry.geo)}</span></td>
-          <td class="specs-cell">${specsLabel}</td>
-          <td class="count-passed">${entry.passed}</td>
-          <td class="count-failed">${entry.failed}</td>
-          <td class="count-flaky">${entry.flaky}</td>
-          <td>${link}</td>
-        </tr>
-      `;
-    }).join('');
+    const runGroups = groupEntriesByRun(day.entries);
+    const runBadge = runGroups.length > 1 ? `<span class="run-count-badge">${runGroups.length} runs</span>` : '';
+
+    // A normal day (one test session) stays a flat table exactly as
+    // before — the nested per-run breakout only appears once there's
+    // actually more than one run to distinguish, so the common case isn't
+    // cluttered with an extra collapsed layer.
+    const bodyHtml = runGroups.length <= 1
+      ? renderRunsTable(day.entries)
+      : runGroups.map(([runTime, entries], idx) => {
+          const passed = entries.reduce((sum, e) => sum + e.passed, 0);
+          const failed = entries.reduce((sum, e) => sum + e.failed, 0);
+          const flaky = entries.reduce((sum, e) => sum + e.flaky, 0);
+          return `
+            <details class="run-subcard"${idx === 0 ? ' open' : ''}>
+              <summary class="run-subcard-summary">
+                <span class="day-chevron">&#9656;</span>
+                <span class="run-time-label">${escapeHtml(formatRunTime(runTime))}</span>
+                <span class="day-stats">
+                  <span class="count-passed">${passed} passed</span>
+                  <span class="count-failed">${failed} failed</span>
+                  <span class="count-flaky">${flaky} flaky</span>
+                </span>
+              </summary>
+              <div class="day-body">${renderRunsTable(entries)}</div>
+            </details>
+          `;
+        }).join('');
 
     details.innerHTML = `
       <summary class="day-summary">
         <span class="day-chevron">&#9656;</span>
         <span class="day-date">${escapeHtml(day.date)}</span>
+        ${runBadge}
         <span class="day-stats">
           <span class="count-passed">${day.passed} passed</span>
           <span class="count-failed">${day.failed} failed</span>
           <span class="count-flaky">${day.flaky} flaky</span>
         </span>
       </summary>
-      <div class="day-body">
-        <table class="runs-table">
-          <thead>
-            <tr>
-              <th>Brand</th>
-              <th>GEO</th>
-              <th>Tested</th>
-              <th>Passed</th>
-              <th>Failed</th>
-              <th>Flaky</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>
+      <div class="day-body">${bodyHtml}</div>
     `;
     listEl.appendChild(details);
   });

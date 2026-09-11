@@ -9,6 +9,20 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-11
+
+### Fixed
+
+- **Running the same brand/country test twice in one day no longer overwrites the first run's results.** Before this fix, if someone reran a test for a brand/country that had already been tested today, the GUI would quietly replace the earlier run's spreadsheet, screenshots, and video evidence with the new one — the first run's results were gone with no warning. Now every run gets its own timestamped folder and spreadsheet, so both (or all) of today's runs stick around side by side. The dashboard's Run History now shows each same-day run separately, labeled with the real clock time it happened.
+- **Older duplicate runs are automatically cleaned up so this doesn't fill up the hard drive.** Since every rerun now keeps its own copy of screenshots/videos instead of overwriting the old one, disk space could have crept back up the way it did before (see the 2026-08-26 cleanup). The system now automatically keeps only the 3 most recent runs per brand/country/day and quietly deletes anything older than that — the spreadsheets themselves are never deleted, only the older raw screenshots/video/trace folders.
+- **Fixed the results website's report links so they still work now that reruns are kept separate.** The tool that finds a brand's spreadsheet to link to on the results website was assuming there'd only ever be one file per brand/day — it now correctly finds whichever one(s) actually exist.
+
+### Added
+
+- **Any run timestamp shown to the team (folder names, spreadsheet names) now always matches the real local time**, not a shifted time based on server clock settings.
+
+---
+
 ## [Unreleased] - 2026-09-10
 
 ### Added

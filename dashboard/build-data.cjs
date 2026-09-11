@@ -26,6 +26,23 @@ function humanizeSpecName(base) {
   return base.replace(/\.spec\.ts$/, '').replace(/-/g, ' ');
 }
 
+// Recovers which run this xlsx belongs to — mirrors gui/server.ts's
+// parseXlsxRunInfo(). New files are named
+// "<base>_<local-timestamp-with-dashes>_<port>.xlsx" (excel-reporter.cjs) —
+// no trailing Z: the digits are this machine's own local wall clock, not
+// UTC (see helpers/run-token.cjs), so re-parsing without a timezone
+// designator lands back on that same local instant. Older files (written
+// before that suffix existed) fall back to the file's own mtime so every
+// run still gets a distinguishable runTime to group/sort same-day reruns by.
+function parseXlsxRunInfo(filePath, fileName) {
+  const m = fileName.match(/_(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})(?:_(\d+))?\.xlsx$/);
+  if (m) {
+    const [, datePart, hh, mm, ss, ms] = m;
+    return { runTime: `${datePart}T${hh}:${mm}:${ss}.${ms}` };
+  }
+  return { runTime: fs.statSync(filePath).mtime.toISOString() };
+}
+
 // Detail table starts at row 12 (Test File/Test Name/Status in cols 1-3) —
 // see excel-reporter.cjs's _writeSheet: summary block is 9 rows, header at
 // summary.length + 2 = row 11.
@@ -91,8 +108,10 @@ async function scanRunReports() {
 
         for (const file of xlsxFiles) {
           try {
+            const filePath = path.join(dateDir, file);
+            const { runTime } = parseXlsxRunInfo(filePath, file);
             const wb = new ExcelJS.Workbook();
-            await wb.xlsx.readFile(path.join(dateDir, file));
+            await wb.xlsx.readFile(filePath);
 
             let total = 0, passed = 0, failed = 0, skipped = 0, flaky = 0;
             const specSet = new Set();
@@ -122,6 +141,7 @@ async function scanRunReports() {
               brand: brand.name,
               geo: geo.name,
               date: dateEntry.name,
+              runTime,
               total, passed, failed, skipped, flaky,
               specs: [...specSet].sort((a, b) => a.localeCompare(b)),
               reportUrl: null,
@@ -151,9 +171,18 @@ async function scanCombinedReports() {
   if (!fs.existsSync(combinedDir)) return { reports, tests };
 
   for (const file of fs.readdirSync(combinedDir)) {
-    const match = file.match(/^([A-Za-z0-9]+)-(\d{4}-\d{2}-\d{2})\.xlsx$/);
+    // The trailing -<HH-mm-ss> run token (added when the GUI's /run creates
+    // the session — see gui/server.ts's excelReportFile) tells us exactly
+    // which session this workbook belongs to; older files written before
+    // that token existed still match via the optional group and fall back
+    // to file mtime below. No trailing Z: the token is this machine's local
+    // wall clock, not UTC (see helpers/run-token.cjs).
+    const match = file.match(/^([A-Za-z0-9]+)-(\d{4}-\d{2}-\d{2})(?:-(\d{2}-\d{2}-\d{2}))?\.xlsx$/);
     if (!match) continue;
-    const [, brand, date] = match;
+    const [, brand, date, token] = match;
+    const runTime = token
+      ? `${date}T${token.replace(/-/g, ':')}.000`
+      : fs.statSync(path.join(combinedDir, file)).mtime.toISOString();
 
     try {
       const wb = new ExcelJS.Workbook();
@@ -182,7 +211,7 @@ async function scanCombinedReports() {
 
       for (const [geo, agg] of byGeo) {
         reports.push({
-          brand, geo, date,
+          brand, geo, date, runTime,
           total: agg.total, passed: agg.passed, failed: agg.failed, skipped: agg.skipped, flaky: agg.flaky,
           specs: [...agg.specs].sort((a, b) => a.localeCompare(b)),
           reportUrl: null,
@@ -266,7 +295,7 @@ async function main() {
     day.failed += r.failed;
     day.flaky += r.flaky;
     day.entries.push({
-      brand: r.brand, geo: r.geo, specs: r.specs,
+      brand: r.brand, geo: r.geo, runTime: r.runTime, specs: r.specs,
       passed: r.passed, failed: r.failed, flaky: r.flaky, reportUrl: r.reportUrl,
     });
   }
