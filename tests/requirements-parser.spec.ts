@@ -12,6 +12,7 @@ import type { JiraTicket } from '../src/jira-client';
 function makeTicket(overrides: Partial<JiraTicket> = {}): JiraTicket {
   return {
     key: 'SLINGO-1',
+    projectKey: 'SLINGO',
     summary: 'Test ticket',
     description: '',
     descriptionRaw: null,

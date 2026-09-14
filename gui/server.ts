@@ -32,6 +32,7 @@ const { pruneOldRuns } = require('../helpers/prune-old-runs.cjs') as {
   pruneOldRuns: (brand: string, geo: string, dateStr: string, keep?: number) => void;
 };
 const { localTimeToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string };
+import { registerJiraCheckerRoutes } from './jira-checker';
 
 dotenv.config();
 
@@ -187,6 +188,7 @@ function geosByBrand(): Record<string, string[]> {
   return map;
 }
 
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/reports', express.static(path.join(process.cwd(), 'Test Reports')));
 // merge-reports.cjs's combined HTML report and excel-reporter.cjs's
@@ -1193,6 +1195,8 @@ app.post('/run/:id/stop', (req, res) => {
   }
   res.json({ stopped: true });
 });
+
+registerJiraCheckerRoutes(app);
 
 app.listen(PORT, () => {
   console.log(`GUI running at http://localhost:${PORT}`);

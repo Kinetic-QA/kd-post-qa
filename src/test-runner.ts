@@ -12,6 +12,7 @@ export interface TestRunResult {
   skipped: number;
   errors: string[];
   screenshotPaths: string[];
+  videoPaths: string[];
 }
 
 export const TEST_MAP: Record<string, string> = {
@@ -54,7 +55,7 @@ export function resolveTestFile(testType: string): string | undefined {
 
 function walkSuites(
   suites: any[],
-  out: { passed: number; failed: number; skipped: number; errors: string[]; screenshotPaths: string[] },
+  out: { passed: number; failed: number; skipped: number; errors: string[]; screenshotPaths: string[]; videoPaths: string[] },
 ) {
   for (const suite of suites || []) {
     for (const spec of suite.specs || []) {
@@ -76,6 +77,8 @@ function walkSuites(
           for (const att of r.attachments || []) {
             if (att.contentType?.startsWith('image/') && att.path && fs.existsSync(att.path)) {
               out.screenshotPaths.push(att.path);
+            } else if (att.contentType?.startsWith('video/') && att.path && fs.existsSync(att.path)) {
+              out.videoPaths.push(att.path);
             }
           }
         }
@@ -127,6 +130,7 @@ export function runPlaywrightTest(testType: string, testFile: string): TestRunRe
     skipped: 0,
     errors: [] as string[],
     screenshotPaths: [] as string[],
+    videoPaths: [] as string[],
   };
 
   if (fs.existsSync(resultsPath)) {

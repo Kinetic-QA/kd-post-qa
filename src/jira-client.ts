@@ -9,6 +9,7 @@ dotenv.config();
 
 export interface JiraTicket {
   key: string;
+  projectKey: string;         // Jira's own project key (e.g. "SC", "ICE36", "LP1") — authoritative, not guessed from the ticket key string
   summary: string;
   description: string;        // Plain text extracted from Atlassian Document Format
   descriptionRaw: unknown;    // Raw ADF object for advanced parsing
@@ -78,12 +79,13 @@ export class JiraClient {
   // ── Fetch a ticket ──────────────────────────────────────────────────────────
   async getTicket(issueKey: string): Promise<JiraTicket> {
     const res = await this.http.get(`/issue/${issueKey}`, {
-      params: { fields: 'summary,description,status,assignee,reporter,attachment,labels,priority' },
+      params: { fields: 'summary,description,status,assignee,reporter,attachment,labels,priority,project' },
     });
     const f = res.data.fields;
 
     return {
       key: issueKey,
+      projectKey: f.project?.key ?? issueKey.split('-')[0],
       summary: f.summary ?? '',
       description: adfToText(f.description),
       descriptionRaw: f.description,
@@ -163,6 +165,17 @@ export class JiraClient {
       thumbnailUrl: att.thumbnail ?? att.content,
       id: String(att.id),
     };
+  }
+
+  // ── Download an attachment's raw bytes (e.g. a mockup image referenced in
+  // the ticket, for an asset-vs-site visual check) ────────────────────────────
+  async downloadAttachment(contentUrl: string): Promise<{ buffer: Buffer; mimeType: string }> {
+    const res = await axios.get(contentUrl, {
+      auth: { username: this.email, password: this.token },
+      responseType: 'arraybuffer',
+    });
+    const contentType = res.headers['content-type'];
+    return { buffer: Buffer.from(res.data), mimeType: typeof contentType === 'string' ? contentType : 'image/png' };
   }
 
   // ── Post a rich ADF comment ─────────────────────────────────────────────────

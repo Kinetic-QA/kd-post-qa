@@ -125,6 +125,29 @@ export const BRAND_URLS: BrandEnvironment[] = [
  *   getQAUrl('SNG', 'AB') → 'https://qa-ab.spingenie.ca/'
  *   getQAUrl('SC', 'UK')  → 'https://qa.slingo.com/'
  */
+// Jira's project key doesn't always match this file's brand short code —
+// confirmed live against the real Jira project list (2026-09-14): ICE36 and
+// LP1 are the only two mismatches (Jira renamed/pre-dated the site's own
+// short-code convention). Everything else (GC, MC, PC, PSC, PSL, SC, SG,
+// SNG, ZI, LMS) matches directly.
+const PROJECT_KEY_OVERRIDES: Record<string, string> = {
+  ICE36: 'I36',
+  LP1: 'LP',
+};
+
+/**
+ * Resolves a Jira project key (ticket.projectKey, e.g. "SC", "ICE36", "LP1")
+ * to this file's brand short code — deterministic, no AI guessing needed,
+ * since Jira's project key is authoritative for which brand a ticket
+ * belongs to. Returns null for a project key with no known brand (e.g. a
+ * non-brand project like GSP or CMS).
+ */
+export function resolveBrandFromProjectKey(projectKey: string): string | null {
+  const key = projectKey.trim().toUpperCase();
+  const mapped = PROJECT_KEY_OVERRIDES[key] ?? key;
+  return BRAND_URLS.some(e => e.brand.toUpperCase() === mapped) ? mapped : null;
+}
+
 export function getQAUrl(brand: string, geo: string): string | null {
   const b = brand.trim().toUpperCase();
   const g = geo.trim().toUpperCase();
