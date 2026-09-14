@@ -9,6 +9,25 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-14
+
+### Added
+
+- **New "JIRA Checker" tab in the GUI.** Type in (or paste the link to) a Jira ticket, and the tool reads it, figures out what should be tested, and shows you a checklist before running anything. Nothing is posted back to Jira, and no ticket status changes, until you review the results and click a "Commit" button — every step before that is safe to try.
+- **JIRA Checker now pulls live from the team's shared Confluence knowledge base** when it reads a ticket, so a QA rule or lesson Reyn adds or corrects on Confluence takes effect automatically within a few minutes — no one needs to update this tool's code for that to happen.
+- **JIRA Checker automatically tells pre-release checks apart from post-release checks** based on the ticket's current status, and writes the comment and follow-up status change to match which one it is.
+- **JIRA Checker can now also run a "Compare" check for tickets that don't match an existing automated test** — it picks whichever fits the ticket: comparing the QA site against the live Production site (for "the content on QA doesn't match what's live" tickets), or comparing a new image attached to the ticket against the live site (for "we changed this banner/image" tickets). If a ticket could reasonably be either a normal automated check or one of these, both options are shown so a person picks, rather than the tool guessing silently.
+
+### Fixed
+
+- **Evidence video recordings were being silently thrown away.** Every automated check already records a short video, but JIRA Checker's evidence step was only ever picking up screenshots — the video files existed on disk but were never shown or attached anywhere. Videos are now included as evidence too.
+- **A ticket's brand could have been mixed up, silently.** Which brand a ticket belongs to used to sometimes be guessed from the ticket's title text; it's now always taken directly and reliably from which Jira project the ticket is filed under, so there's no chance of accidentally checking the wrong brand's site.
+- **Pasting a full Jira ticket link into JIRA Checker now works**, not just the short ticket code (e.g. pasting `https://prime-online.atlassian.net/browse/SC-963` works the same as typing `SC-963`).
+- **Screenshots shown before confirming a check are now full-size and open in a new tab when clicked**, instead of being squeezed down into a tiny, hard-to-read thumbnail.
+- **JIRA Checker's ticket-reading step no longer occasionally fails silently** when the AI's answer came back wrapped in extra formatting it wasn't supposed to use — this could make a perfectly good ticket look like it "couldn't be understood."
+
+---
+
 ## [Unreleased] - 2026-09-11
 
 ### Fixed

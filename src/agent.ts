@@ -38,6 +38,7 @@ import { parseTestType } from './requirements-parser';
 import { interpretTicket } from './ticket-interpreter';
 import { resolveTestFile, runPlaywrightTest, SUPPORTED_TEST_TYPES, TestRunResult } from './test-runner';
 import { getQAUrl } from '../helpers/brand-urls';
+import { buildCommentAdf } from './jira-comment';
 
 // ── Linear flow ──────────────────────────────────────────────────────────────
 const TRANSITION_START_PROGRESS  = process.env.JIRA_TRANSITION_START_PROGRESS  ?? '31';
@@ -76,102 +77,6 @@ function getErrorMessage(e: unknown): string {
     return detail ? `HTTP ${status}: ${detail}` : `HTTP ${status}`;
   }
   return e instanceof Error ? e.message : String(e);
-}
-
-// ─── ADF helpers ─────────────────────────────────────────────────────────────
-
-function adfDoc(...content: object[]) {
-  return { type: 'doc', version: 1, content };
-}
-function adfPara(...inlines: object[]) {
-  return { type: 'paragraph', content: inlines };
-}
-function adfText(text: string) {
-  return { type: 'text', text };
-}
-function adfBold(text: string) {
-  return { type: 'text', text, marks: [{ type: 'strong' }] };
-}
-function adfBulletList(...items: string[]) {
-  return {
-    type: 'bulletList',
-    content: items.map(i => ({
-      type: 'listItem',
-      content: [adfPara(adfText(i))],
-    })),
-  };
-}
-function adfImage(thumbnailUrl: string) {
-  return {
-    type: 'mediaSingle',
-    attrs: { layout: 'center' },
-    content: [{
-      type: 'media',
-      attrs: { type: 'external', url: thumbnailUrl },
-    }],
-  };
-}
-
-// ─── Comment builder ─────────────────────────────────────────────────────────
-
-function buildCommentAdf(
-  result: TestRunResult,
-  attachments: { thumbnailUrl: string; filename: string }[],
-  checkItems: string[],
-): object {
-  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const duration = (result.durationMs / 1000).toFixed(1);
-  const testLabel = result.testType.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-  const scopeItems = checkItems.length > 0 ? checkItems : [`${testLabel} Flow`];
-
-  const nodes: object[] = [];
-
-  if (result.success) {
-    nodes.push(
-      adfPara(adfBold(`Pre-Checked (${today})`)),
-      adfPara(adfBold('Scope Checked:')),
-      adfBulletList(...scopeItems),
-      adfPara(adfBold('Platform and GEOs checked:')),
-      adfBulletList('Desktop', 'N/A (Automated QA)'),
-      adfPara(adfBold('Overall Result: ✅ PASS')),
-      adfPara(adfText(
-        `${result.passed} test(s) passed in ${duration}s. No issues were identified during pre-checking.`
-      )),
-    );
-  } else {
-    const errItems = result.errors.length
-      ? result.errors
-      : ['Test failed — no error details captured'];
-
-    nodes.push(
-      adfPara(adfBold(`Pre-Checked (${today})`)),
-      adfPara(adfBold('Scope Checked:')),
-      adfBulletList(`${testLabel} Flow`),
-      adfPara(adfBold('Affected GEOs and Platform:')),
-      adfBulletList('Desktop', 'N/A (Automated QA)'),
-      adfPara(adfBold('Overall Result: ❌ FAIL')),
-      adfPara(adfBold('Scope Checked:')),
-      adfBulletList(...scopeItems),
-      adfPara(adfBold('Issue Summary:')),
-      adfPara(adfText(
-        `${testLabel} test failed during automated pre-check. `
-        + `${result.failed} test(s) failed in ${duration}s.`
-      )),
-      adfPara(adfBold('Failed Reason:')),
-      adfBulletList(...errItems),
-      adfPara(adfText('Action required: Please investigate the failure and re-run after fix.')),
-    );
-  }
-
-  if (attachments.length > 0) {
-    nodes.push(adfPara(adfBold('Evidence:')));
-    for (const att of attachments) {
-      nodes.push(adfPara(adfText(att.filename)));
-      nodes.push(adfImage(att.thumbnailUrl));
-    }
-  }
-
-  return adfDoc(...nodes);
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────

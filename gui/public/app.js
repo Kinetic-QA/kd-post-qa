@@ -1319,3 +1319,343 @@ investigateExportBtn.addEventListener('click', () => {
   a.remove();
   URL.revokeObjectURL(url);
 });
+
+// ── JIRA Checker tab (POC) ───────────────────────────────────────────────────
+// Load Ticket -> ready? show test-case card + Check, or show a drafted
+// clarification comment + Commit-to-Hold. Check runs a real Playwright spec
+// server-side (never AI-generated code) and shows the drafted house-style
+// comment. Commit is the only button that changes Jira ticket state.
+(function jiraChecker() {
+  const keyInput = document.getElementById('jira-key-input');
+  const loadBtn = document.getElementById('jira-load-btn');
+
+  const ticketCard = document.getElementById('jira-ticket-card');
+  const ticketTitle = document.getElementById('jira-ticket-title');
+  const ticketStatusPill = document.getElementById('jira-ticket-status');
+
+  const notReadyBox = document.getElementById('jira-not-ready');
+  const notReadyReason = document.getElementById('jira-not-ready-reason');
+  const clarificationBox = document.getElementById('jira-clarification-box');
+  const clarificationText = document.getElementById('jira-clarification-text');
+  const holdBtn = document.getElementById('jira-hold-btn');
+
+  const readyBox = document.getElementById('jira-ready');
+  const phaseEl = document.getElementById('jira-phase');
+  const testTypeEl = document.getElementById('jira-test-type');
+  const confidenceEl = document.getElementById('jira-confidence');
+  const checkItemsList = document.getElementById('jira-check-items');
+  const checkBtn = document.getElementById('jira-check-btn');
+  const contentMismatchNote = document.getElementById('jira-content-mismatch-note');
+  const compareAltBtn = document.getElementById('jira-compare-alt-btn');
+
+  const visualReadyBox = document.getElementById('jira-visual-ready');
+  const visualPhaseEl = document.getElementById('jira-visual-phase');
+  const visualExplainerEl = document.getElementById('jira-visual-explainer');
+  const visualDetailEl = document.getElementById('jira-visual-detail');
+
+  // A "visual check" isn't one fixed thing — asset-vs-site (a new/changed
+  // image, checked against one live site) and site-vs-site (QA vs
+  // Production content mismatch) need different explanations and inputs.
+  function describeVisualCheck(vc) {
+    if (vc.kind === 'asset-vs-site') {
+      visualExplainerEl.innerHTML = 'No automated functional test matches this ticket &mdash; but it has an attached image, so it looks like a <strong>new/changed asset check</strong> instead.';
+      visualDetailEl.innerHTML = `<strong>Reference asset:</strong> ${vc.attachmentFilename} &nbsp; <strong>vs live site:</strong> ${vc.siteUrl}`;
+    } else {
+      visualExplainerEl.innerHTML = 'No automated functional test matches this ticket &mdash; but it looks like a <strong>QA vs Production content/visual comparison</strong> instead.';
+      visualDetailEl.innerHTML = `<strong>QA:</strong> ${vc.qaUrl} &nbsp; <strong>vs Production:</strong> ${vc.liveUrl}`;
+    }
+  }
+  const visualCheckItemsList = document.getElementById('jira-visual-check-items');
+  const compareBtn = document.getElementById('jira-compare-btn');
+
+  const resultCard = document.getElementById('jira-result-card');
+  const resultPhasePill = document.getElementById('jira-result-phase');
+  const resultStatusPill = document.getElementById('jira-result-status');
+  const commentPreview = document.getElementById('jira-comment-preview');
+  const evidenceGallery = document.getElementById('jira-evidence-gallery');
+  const videoNote = document.getElementById('jira-video-note');
+  const commitBtn = document.getElementById('jira-commit-btn');
+  const cancelBtn = document.getElementById('jira-cancel-btn');
+
+  function phaseLabel(phase) {
+    return phase === 'post-check' ? 'Post-Check' : 'Pre-Check';
+  }
+
+  const outcomeCard = document.getElementById('jira-commit-outcome');
+  const outcomeText = document.getElementById('jira-commit-outcome-text');
+
+  let current = null; // { key, testType, testFile, checkItems, params }
+
+  function hideAll() {
+    ticketCard.hidden = true;
+    notReadyBox.hidden = true;
+    clarificationBox.hidden = true;
+    readyBox.hidden = true;
+    visualReadyBox.hidden = true;
+    contentMismatchNote.hidden = true;
+    resultCard.hidden = true;
+    outcomeCard.hidden = true;
+  }
+
+  // Shared by Check and Compare results — both endpoints return the same
+  // { success, preview, screenshots, videoFilenames? } shape.
+  function renderCheckResult(data, phase) {
+    resultCard.hidden = false;
+    resultPhasePill.textContent = phaseLabel(phase);
+    resultPhasePill.className = `status-pill ${phase === 'post-check' ? 'running' : 'passed'}`;
+    resultStatusPill.textContent = data.success ? 'PASS' : 'FAIL';
+    resultStatusPill.className = `status-pill ${data.success ? 'passed' : 'failed'}`;
+    commentPreview.textContent = data.preview;
+
+    evidenceGallery.innerHTML = '';
+    for (const shot of data.screenshots ?? []) {
+      const figure = document.createElement('figure');
+      const img = document.createElement('img');
+      img.src = shot.dataUri;
+      img.alt = shot.filename;
+      img.title = 'Click to open full size in a new tab';
+      // A full-page screenshot is tall and narrow — no inline size can show
+      // every detail at once. Chrome blocks top-level navigation straight to
+      // a data: URI, so convert to a blob: URL first rather than a plain
+      // <a href> to the data URI.
+      img.addEventListener('click', () => {
+        fetch(shot.dataUri)
+          .then(r => r.blob())
+          .then(blob => window.open(URL.createObjectURL(blob), '_blank'));
+      });
+      const caption = document.createElement('figcaption');
+      caption.textContent = shot.filename;
+      figure.appendChild(img);
+      figure.appendChild(caption);
+      evidenceGallery.appendChild(figure);
+    }
+
+    if (data.videoFilenames?.length) {
+      videoNote.hidden = false;
+      videoNote.textContent = `${data.videoFilenames.length} video(s) recorded (${data.videoFilenames.join(', ')}) — will be attached and linked in the comment on Commit.`;
+    } else {
+      videoNote.hidden = true;
+    }
+  }
+
+  loadBtn.addEventListener('click', async () => {
+    const key = keyInput.value.trim().toUpperCase();
+    if (!key) return;
+    hideAll();
+    loadBtn.disabled = true;
+    loadBtn.textContent = 'Loading...';
+    try {
+      const res = await fetch(`/jira/ticket?key=${encodeURIComponent(key)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? 'Failed to load ticket');
+        return;
+      }
+
+      ticketCard.hidden = false;
+      ticketTitle.textContent = `${data.key} — ${data.summary}`;
+      ticketStatusPill.textContent = data.status;
+      ticketStatusPill.className = 'status-pill';
+
+      if (!data.ready) {
+        notReadyBox.hidden = false;
+        notReadyReason.textContent = data.reason;
+        if (data.holdable && data.clarificationComment) {
+          clarificationBox.hidden = false;
+          clarificationText.textContent = data.clarificationComment;
+          current = { key, comment: data.clarificationComment };
+        }
+        return;
+      }
+
+      if (data.mode === 'visual') {
+        visualReadyBox.hidden = false;
+        visualPhaseEl.textContent = phaseLabel(data.phase);
+        visualPhaseEl.className = `status-pill ${data.phase === 'post-check' ? 'running' : 'passed'}`;
+        describeVisualCheck(data.visualCheck);
+        visualCheckItemsList.innerHTML = '';
+        for (const item of data.checkItems.length ? data.checkItems : ['Visual/content check']) {
+          const li = document.createElement('li');
+          li.textContent = item;
+          visualCheckItemsList.appendChild(li);
+        }
+        current = {
+          key,
+          kind: 'visual',
+          phase: data.phase,
+          checkItems: data.checkItems,
+          visualCheck: data.visualCheck,
+        };
+        return;
+      }
+
+      readyBox.hidden = false;
+      phaseEl.textContent = phaseLabel(data.phase);
+      phaseEl.className = `status-pill ${data.phase === 'post-check' ? 'running' : 'passed'}`;
+      testTypeEl.textContent = data.testType;
+      confidenceEl.textContent = data.confidence === 'low' ? 'Low confidence — verify' : 'High confidence';
+      confidenceEl.className = `status-pill ${data.confidence === 'low' ? 'running' : 'passed'}`;
+      checkItemsList.innerHTML = '';
+      for (const item of data.checkItems.length ? data.checkItems : [`${data.testType} flow`]) {
+        const li = document.createElement('li');
+        li.textContent = item;
+        checkItemsList.appendChild(li);
+      }
+      current = {
+        key,
+        kind: 'playwright',
+        phase: data.phase,
+        testType: data.testType,
+        testFile: data.testFile,
+        checkItems: data.checkItems,
+        params: data.params,
+      };
+
+      if (data.visualCheckRecommended && data.visualCheck) {
+        contentMismatchNote.hidden = false;
+        contentMismatchNote.dataset.visualCheck = JSON.stringify(data.visualCheck);
+        const label = contentMismatchNote.querySelector('p');
+        if (label) {
+          label.innerHTML = data.visualCheck.kind === 'asset-vs-site'
+            ? '&#9888;&#65039; This also reads like a <strong>new/changed asset</strong> ticket &mdash; a functional check may not verify the asset itself.'
+            : '&#9888;&#65039; This also reads like a <strong>QA vs Production content mismatch</strong> &mdash; a functional check may not catch it.';
+        }
+      } else {
+        contentMismatchNote.hidden = true;
+      }
+    } catch (e) {
+      alert(`Could not reach the server: ${e}`);
+    } finally {
+      loadBtn.disabled = false;
+      loadBtn.textContent = 'Load Ticket';
+    }
+  });
+
+  holdBtn.addEventListener('click', async () => {
+    if (!current?.key || !current?.comment) return;
+    holdBtn.disabled = true;
+    holdBtn.textContent = 'Posting...';
+    try {
+      const res = await fetch('/jira/hold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: current.key, comment: current.comment }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? 'Failed to put ticket on hold');
+        return;
+      }
+      outcomeCard.hidden = false;
+      outcomeText.textContent = `${current.key} — clarification comment posted, ticket moved to On Hold.`;
+    } catch (e) {
+      alert(`Could not reach the server: ${e}`);
+    } finally {
+      holdBtn.disabled = false;
+      holdBtn.textContent = 'Commit — Post & Put On Hold';
+    }
+  });
+
+  checkBtn.addEventListener('click', async () => {
+    if (!current?.key) return;
+    resultCard.hidden = true;
+    checkBtn.disabled = true;
+    checkBtn.textContent = 'Running...';
+    try {
+      const res = await fetch('/jira/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(current),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? 'Check failed');
+        return;
+      }
+      renderCheckResult(data, current.phase);
+    } catch (e) {
+      alert(`Could not reach the server: ${e}`);
+    } finally {
+      checkBtn.disabled = false;
+      checkBtn.textContent = '▶ Check';
+    }
+  });
+
+  async function runCompare(payload, btn, idleLabel) {
+    resultCard.hidden = true;
+    btn.disabled = true;
+    btn.textContent = 'Comparing...';
+    try {
+      const res = await fetch('/jira/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? 'Compare failed');
+        return;
+      }
+      renderCheckResult(data, payload.phase);
+    } catch (e) {
+      alert(`Could not reach the server: ${e}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = idleLabel;
+    }
+  }
+
+  compareBtn.addEventListener('click', () => {
+    if (!current?.key) return;
+    runCompare(current, compareBtn, '▶ Compare');
+  });
+
+  compareAltBtn.addEventListener('click', () => {
+    if (!current?.key) return;
+    runCompare({
+      key: current.key,
+      phase: current.phase,
+      checkItems: current.checkItems,
+      visualCheck: JSON.parse(contentMismatchNote.dataset.visualCheck),
+    }, compareAltBtn, '▶ Compare instead');
+  });
+
+  cancelBtn.addEventListener('click', async () => {
+    if (!current?.key) return;
+    resultCard.hidden = true;
+    try {
+      await fetch('/jira/check/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: current.key }),
+      });
+    } catch { /* best-effort — hiding the card is what actually matters to the user */ }
+  });
+
+  commitBtn.addEventListener('click', async () => {
+    if (!current?.key) return;
+    commitBtn.disabled = true;
+    commitBtn.textContent = 'Posting...';
+    try {
+      const res = await fetch('/jira/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: current.key }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? 'Commit failed');
+        return;
+      }
+      outcomeCard.hidden = false;
+      let msg = `${current.key} — comment posted, ticket transitioned to ${data.status}.`;
+      if (data.warnings?.length) msg += `\n\nWarnings:\n${data.warnings.join('\n')}`;
+      outcomeText.textContent = msg;
+    } catch (e) {
+      alert(`Could not reach the server: ${e}`);
+    } finally {
+      commitBtn.disabled = false;
+      commitBtn.textContent = 'Commit — Post Comment & Update Status';
+    }
+  });
+})();

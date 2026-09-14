@@ -31,6 +31,9 @@
       <button class="tab" data-tab="visual">
         <span class="tab-icon">&#128065;</span> Visual Check
       </button>
+      <button class="tab" data-tab="jira">
+        <span class="tab-icon">&#127917;</span> JIRA Checker
+      </button>
     </nav>
 
     <div id="tab-dashboard" class="tab-panel active">
@@ -337,6 +340,94 @@
         </section>
 
       </div>
+
+    </div>
+
+    <div id="tab-jira" class="tab-panel">
+
+      <section class="card">
+        <div class="card-header">
+          <span class="icon">&#127917;</span>
+          <h2>Load Ticket</h2>
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="jira-key-input">JIRA Ticket Key</label>
+            <input type="text" id="jira-key-input" placeholder="e.g. SC-913" />
+          </div>
+        </div>
+        <div class="run-actions">
+          <button id="jira-load-btn" class="run-btn">Load Ticket</button>
+        </div>
+      </section>
+
+      <section id="jira-ticket-card" class="card" hidden>
+        <div class="card-header">
+          <span class="icon">&#128203;</span>
+          <h2 id="jira-ticket-title">Ticket</h2>
+          <span id="jira-ticket-status" class="status-pill"></span>
+        </div>
+        <div id="jira-not-ready" hidden>
+          <p id="jira-not-ready-reason"></p>
+          <div id="jira-clarification-box" hidden>
+            <p><strong>Draft clarification comment:</strong></p>
+            <pre id="jira-clarification-text" class="comment-preview"></pre>
+            <div class="run-actions">
+              <button id="jira-hold-btn" class="run-btn">Commit &mdash; Post &amp; Put On Hold</button>
+            </div>
+          </div>
+        </div>
+        <div id="jira-ready" hidden>
+          <p><strong>Phase:</strong> <span id="jira-phase" class="status-pill"></span></p>
+          <p><strong>Test type:</strong> <span id="jira-test-type"></span> <span id="jira-confidence" class="status-pill"></span></p>
+          <p><strong>Scope to check:</strong></p>
+          <ul id="jira-check-items"></ul>
+          <div class="run-actions">
+            <button id="jira-check-btn" class="run-btn">&#9654; Check</button>
+          </div>
+          <div id="jira-content-mismatch-note" hidden>
+            <p>&#9888;&#65039; This also reads like a <strong>QA vs Production content mismatch</strong> &mdash; a functional check may not catch it.</p>
+            <div class="run-actions">
+              <button id="jira-compare-alt-btn" class="stop-btn">&#9654; Compare (QA vs Production) instead</button>
+            </div>
+          </div>
+        </div>
+        <div id="jira-visual-ready" hidden>
+          <p><strong>Phase:</strong> <span id="jira-visual-phase" class="status-pill"></span></p>
+          <p id="jira-visual-explainer">No automated functional test matches this ticket &mdash; but it looks like it needs a visual check instead.</p>
+          <p id="jira-visual-detail"></p>
+          <p><strong>Scope to check:</strong></p>
+          <ul id="jira-visual-check-items"></ul>
+          <div class="run-actions">
+            <button id="jira-compare-btn" class="run-btn">&#9654; Compare</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="jira-result-card" class="card" hidden>
+        <div class="card-header">
+          <span class="icon">&#128203;</span>
+          <h2>Check Result</h2>
+          <span id="jira-result-phase" class="status-pill"></span>
+          <span id="jira-result-status" class="status-pill"></span>
+        </div>
+        <p><strong>Draft comment (Official Reporting format):</strong></p>
+        <pre id="jira-comment-preview" class="comment-preview"></pre>
+        <div id="jira-evidence-gallery" class="evidence-gallery"></div>
+        <p id="jira-video-note" class="video-note" hidden></p>
+        <div class="run-actions">
+          <button id="jira-commit-btn" class="run-btn">Commit &mdash; Post Comment &amp; Update Status</button>
+          <button id="jira-cancel-btn" class="stop-btn">Cancel</button>
+        </div>
+      </section>
+
+      <section id="jira-commit-outcome" class="card" hidden>
+        <div class="card-header">
+          <span class="icon">&#9989;</span>
+          <h2>Done</h2>
+        </div>
+        <p id="jira-commit-outcome-text"></p>
+      </section>
 
     </div>
 
