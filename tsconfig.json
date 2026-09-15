@@ -10,6 +10,7 @@
     "tests/**/*.ts",
     "helpers/**/*.ts",
     "src/**/*.ts",
+    "gui/**/*.ts",
     "playwright.config.ts",
     "global-setup.ts"
   ],

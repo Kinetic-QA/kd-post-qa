@@ -21,9 +21,10 @@ import * as crypto from 'crypto';
 import * as dotenv from 'dotenv';
 import axios from 'axios';
 import ExcelJS from 'exceljs';
+import mammoth from 'mammoth';
 import { BRAND_URLS } from '../helpers/brand-urls';
 import { captureFullPageScreenshot, captureMultipleFrames, captureWithPopupWait, captureSiteText, rasterizeSvgToPng, cropRegion } from './screenshot-capture';
-import { compareVisual, compareText, MODEL, VisualCheckMode, VisualStatus, VisualCompareResult } from './visual-compare';
+import { compareVisual, compareText, MODEL, VisualCheckMode, VisualStatus, VisualCompareResult, ImageInput, TextInput } from './visual-compare';
 import { crawlSite } from './site-crawler';
 // require(), not import — TS's module resolution doesn't match an explicit
 // .cjs extension against a .d.ts declaration file of the same base name
@@ -228,15 +229,169 @@ function fileFrom(req: express.Request, field: string): Express.Multer.File | un
   return files?.[field]?.[0];
 }
 
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 function mimeTypeFor(file: Express.Multer.File): string {
   // multer/the browser usually gets this right from the file's extension,
-  // but fall back to sniffing the extension ourselves for the one type this
-  // feature cares about (PDF) in case a browser ever sends a generic
-  // application/octet-stream for it.
+  // but fall back to sniffing the extension ourselves in case a browser ever
+  // sends a generic application/octet-stream for one of these.
   if (file.mimetype && file.mimetype !== 'application/octet-stream') return file.mimetype;
-  if (file.originalname.toLowerCase().endsWith('.pdf')) return 'application/pdf';
-  if (file.originalname.toLowerCase().endsWith('.svg')) return 'image/svg+xml';
+  const name = file.originalname.toLowerCase();
+  if (name.endsWith('.pdf')) return 'application/pdf';
+  if (name.endsWith('.svg')) return 'image/svg+xml';
+  if (name.endsWith('.docx')) return DOCX_MIME;
+  if (name.endsWith('.xlsx')) return XLSX_MIME;
   return 'image/png';
+}
+
+function isOfficeDoc(mimeType: string): boolean {
+  return mimeType === DOCX_MIME || mimeType === XLSX_MIME;
+}
+
+// Document vs Site used to only ever check the one URL a person typed in —
+// if the reference document itself named a specific sub-page ("the Mobile
+// App page at qa-ab.spingenie.ca/mobile-app/"), the tool had no way to
+// actually go look, and could only say "cannot confirm from screenshot
+// alone." This finds same-site URLs mentioned in the document's own
+// extracted text (full "https://..." links and bare "hostname/path"
+// mentions alike) so those specific pages get captured and checked too —
+// scoped to the SAME hostname as the URL the person provided, never an
+// arbitrary domain named in the document, and capped so a document that
+// mentions many links can't turn one check into an uncontrolled crawl.
+const MAX_EXTRA_SITE_PAGES = 3;
+
+function extractSameSiteUrls(text: string, baseUrlStr: string): string[] {
+  let base: URL;
+  try {
+    base = new URL(baseUrlStr);
+  } catch {
+    return [];
+  }
+  const found = new Set<string>();
+  const alreadyMain = new Set([base.origin + base.pathname, base.origin + '/']);
+
+  const addIfSameHost = (candidate: string) => {
+    try {
+      const u = new URL(candidate, base);
+      if (u.hostname !== base.hostname) return;
+      const normalized = u.origin + u.pathname;
+      if (!alreadyMain.has(normalized)) found.add(normalized);
+    } catch { /* not a usable URL — ignore */ }
+  };
+
+  // Full URLs, e.g. "https://qa-ab.spingenie.ca/mobile-app/"
+  for (const m of text.matchAll(/https?:\/\/[^\s,;()"'<>]+/gi)) {
+    addIfSameHost(m[0].replace(/[.,;:]+$/, ''));
+  }
+
+  // Bare "hostname/path" mentions with no scheme, e.g.
+  // "qa-ab.spingenie.ca/mobile-app/" — same host as the given URL only, so
+  // this can't be tricked into resolving an unrelated domain named in the doc.
+  const escapedHost = base.hostname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const m of text.matchAll(new RegExp(`\\b${escapedHost}(/[^\\s,;()"'<>]*)`, 'gi'))) {
+    addIfSameHost(base.origin + m[1].replace(/[.,;:]+$/, ''));
+  }
+
+  return [...found].slice(0, MAX_EXTRA_SITE_PAGES);
+}
+
+// Claude's document content block only understands PDF — a Word/Excel
+// upload is converted to plain extracted text here instead, so
+// "Document vs Site" can accept any of the three, not just PDF/image.
+// Formatting/layout doesn't survive this; the document-vs-site prompt in
+// visual-compare.ts is written to compare content only when it gets text.
+const MAX_EXTRACTED_DOC_CHARS = 50_000;
+// Plain text extraction silently drops any images embedded IN the document
+// (a mockup pasted into a Word doc, a logo in a spreadsheet) — extracted
+// separately and sent to Claude as real image blocks so it can actually see
+// them, capped so one document with dozens of images can't blow up the
+// request.
+const MAX_EMBEDDED_IMAGES = 5;
+
+function mediaExtensionToMimeType(extension: string): string | null {
+  const ext = extension.toLowerCase();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'gif') return 'image/gif';
+  return null; // exceljs also reports e.g. emf/wmf vector media Claude can't read as an image
+}
+
+async function extractOfficeDocContent(buffer: Buffer, mimeType: string): Promise<{ text: string; images: ImageInput[] }> {
+  let text: string;
+  let images: ImageInput[] = [];
+
+  if (mimeType === DOCX_MIME) {
+    text = (await mammoth.extractRawText({ buffer })).value;
+    try {
+      await mammoth.convertToHtml({ buffer }, {
+        convertImage: mammoth.images.imgElement(async image => {
+          if (images.length < MAX_EMBEDDED_IMAGES) {
+            const b64 = await image.read('base64');
+            images.push({ buffer: Buffer.from(b64, 'base64'), mimeType: image.contentType });
+          }
+          return { src: '' };
+        }),
+      });
+    } catch (e) {
+      // Text extraction above already succeeded — losing the embedded
+      // images on a weird/corrupt image stream shouldn't fail the whole
+      // check, just means Claude only sees the text this time.
+      console.warn('[WARN] Could not extract embedded images from .docx:', e instanceof Error ? e.message : e);
+    }
+  } else {
+    // exceljs's own .d.ts types load(buffer) against a Buffer shape that
+    // doesn't structurally match this project's actual Buffer type (a
+    // @types/node duplication/version issue) — readFile(path) has no such
+    // mismatch, so the upload is written to a temp file instead, same
+    // write-then-cleanup pattern jira-checker.ts's uploadBufferAsAttachment
+    // already uses for the same class of problem.
+    const wb = new ExcelJS.Workbook();
+    const tmpPath = path.join(os.tmpdir(), `visual-check-${crypto.randomUUID()}.xlsx`);
+    fs.writeFileSync(tmpPath, buffer);
+    try {
+      try {
+        await wb.xlsx.readFile(tmpPath);
+      } finally {
+        fs.unlinkSync(tmpPath);
+      }
+    } catch (e) {
+      // Confirmed live: exceljs can throw while reconciling drawings/images
+      // against worksheets for some real, valid .xlsx files (a compatibility
+      // quirk, not a corrupt-file problem) — losing the WHOLE workbook to an
+      // uncaught throw here would silently fail cell text too, not just
+      // images, so this is caught and reported rather than left to bubble up.
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('[WARN] Could not parse .xlsx (falling back to no extracted content):', msg);
+      return { text: `(Could not read this Excel file's content: ${msg})`, images: [] };
+    }
+
+    const parts: string[] = [];
+    wb.eachSheet(sheet => {
+      parts.push(`Sheet: ${sheet.name}`);
+      sheet.eachRow({ includeEmpty: false }, row => {
+        const cells = (row.values as unknown[]).slice(1).map(v => (v == null ? '' : String(v)));
+        if (cells.some(c => c !== '')) parts.push(cells.join(' | '));
+      });
+    });
+    text = parts.join('\n');
+
+    try {
+      for (const media of wb.model.media ?? []) {
+        if (images.length >= MAX_EMBEDDED_IMAGES) break;
+        const imgMime = mediaExtensionToMimeType(media.extension);
+        if (imgMime) images.push({ buffer: Buffer.from(media.buffer), mimeType: imgMime });
+      }
+    } catch (e) {
+      console.warn('[WARN] Could not extract embedded images from .xlsx:', e instanceof Error ? e.message : e);
+    }
+  }
+
+  text = text.trim();
+  if (text.length > MAX_EXTRACTED_DOC_CHARS) {
+    text = text.slice(0, MAX_EXTRACTED_DOC_CHARS) + '\n\n[...truncated...]';
+  }
+  return { text, images };
 }
 
 // Crops the matched region (if Claude gave one) out of the relevant site
@@ -254,7 +409,7 @@ async function buildMatchCrop(
   return cropped ? `data:image/png;base64,${cropped.toString('base64')}` : null;
 }
 
-type SectionImages = { a: string | null; b: string[]; matchCrop: string | null };
+type SectionImages = { a: string | null; aText: string | null; b: string[]; bLabels: string[] | null; matchCrop: string | null };
 
 // Shared by document-vs-site, asset-vs-site, site-vs-site, and the banner/
 // popup sub-checks inside campaign-vs-site — every one of them is "one
@@ -266,16 +421,30 @@ async function runImageSection(
   mode: VisualCheckMode,
   refBuffer: Buffer,
   refMime: string,
-  siteBufs: Buffer[]
+  siteBufs: Buffer[],
+  siteLabels?: string[]
 ): Promise<{ result: VisualCompareResult | { error: string }; images: SectionImages }> {
-  const compareImage = refMime === 'image/svg+xml'
-    ? { buffer: await rasterizeSvgToPng(refBuffer), mimeType: 'image/png' as const }
-    : { buffer: refBuffer, mimeType: refMime };
+  // A Word/Excel reference has no visual form Claude's document block
+  // understands, so it's converted to text before compareVisual ever sees
+  // it — everything else in this function (crop, thumbnails) still only
+  // deals with the SITE side, which is always real screenshots either way.
+  let extractedText: string | null = null;
+  let reference: ImageInput | TextInput;
+  if (isOfficeDoc(refMime)) {
+    const extracted = await extractOfficeDocContent(refBuffer, refMime);
+    extractedText = extracted.text;
+    reference = { text: extracted.text, images: extracted.images };
+  } else {
+    reference = refMime === 'image/svg+xml'
+      ? { buffer: await rasterizeSvgToPng(refBuffer), mimeType: 'image/png' as const }
+      : { buffer: refBuffer, mimeType: refMime };
+  }
 
   const result = await compareVisual(
     mode,
-    compareImage,
-    siteBufs.map(buf => ({ buffer: buf, mimeType: 'image/png' as const }))
+    reference,
+    siteBufs.map(buf => ({ buffer: buf, mimeType: 'image/png' as const })),
+    siteLabels
   );
 
   const matchCrop = 'error' in result ? null : await buildMatchCrop(result, siteBufs);
@@ -284,12 +453,21 @@ async function runImageSection(
     result,
     images: {
       // Only rendered as a thumbnail if the browser can display it
-      // directly — a PDF's base64 isn't something an <img> tag can show,
-      // and re-rendering a PDF page to an image is out of scope for v1.
-      // SVG displays fine as-is (unrasterized, sharper than the copy sent
-      // to Claude).
-      a: refMime === 'application/pdf' ? null : `data:${refMime};base64,${refBuffer.toString('base64')}`,
+      // directly — a PDF or Office file's base64 isn't something an <img>
+      // tag can show, and re-rendering one to an image is out of scope for
+      // v1. SVG displays fine as-is (unrasterized, sharper than the copy
+      // sent to Claude).
+      a: (refMime === 'application/pdf' || isOfficeDoc(refMime)) ? null : `data:${refMime};base64,${refBuffer.toString('base64')}`,
+      // Shown instead of a thumbnail for a Word/Excel reference, so the
+      // panel isn't just blank — the same text Claude actually compared
+      // against, not a re-derived summary.
+      aText: extractedText,
       b: siteBufs.map(buf => `data:image/png;base64,${buf.toString('base64')}`),
+      // Which real URL each site frame came from, when the reference
+      // document itself named extra pages to check (see
+      // extractSameSiteUrls below) — lets the UI show which screenshot is
+      // which page instead of a bare "Site frame N".
+      bLabels: siteLabels ?? null,
       matchCrop,
     },
   };
@@ -375,7 +553,9 @@ app.post('/visual-check', uploadFields, async (req, res) => {
             ...synthesized,
             images: {
               a: `data:${mimeTypeFor(popupFile)};base64,${popupFile.buffer.toString('base64')}`,
+              aText: null,
               b: [`data:image/png;base64,${popupSiteBuf.toString('base64')}`],
+              bLabels: null,
               matchCrop: null,
             },
           };
@@ -415,14 +595,42 @@ app.post('/visual-check', uploadFields, async (req, res) => {
     // often part of a rotating hero banner/carousel — a single screenshot
     // can only prove what was showing at that instant, not that the asset
     // is genuinely absent. Capture several frames spaced apart instead so a
-    // carousel gets at least one full rotation; Document vs Site is a
-    // whole-page fidelity check where this matters far less, so it keeps
-    // the cheaper single-shot capture.
-    const siteBufs = mode === 'asset-vs-site'
-      ? await captureMultipleFrames(siteUrl)
-      : [await captureFullPageScreenshot(siteUrl)];
+    // carousel gets at least one full rotation.
+    //
+    // Document vs Site instead looks for OTHER PAGES the reference document
+    // itself names (see extractSameSiteUrls) — only possible for Word/Excel
+    // references, since that's the only case with real extracted text to
+    // scan before ever capturing a screenshot; a PDF/image reference stays
+    // single-page for now.
+    let siteBufs: Buffer[];
+    let siteLabels: string[] | undefined;
+    if (mode === 'asset-vs-site') {
+      siteBufs = await captureMultipleFrames(siteUrl);
+    } else {
+      let extraUrls: string[] = [];
+      if (isOfficeDoc(mimeTypeFor(file))) {
+        const preExtracted = await extractOfficeDocContent(file.buffer, mimeTypeFor(file));
+        extraUrls = extractSameSiteUrls(preExtracted.text, siteUrl);
+      }
 
-    const { result, images } = await runImageSection(mode, file.buffer, mimeTypeFor(file), siteBufs);
+      const captured: { url: string; buf: Buffer }[] = [];
+      for (const u of [siteUrl, ...extraUrls]) {
+        try {
+          captured.push({ url: u, buf: await captureFullPageScreenshot(u) });
+        } catch (e) {
+          // The MAIN url failing is a real error the outer catch should
+          // report; an EXTRA page the document happened to mention being
+          // unreachable (wrong/stale link, requires auth, etc.) shouldn't
+          // fail the whole check — it's just one less page to check.
+          if (u === siteUrl) throw e;
+          console.warn(`[WARN] Could not capture "${u}" (mentioned in the reference document) — skipping it:`, e instanceof Error ? e.message : e);
+        }
+      }
+      siteBufs = captured.map(c => c.buf);
+      siteLabels = captured.length > 1 ? captured.map(c => c.url) : undefined;
+    }
+
+    const { result, images } = await runImageSection(mode, file.buffer, mimeTypeFor(file), siteBufs, siteLabels);
     res.json({ ...result, mode, images });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
