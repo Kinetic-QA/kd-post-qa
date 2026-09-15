@@ -14,6 +14,16 @@ interface CacheEntry {
 }
 const cache = new Map<string, CacheEntry>();
 
+export interface ConfluencePageSummary {
+  id: string;
+  title: string;
+}
+interface ChildrenCacheEntry {
+  children: ConfluencePageSummary[];
+  fetchedAt: number;
+}
+const childrenCache = new Map<string, ChildrenCacheEntry>();
+
 const MAX_CHARS = 8000;
 
 // Confluence's "storage" format is XHTML-ish. This is a lightweight
@@ -72,5 +82,41 @@ export async function getConfluencePageText(pageId: string, ttlMs = 10 * 60 * 10
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[Confluence] Could not fetch page ${pageId} (serving ${cached ? 'stale cache' : 'nothing'}): ${msg}`);
     return cached?.text ?? null;
+  }
+}
+
+/**
+ * Lists a Confluence page's direct child pages (id + title only, no body) —
+ * used to discover what's currently under a KB folder (e.g. "JIRA QA
+ * Helper") without hardcoding the list, so a page Reyn adds/renames shows up
+ * on the next cache expiry. Same fail-soft contract as getConfluencePageText:
+ * never throws, serves stale cache on error, empty array if nothing cached.
+ */
+export async function getConfluencePageChildren(pageId: string, ttlMs = 10 * 60 * 1000): Promise<ConfluencePageSummary[]> {
+  const cached = childrenCache.get(pageId);
+  if (cached && Date.now() - cached.fetchedAt < ttlMs) return cached.children;
+
+  const email = process.env.JIRA_EMAIL;
+  const token = process.env.JIRA_API_TOKEN;
+  const baseUrl = process.env.JIRA_BASE_URL?.replace(/\/$/, '');
+  if (!email || !token || !baseUrl) return cached?.children ?? [];
+
+  try {
+    const res = await axios.get(`${baseUrl}/wiki/rest/api/content/${pageId}/child/page`, {
+      params: { limit: 100 },
+      auth: { username: email, password: token },
+      headers: { Accept: 'application/json' },
+      timeout: 8000,
+    });
+    const children: ConfluencePageSummary[] = (res.data?.results ?? []).map((r: any) => ({
+      id: r.id,
+      title: r.title,
+    }));
+    childrenCache.set(pageId, { children, fetchedAt: Date.now() });
+    return children;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[Confluence] Could not fetch children of page ${pageId} (serving ${cached ? 'stale cache' : 'nothing'}): ${msg}`);
+    return cached?.children ?? [];
   }
 }
