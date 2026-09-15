@@ -871,12 +871,27 @@ function updateVisualWidgets() {
   visualWidgetCampaign.hidden = !isCampaign;
   if (isUploadMode) {
     visualFileLabel.textContent = VISUAL_FILE_LABELS[mode];
-    visualFileInput.accept = mode === 'asset-vs-site' ? '.png,.jpg,.jpeg,.webp,.gif,.svg' : '.pdf,.png,.jpg,.jpeg,.webp,.gif,.svg';
+    visualFileInput.accept = mode === 'asset-vs-site' ? '.png,.jpg,.jpeg,.webp,.gif,.svg' : '.pdf,.docx,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.svg';
   }
 }
 
 visualModeSelect.addEventListener('change', updateVisualWidgets);
 updateVisualWidgets();
+
+// Click any comparison pane or thumbnail to open it full-size in a new tab.
+// A full-page screenshot shrunk into a fixed-height pane is often unreadable
+// as-is. Delegated on the results card (not per-image) since these images
+// are inserted via innerHTML from buildSectionHtml()'s HTML strings, not
+// created as DOM elements one at a time. Same blob: URL pattern used
+// elsewhere in the app — Chrome blocks a top-level navigation straight to a
+// data: URI, but not to a blob: URL created from one.
+visualResultsCard.addEventListener('click', (e) => {
+  const img = e.target.closest('.visual-compare-img, .visual-thumb');
+  if (!img || !img.src) return;
+  fetch(img.src)
+    .then(r => r.blob())
+    .then(blob => window.open(URL.createObjectURL(blob), '_blank'));
+});
 
 const SEVERITY_META = {
   critical: { label: 'Critical', variant: 'failed' },
@@ -907,14 +922,30 @@ function buildSectionHtml(sectionData, labels) {
     // page. Falls back to the full frame whenever no usable crop exists.
     const usingCrop = !!sectionData.images.matchCrop;
     const bestSrc = sectionData.images.matchCrop || fullBestSrc;
-    const bLabel = usingCrop ? `${labels.b} — Close-up` : labels.b;
+    // When the reference document named specific pages to check (Document
+    // vs Site only), each site frame's real URL is known — show that
+    // instead of a bare "Live Site" label so it's clear which page is which.
+    const bLabels = Array.isArray(sectionData.images.bLabels) ? sectionData.images.bLabels : null;
+    const bLabel = usingCrop
+      ? `${labels.b} — Close-up`
+      : (bLabels?.[bestIndex] ? `${labels.b} — ${bLabels[bestIndex]}` : labels.b);
 
     const panes = [];
     if (sectionData.images.a) {
       panes.push(`
         <div class="visual-compare-pane">
           <span class="visual-pane-label">${escapeHtml(labels.a)}</span>
-          <img src="${sectionData.images.a}" class="visual-compare-img" alt="${escapeHtml(labels.a)}" />
+          <img src="${sectionData.images.a}" class="visual-compare-img" alt="${escapeHtml(labels.a)}" title="Click to view full size" />
+        </div>
+      `);
+    } else if (sectionData.images.aText) {
+      // A Word/Excel reference has no image to show — display the same
+      // extracted text Claude actually compared against instead of leaving
+      // this pane blank.
+      panes.push(`
+        <div class="visual-compare-pane">
+          <span class="visual-pane-label">${escapeHtml(labels.a)} (extracted text)</span>
+          <pre class="visual-compare-text">${escapeHtml(sectionData.images.aText)}</pre>
         </div>
       `);
     }
@@ -922,7 +953,7 @@ function buildSectionHtml(sectionData, labels) {
       panes.push(`
         <div class="visual-compare-pane">
           <span class="visual-pane-label">${escapeHtml(bLabel)}</span>
-          <img src="${bestSrc}" class="visual-compare-img" alt="${escapeHtml(bLabel)}" />
+          <img src="${bestSrc}" class="visual-compare-img" alt="${escapeHtml(bLabel)}" title="Click to view full size" />
         </div>
       `);
     }
@@ -939,9 +970,15 @@ function buildSectionHtml(sectionData, labels) {
       const extraHtml = extraThumbs
         .map((src, i) => {
           const isFullBest = usingCrop ? i === 0 : i === bestIndex;
+          // Map back to the real siteThumbs index for the label lookup —
+          // when usingCrop, index 0 is the prepended full best frame
+          // (== bestIndex in the original array), and every later index is
+          // shifted by one.
+          const srcIndex = usingCrop ? (i === 0 ? bestIndex : i - 1) : i;
+          const url = bLabels?.[srcIndex];
           const label = usingCrop
-            ? (i === 0 ? 'Full page (uncropped)' : `Site frame ${i - 1}`)
-            : `Site frame ${i}`;
+            ? (i === 0 ? (url ? `Full page (uncropped) — ${url}` : 'Full page (uncropped)') : (url || `Site frame ${srcIndex}`))
+            : (url || `Site frame ${i}`);
           return `<img src="${src}" class="visual-thumb${isFullBest ? ' visual-thumb-best' : ''}" alt="${label}" title="${label}" />`;
         })
         .join('');

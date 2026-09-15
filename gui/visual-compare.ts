@@ -46,6 +46,24 @@ export interface ImageInput {
   mimeType: string; // e.g. 'image/png', 'image/jpeg', 'application/pdf'
 }
 
+// The reference side of "document-vs-site" can also be a Word/Excel file —
+// Claude's document content block only understands PDF (and images), so a
+// .docx/.xlsx upload is converted to plain extracted text by the caller
+// (gui/server.ts, via mammoth/exceljs) before it ever reaches this module,
+// and sent as a text block instead of an image/document block. Any images
+// embedded IN that document (a mockup screenshot pasted into a Word doc,
+// say) are extracted separately and sent as their own image blocks
+// alongside the text, so Claude can actually see them — text extraction
+// alone silently drops embedded images entirely.
+export interface TextInput {
+  text: string;
+  images?: ImageInput[];
+}
+
+function isTextInput(ref: ImageInput | TextInput): ref is TextInput {
+  return 'text' in ref;
+}
+
 export interface VisualCompareResult {
   status: VisualStatus;
   // Index into the siteImages array this verdict is best illustrated by —
@@ -62,13 +80,17 @@ export interface VisualCompareResult {
 }
 
 const PROMPTS: Record<VisualCheckMode, string> = {
-  'document-vs-site': `You are a QA analyst comparing a reference document (a spec, requirements doc, or design brief — the FIRST attachment) against a live website screenshot (the LAST attachment).
+  'document-vs-site': `You are a QA analyst comparing a reference document (a spec, requirements doc, or design brief) against one or more live website screenshots (the "Site frame N" attachments).
 
-Identify meaningful discrepancies: missing or extra sections, wrong copy/text, layout that doesn't match what the document describes, wrong colors/branding, missing images or elements the document calls for.
+The reference is either a visual document (PDF/image, shown as the FIRST attachment — compare its actual layout/visuals too) or plain extracted text from a Word/Excel file (shown as a text block instead, with no layout/formatting preserved — in that case compare only the textual content/requirements it states, not any visual layout, since none survived extraction). A Word/Excel reference may ALSO include one or more "Embedded image N from the reference document" images immediately after the text — these are real images the source document contained (e.g. a mockup or screenshot pasted into it) and should be compared visually against the live site just like a directly-uploaded reference image would be, in addition to the textual requirements.
 
-Also extract a field-by-field "breakdown" of comparable text the document specifies (headings, key copy, CTA button text, promo/bonus codes, prices) versus what the live site actually shows for each.
+There may be MORE THAN ONE "Site frame" — unlike asset-vs-site's carousel handling, each one here is a DIFFERENT PAGE of the site, not multiple shots of the same page. When the reference document itself names a specific page or URL (e.g. "the Mobile App page at .../mobile-app/", "the Regulation Requirements tab"), that page was proactively captured as an extra site frame labeled with its real URL — use it to actually confirm or refute what the document claims about THAT page, instead of saying you can't confirm it from a single homepage screenshot. If the document names a page/section that has NO corresponding site frame (no URL could be resolved for it, e.g. it's reached only via a menu click rather than a distinct URL), say plainly that it couldn't be checked and why, rather than guessing from an unrelated frame.
 
-Set "status" to "issue_found" if you find any meaningful discrepancy, or "no_issues_found" if the page matches the document. Leave "boundingBox" null unless there's one specific discrepant area worth zooming into, in which case give its normalized location in the site screenshot.`,
+Identify meaningful discrepancies: missing or extra sections, wrong copy/text, layout that doesn't match what the document describes (visual reference only), wrong colors/branding (visual reference only), missing images or elements the document calls for. Treat each site frame as evidence for whatever specific claim it corresponds to, not just the first/main one.
+
+Also extract a field-by-field "breakdown" of comparable text the document specifies (headings, key copy, CTA button text, promo/bonus codes, prices) versus what the live site actually shows for each — note which page/frame each value came from when it isn't the main frame.
+
+Set "status" to "issue_found" if you find any meaningful discrepancy on ANY checked page, or "no_issues_found" only if everything checkable matches. Set "bestFrameIndex" to whichever site frame is most relevant to the overall verdict. Leave "boundingBox" null unless there's one specific discrepant area worth zooming into, in which case give its normalized location within that bestFrameIndex screenshot — always null when the reference is extracted text, since there's no visual document to point back to.`,
   'asset-vs-site': `You are a QA analyst checking whether a specific asset (e.g. a banner, logo, or promo image — the FIRST attachment) appears correctly on a live website.
 
 You will be shown one or more numbered screenshots of the SAME live page ("Site frame 0", "Site frame 1", ...), captured a few seconds apart. This is deliberate: many sites show the asset inside a rotating hero banner/carousel, so a single screenshot may just have caught a different slide, not proof the asset is missing. Treat all the site frames together as one combined view of the page — check every one of them before concluding anything.
@@ -124,6 +146,24 @@ function blockFor(image: ImageInput): Anthropic.ImageBlockParam | Anthropic.Docu
   };
 }
 
+function blocksForReference(ref: ImageInput | TextInput): Anthropic.ContentBlockParam[] {
+  if (isTextInput(ref)) {
+    const blocks: Anthropic.ContentBlockParam[] = [
+      { type: 'text', text: `Reference document content (extracted text, formatting/layout not preserved):\n\n${ref.text}` },
+    ];
+    // Text extraction silently drops any images embedded IN the document
+    // (e.g. a mockup screenshot pasted into a Word doc) — sent as their own
+    // labeled image blocks so Claude actually sees them, not just the text
+    // around them.
+    (ref.images ?? []).forEach((img, i) => {
+      blocks.push({ type: 'text', text: `Embedded image ${i} from the reference document:` });
+      blocks.push(blockFor(img));
+    });
+    return blocks;
+  }
+  return [blockFor(ref)];
+}
+
 function parseBoundingBox(raw: unknown): BoundingBox | null {
   if (!raw || typeof raw !== 'object') return null;
   const b = raw as Record<string, unknown>;
@@ -143,8 +183,9 @@ function parseBoundingBox(raw: unknown): BoundingBox | null {
 
 export async function compareVisual(
   mode: VisualCheckMode,
-  imageA: ImageInput,
-  siteImages: ImageInput[]
+  imageA: ImageInput | TextInput,
+  siteImages: ImageInput[],
+  siteLabels?: string[]
 ): Promise<VisualCompareResult | { error: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -162,9 +203,12 @@ export async function compareVisual(
 
   // Each site image gets its own numbered label immediately before it (not
   // one combined label up front) so bestFrameIndex in the response can
-  // reliably be tied back to a specific frame.
+  // reliably be tied back to a specific frame. Includes the real URL when
+  // one is known — e.g. when the reference document itself named a
+  // specific page to check ("the Mobile App page at .../mobile-app/") and
+  // that page was captured alongside the main site URL.
   const siteContent = siteImages.flatMap((img, i): Anthropic.ContentBlockParam[] => [
-    { type: 'text', text: `Site frame ${i}:` },
+    { type: 'text', text: siteLabels?.[i] ? `Site frame ${i} (${siteLabels[i]}):` : `Site frame ${i}:` },
     blockFor(img),
   ]);
 
@@ -177,7 +221,7 @@ export async function compareVisual(
       messages: [{
         role: 'user',
         content: [
-          blockFor(imageA),
+          ...blocksForReference(imageA),
           ...siteContent,
         ],
       }],
