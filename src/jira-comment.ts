@@ -1,6 +1,20 @@
 // Shared ADF comment builder — used by both the CLI agent (src/agent.ts) and
 // the JIRA Checker GUI tab (gui/jira-checker.ts) so the two front doors to
 // the same Jira automation always post an identical house-style comment.
+//
+// Shape follows the "Jira Comment Format Reference (reconstructed)"
+// (Confluence page 283344898, authored by Reyn 2026-09-15 from QA Reporting
+// Protocols §4/§5/§7, Standing Rules #6-8/#12/#13, and QA Role & Working
+// Conventions §4 — a reconstruction, not the lost original, but the current
+// authoritative source): shared skeleton (Pre/Post-Checked header, Scope
+// Checked, Platform and GEOs Checked, Overall Result heading + separate
+// verdict line), phase-specific verdict blocks, and evidence conventions.
+// Not a live Confluence fetch like ticket-interpreter.ts's use of Standing
+// Rules/Test Case Standard — this builds a structural ADF document
+// deterministically rather than via an AI call, so the format is
+// transcribed into code once rather than re-interpreted by AI on every
+// post (which would risk a malformed comment shape on a bad AI response).
+// Re-sync this file by hand if the Confluence page changes.
 import type { TestRunResult } from './test-runner';
 
 export function adfDoc(...content: object[]) {
@@ -48,12 +62,28 @@ export interface VideoAttachment {
   filename: string;
 }
 
+export interface CommentContext {
+  geo?: string;
+  platform?: string; // default 'Desktop' — automated Playwright runs are desktop-only today
+}
+
+// Shared "Platform and GEOs Checked" bullet pair — same two-line shape
+// (GEO: <x> / Platform: <y>) the format reference specifies for every
+// comment, functional or visual.
+function platformGeoBullets(ctx: CommentContext = {}): object {
+  return adfBulletList(
+    `GEO: ${ctx.geo || '(not resolved — see ticket)'}`,
+    `Platform: ${ctx.platform || 'Desktop'}`,
+  );
+}
+
 export function buildCommentAdf(
   result: TestRunResult,
   attachments: { thumbnailUrl: string; filename: string }[],
   checkItems: string[],
   phase: CheckPhase = 'pre-check',
   videos: VideoAttachment[] = [],
+  ctx: CommentContext = {},
 ): object {
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const duration = (result.durationMs / 1000).toFixed(1);
@@ -62,19 +92,23 @@ export function buildCommentAdf(
   const headerLabel = phase === 'post-check' ? 'Post-Checked' : 'Pre-Checked';
   const phaseWord = phase === 'post-check' ? 'post-checking' : 'pre-checking';
 
-  const nodes: object[] = [];
+  // Shared skeleton, all cases: header, Scope Checked, Platform and GEOs
+  // Checked, then "Overall Result" as its own heading (the verdict itself
+  // is a separate line, not folded into the same bold run).
+  const nodes: object[] = [
+    adfPara(adfBold(`${headerLabel} (${today})`)),
+    adfPara(adfBold('Scope Checked')),
+    adfBulletList(...scopeItems),
+    adfPara(adfBold('Platform and GEOs Checked')),
+    platformGeoBullets(ctx),
+    adfPara(adfBold('Overall Result')),
+  ];
 
   if (result.success) {
     nodes.push(
-      adfPara(adfBold(`${headerLabel} (${today})`)),
-      adfPara(adfBold('Scope Checked:')),
-      adfBulletList(...scopeItems),
-      adfPara(adfBold('Platform and GEOs checked:')),
-      adfBulletList('Desktop', 'N/A (Automated QA)'),
-      adfPara(adfBold('Overall Result: ✅ PASS')),
-      adfPara(adfText(
-        `${result.passed} test(s) passed in ${duration}s. No issues were identified during ${phaseWord}.`
-      )),
+      adfPara(adfText(`✅ `), adfBold('PASS')),
+      adfPara(adfText(`No issues were identified during ${phaseWord}.`)),
+      adfPara(adfText(`(${result.passed} test(s) passed in ${duration}s.)`)),
     );
     // Post-check clean-pass house format adds a Documentation section,
     // separated by a rule, per the standing rule confirmed 2026-09-11
@@ -85,30 +119,24 @@ export function buildCommentAdf(
       for (const item of scopeItems) {
         nodes.push(adfPara(adfText(`${item} — confirmed present/working on live.`)));
       }
+    } else if (videos.length > 0) {
+      nodes.push(adfPara(adfBold('Screen recording')));
+      for (const vid of videos) {
+        nodes.push(adfPara(adfLink(vid.filename, vid.contentUrl)));
+      }
     }
   } else {
+    // Per the format reference's pre-check-defect shape: one bullet per
+    // defect, stated as a factual mismatch — no separate "Issue Summary" /
+    // "Failed Reason" headers duplicating the same information.
     const errItems = result.errors.length
       ? result.errors
       : ['Test failed — no error details captured'];
 
     nodes.push(
-      adfPara(adfBold(`${headerLabel} (${today})`)),
-      adfPara(adfBold('Scope Checked:')),
-      adfBulletList(`${testLabel} Flow`),
-      adfPara(adfBold('Affected GEOs and Platform:')),
-      adfBulletList('Desktop', 'N/A (Automated QA)'),
-      adfPara(adfBold('Overall Result: ❌ FAIL')),
-      adfPara(adfBold('Scope Checked:')),
-      adfBulletList(...scopeItems),
-      adfPara(adfBold('Issue Summary:')),
-      adfPara(adfText(
-        `${testLabel} test failed during automated ${phaseWord}. `
-        + `${result.failed} test(s) failed in ${duration}s.`
-      )),
-      adfPara(adfBold('Failed Reason:')),
+      adfPara(adfText(`❌ `), adfBold('FAIL')),
       adfBulletList(...errItems),
-    );
-    nodes.push(
+      adfPara(adfText(`(${result.failed} test(s) failed in ${duration}s during automated ${phaseWord}.)`)),
       phase === 'post-check'
         // Per the Reporting Protocol §5.4 — a post-check defect is tracked on
         // a NEW linked ticket; the original is closed, never reopened.
@@ -117,6 +145,10 @@ export function buildCommentAdf(
     );
   }
 
+  // Screenshots ideally sit directly under the bullet they evidence (per
+  // the format reference) — not implemented here since nothing in this
+  // automated flow maps a given screenshot to a specific checkItem/defect
+  // bullet; they're grouped under one Evidence section instead.
   if (attachments.length > 0) {
     nodes.push(adfPara(adfBold('Evidence:')));
     for (const att of attachments) {
@@ -125,9 +157,10 @@ export function buildCommentAdf(
     }
   }
 
-  if (videos.length > 0) {
-    // Jira doesn't inline-render video the way it does images — link to the
-    // uploaded attachment instead of trying to embed a player.
+  if (videos.length > 0 && !(result.success && phase !== 'post-check')) {
+    // Already rendered as "Screen recording" above for the one case the
+    // format reference names explicitly (pre-check, clean pass); every
+    // other case (fail, post-check) just links the video as evidence.
     nodes.push(adfPara(adfBold('Video evidence:')));
     for (const vid of videos) {
       nodes.push(adfPara(adfLink(vid.filename, vid.contentUrl)));
@@ -160,6 +193,6 @@ export function adfDocToPreviewText(doc: { content: any[] }): string {
 // Plain-text render of the same comment, for the GUI's pre-Commit preview —
 // screenshots aren't uploaded yet at preview time, so attachments are never
 // passed here (Commit builds the real ADF version, with attachments, itself).
-export function commentPreviewText(result: TestRunResult, checkItems: string[], phase: CheckPhase = 'pre-check'): string {
-  return adfDocToPreviewText(buildCommentAdf(result, [], checkItems, phase) as { content: any[] });
+export function commentPreviewText(result: TestRunResult, checkItems: string[], phase: CheckPhase = 'pre-check', ctx: CommentContext = {}): string {
+  return adfDocToPreviewText(buildCommentAdf(result, [], checkItems, phase, [], ctx) as { content: any[] });
 }

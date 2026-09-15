@@ -9,6 +9,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-15
+
+### Added
+
+- **JIRA Checker now always drafts a test case for every ticket**, even when it can't run an automated check at all (e.g. the ticket's project doesn't map to a known brand, or nothing about it matches an existing automated test). Before, a ticket like that just got a "please clarify" message and nothing else useful. Now it also gets a properly formatted test case — objective, preconditions, step-by-step instructions with what to expect at each step — that a QA person can pick up and run by hand today, following the same house test-case standard Reyn just finished writing on Confluence.
+- **JIRA Checker now also pulls in Reyn's newly-written "Test Case Standard," "Verification Techniques," and "KD QA Test Case & Jira Workflow" pages from Confluence**, on top of the Standing Rules it already used — so the tool follows the team's actual current standards for how a test case should look and how a check should really be performed, and picking up future edits to those pages automatically, no code change needed.
+- **JIRA Checker now also looks up any other relevant page in the team's Confluence knowledge base** for a given ticket (for example, a Genting Safer Play ticket automatically pulls in that project's own reference docs) instead of only ever reading the two or three pages hardcoded into the tool.
+
+### Fixed
+
+- **The posted Jira comment's format now matches the team's actual house style** (the "Scope Checked" / "Platform and GEOs Checked" / "Overall Result" layout Reyn just documented), including showing the real GEO and platform that was checked instead of a placeholder that always said "N/A." A leftover duplicated section in the failure-comment layout was also cleaned up.
+- **A ticket missing its GEO or brand could have silently reused the previous ticket's GEO/brand for its automated check.** JIRA Checker runs as one long-running program behind the GUI, and it was only ever filling in the current ticket's brand/GEO — it never cleared out the previous ticket's, so a ticket without one could have quietly run against the wrong site with no warning shown. It now always starts from a clean slate before every check.
+- **JIRA Checker could get stuck loading forever with no error shown** if something unexpected went wrong partway through reading a ticket. It now always shows an error message instead of hanging.
+- **If the AI reading a ticket fails or times out, JIRA Checker now says so clearly** instead of just showing an empty "no test case" area that looked the same as a ticket genuinely having nothing to test.
+- **Loading a ticket is now noticeably faster on a cold start** (right after the tool restarts, or every 10 minutes or so) — the several Confluence lookups a ticket load does were happening one after another; they now happen all at once.
+
 ## [Unreleased] - 2026-09-14
 
 ### Added

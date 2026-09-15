@@ -260,7 +260,7 @@ async function main() {
 
   // 6. Post comment with findings
   console.log(`\n[6/7] Posting findings comment...`);
-  const commentAdf = buildCommentAdf(testResult, attachments, checkItems);
+  const commentAdf = buildCommentAdf(testResult, attachments, checkItems, undefined, undefined, { geo: testParams.GEO });
   try {
     await jira.addCommentAdf(issueKey, commentAdf);
     console.log('      Done.');

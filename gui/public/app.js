@@ -1333,6 +1333,9 @@ investigateExportBtn.addEventListener('click', () => {
   const ticketTitle = document.getElementById('jira-ticket-title');
   const ticketStatusPill = document.getElementById('jira-ticket-status');
 
+  const testCasesBox = document.getElementById('jira-test-cases-box');
+  const testCasesList = document.getElementById('jira-test-cases-list');
+
   const notReadyBox = document.getElementById('jira-not-ready');
   const notReadyReason = document.getElementById('jira-not-ready-reason');
   const clarificationBox = document.getElementById('jira-clarification-box');
@@ -1386,8 +1389,114 @@ investigateExportBtn.addEventListener('click', () => {
 
   let current = null; // { key, testType, testFile, checkItems, params }
 
+  // Always drawn from Load Ticket regardless of ready/not-ready/holdable —
+  // per the house Test Case Standard, a QA-executable test case is what
+  // JIRA Checker owes every ticket, independent of whether automation can
+  // also run against it.
+  function renderTestCases(testCases, warning) {
+    testCasesList.innerHTML = '';
+    if (!testCases || testCases.length === 0) {
+      // A failed AI interpretation and "genuinely nothing to draft" used to
+      // look identical (empty box, hidden). Surface the warning explicitly
+      // so a real failure isn't mistaken for the ticket just being simple.
+      if (warning) {
+        testCasesBox.hidden = false;
+        const p = document.createElement('p');
+        p.className = 'test-case-meta';
+        p.textContent = `⚠️ ${warning}`;
+        testCasesList.appendChild(p);
+      } else {
+        testCasesBox.hidden = true;
+      }
+      return;
+    }
+    testCasesBox.hidden = false;
+    for (const tc of testCases) {
+      const block = document.createElement('div');
+      block.className = 'test-case-block';
+
+      const header = document.createElement('div');
+      header.className = 'test-case-block-header';
+      const idSpan = document.createElement('span');
+      idSpan.className = 'test-case-id';
+      idSpan.textContent = tc.testCaseId;
+      const titleStrong = document.createElement('strong');
+      titleStrong.textContent = tc.title || '(untitled)';
+      const autoPill = document.createElement('span');
+      autoPill.className = `status-pill ${tc.automatable ? 'passed' : 'running'}`;
+      autoPill.textContent = tc.automatable ? 'Automatable' : 'Manual';
+      header.append(idSpan, titleStrong, autoPill);
+      block.appendChild(header);
+
+      const metaParts = [
+        tc.brandGeo && `Brand/GEO: ${tc.brandGeo}`,
+        tc.platform && `Platform: ${tc.platform}`,
+        tc.environment && `Environment: ${tc.environment}`,
+      ].filter(Boolean);
+      if (metaParts.length) {
+        const meta = document.createElement('p');
+        meta.className = 'test-case-meta';
+        meta.textContent = metaParts.join(' • ');
+        block.appendChild(meta);
+      }
+
+      if (tc.requirementReference) {
+        const ref = document.createElement('p');
+        ref.innerHTML = `<strong>Requirement:</strong> ${tc.requirementReference}`;
+        block.appendChild(ref);
+      }
+
+      if (tc.preconditions?.length) {
+        const p = document.createElement('p');
+        p.innerHTML = '<strong>Preconditions:</strong>';
+        block.appendChild(p);
+        const ul = document.createElement('ul');
+        for (const pre of tc.preconditions) {
+          const li = document.createElement('li');
+          li.textContent = pre;
+          ul.appendChild(li);
+        }
+        block.appendChild(ul);
+      }
+
+      if (tc.testData?.length) {
+        const p = document.createElement('p');
+        p.innerHTML = `<strong>Test data:</strong> ${tc.testData.join(', ')}`;
+        block.appendChild(p);
+      }
+
+      if (tc.steps?.length) {
+        const stepsLabel = document.createElement('p');
+        stepsLabel.innerHTML = '<strong>Steps:</strong>';
+        block.appendChild(stepsLabel);
+        const ol = document.createElement('ol');
+        for (const s of tc.steps) {
+          const li = document.createElement('li');
+          const stepSpan = document.createElement('div');
+          stepSpan.textContent = s.step;
+          const expSpan = document.createElement('div');
+          expSpan.className = 'expected';
+          expSpan.textContent = `Expected: ${s.expected}`;
+          li.append(stepSpan, expSpan);
+          ol.appendChild(li);
+        }
+        block.appendChild(ol);
+      }
+
+      if (tc.notes) {
+        const notes = document.createElement('p');
+        notes.className = 'test-case-meta';
+        notes.textContent = `Notes: ${tc.notes}`;
+        block.appendChild(notes);
+      }
+
+      testCasesList.appendChild(block);
+    }
+  }
+
   function hideAll() {
     ticketCard.hidden = true;
+    testCasesBox.hidden = true;
     notReadyBox.hidden = true;
     clarificationBox.hidden = true;
     readyBox.hidden = true;
@@ -1456,6 +1565,7 @@ investigateExportBtn.addEventListener('click', () => {
       ticketTitle.textContent = `${data.key} — ${data.summary}`;
       ticketStatusPill.textContent = data.status;
       ticketStatusPill.className = 'status-pill';
+      renderTestCases(data.testCases, data.testCasesWarning);
 
       if (!data.ready) {
         notReadyBox.hidden = false;
@@ -1485,6 +1595,7 @@ investigateExportBtn.addEventListener('click', () => {
           phase: data.phase,
           checkItems: data.checkItems,
           visualCheck: data.visualCheck,
+          geo: data.params?.GEO,
         };
         return;
       }
@@ -1617,6 +1728,7 @@ investigateExportBtn.addEventListener('click', () => {
       phase: current.phase,
       checkItems: current.checkItems,
       visualCheck: JSON.parse(contentMismatchNote.dataset.visualCheck),
+      geo: current.params?.GEO,
     }, compareAltBtn, '▶ Compare instead');
   });
 
