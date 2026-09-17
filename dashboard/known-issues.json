@@ -1,0 +1,10 @@
+{
+  "note": "Brands whose CURRENT failing run is a confirmed known issue in the test script itself (not a real product bug). Each entry is scoped to appliesToDate — the exact date of the run it acknowledges. If that brand's latest run moves to a new date, the entry stops applying automatically and the brand goes back to full 'Needs attention' alarm until someone re-confirms the new failure and adds a fresh entry. This is deliberate: a stale note must never silently mask a genuinely new failure just because it landed on the same brand.",
+  "brands": {
+    "SC": {
+      "appliesToDate": "2026-09-09",
+      "note": "Confirmed script/test issue, not a real product bug.",
+      "since": "2026-09-17"
+    }
+  }
+}

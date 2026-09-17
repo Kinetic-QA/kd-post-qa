@@ -225,6 +225,8 @@ async function scanCombinedReports() {
   return { reports, tests };
 }
 
+const KNOWN_ISSUES = JSON.parse(fs.readFileSync(path.join(__dirname, 'known-issues.json'), 'utf8')).brands || {};
+
 function buildBrandSummary(runs) {
   const byBrand = new Map();
   for (const r of runs) {
@@ -254,28 +256,80 @@ function buildBrandSummary(runs) {
       passRatePct: (b.passed + b.failed) > 0
         ? Math.round(((b.passed + b.skipped) / b.total) * 1000) / 10
         : 0,
+      // Plain status for a non-technical reader, so nobody has to compare
+      // Passed/Failed/Flaky columns themselves to know if a brand is OK:
+      // any real failure means "issue" regardless of how small; flaky-only
+      // (no hard failures, just an inconsistent result) is a lesser "watch"
+      // state, not lumped in with a real failure. A failure gets calmed down
+      // to "known-issue" ONLY when known-issues.json names this exact brand
+      // AND its appliesToDate matches this brand's actual latest run date —
+      // otherwise a stale note could quietly hide a genuinely new failure
+      // that happens to land on the same brand later.
+      status: (() => {
+        if (b.failed > 0) {
+          const known = KNOWN_ISSUES[b.brand];
+          if (known && known.appliesToDate === b.lastRunDate) return 'known-issue';
+          return 'issue';
+        }
+        return b.flaky > 0 ? 'watch' : 'healthy';
+      })(),
+      knownIssueNote: (() => {
+        const known = KNOWN_ISSUES[b.brand];
+        return (b.failed > 0 && known && known.appliesToDate === b.lastRunDate) ? known.note : null;
+      })(),
     }))
     .sort((a, b) => (b.lastRunDate || '').localeCompare(a.lastRunDate || ''));
 }
 
-// This project is meant to show "today's regression run", not the whole
-// history under Test Reports/ (that full history is what made the first
-// version of this page look cluttered with months of unrelated runs) — so
-// scope every scan down to one date, defaulting to today. Pass an explicit
-// TARGET_DATE to rebuild the snapshot for a different day (e.g. re-running
-// this after midnight for a run that started the day before).
+// Two different scopes, on purpose:
+//  - "brands" / the top stat cards are each brand's CURRENT state — its own
+//    most-recent date, not summed across every date it's ever run — so the
+//    overview reads as "how are we doing right now", not a growing pile of
+//    stale numbers. A brand that isn't run today still shows its last real
+//    result instead of vanishing.
+//  - "days" (Run History) is the actual history: every run-day across every
+//    brand, most recent first, so a past run stays visible and comparable
+//    once a brand is re-tested later (capped to the last 30 days, same cap
+//    the internal GUI's own /dashboard endpoint uses, so this doesn't grow
+//    unbounded either).
+// TARGET_DATE is no longer a hard filter — it's kept only so a caller can
+// still ask "what did TODAY look like" via the CLI/env var if ever needed,
+// but the snapshot itself always covers full history for Run History.
 const TARGET_DATE = process.env.TARGET_DATE || new Date().toISOString().slice(0, 10);
 
-async function main() {
-  const { reports: allRuns, tests: allTests } = await scanRunReports();
-  const runs = allRuns.filter(r => r.date === TARGET_DATE);
-  const tests = allTests.filter(t => t.date === TARGET_DATE);
+function latestRunsPerBrand(allRuns) {
+  const latestDateByBrand = new Map();
+  for (const r of allRuns) {
+    const cur = latestDateByBrand.get(r.brand);
+    if (!cur || r.date > cur) latestDateByBrand.set(r.brand, r.date);
+  }
+  return allRuns.filter(r => r.date === latestDateByBrand.get(r.brand));
+}
 
-  if (runs.length === 0) {
-    console.log(`No runs found for ${TARGET_DATE} — writing an empty snapshot.`);
+// The public overview only ever shows brands someone has explicitly put in
+// dashboard/release-scope.json (this month's real release cycle) — Test
+// Reports/ on disk also holds ad hoc dev/investigation/bug-repro runs for
+// brands that were never meant to appear on the public site, so scanning
+// everything found there isn't safe to do unfiltered.
+const RELEASE_SCOPE = JSON.parse(fs.readFileSync(path.join(__dirname, 'release-scope.json'), 'utf8'));
+const SCOPED_BRANDS = new Set(RELEASE_SCOPE.brands);
+const SINCE_DATE = RELEASE_SCOPE.sinceDate || '0000-00-00';
+const inScope = r => SCOPED_BRANDS.has(r.brand) && r.date >= SINCE_DATE;
+
+async function main() {
+  const { reports: scannedRuns, tests: scannedTests } = await scanRunReports();
+  const allRuns = scannedRuns.filter(inScope);
+  const allTests = scannedTests.filter(inScope);
+
+  if (allRuns.length === 0) {
+    console.log(`No runs found for release-scope brands (${[...SCOPED_BRANDS].join(', ')}) — writing an empty snapshot.`);
   }
 
-  const stats = runs.reduce(
+  const currentRuns = latestRunsPerBrand(allRuns);
+  const currentDates = new Set(currentRuns.map(r => r.date));
+  const currentTests = allTests.filter(t => currentDates.has(t.date));
+
+  const stats = currentRuns.reduce(
     (acc, r) => {
       acc.totalRuns += 1;
       acc.totalPassed += r.passed;
@@ -286,9 +340,16 @@ async function main() {
     },
     { totalRuns: 0, totalPassed: 0, totalFailed: 0, totalFlaky: 0, lastRunDate: null }
   );
+  // Plain-language headline for a non-technical viewer: "of what we actually
+  // ran, what fraction came back clean" — skipped tests aren't part of the
+  // denominator since they were never executed, so they can't count for or
+  // against health.
+  const totalExecuted = stats.totalPassed + stats.totalFailed + stats.totalFlaky;
+  stats.totalTests = totalExecuted;
+  stats.passRatePct = totalExecuted > 0 ? Math.round((stats.totalPassed / totalExecuted) * 1000) / 10 : null;
 
   const byDate = new Map();
-  for (const r of runs) {
+  for (const r of allRuns) {
     if (!byDate.has(r.date)) byDate.set(r.date, { date: r.date, passed: 0, failed: 0, flaky: 0, entries: [] });
     const day = byDate.get(r.date);
     day.passed += r.passed;
@@ -301,18 +362,18 @@ async function main() {
   }
   const days = [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
 
-  const brands = buildBrandSummary(runs);
+  const brands = buildBrandSummary(currentRuns);
 
   const generatedAt = new Date().toISOString();
-  const data = { generatedAt, targetDate: TARGET_DATE, stats, days, tests: tests.slice(0, 500), brands };
+  const data = { generatedAt, targetDate: TARGET_DATE, stats, days, tests: currentTests.slice(0, 500), brands };
 
   const outDir = path.join(__dirname, 'public');
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, 'data.json'), JSON.stringify(data));
 
-  console.log(`Wrote ${path.join(outDir, 'data.json')} (scoped to ${TARGET_DATE})`);
-  console.log(`  ${runs.length} run(s) across ${brands.length} brand(s), ${tests.length} individual test result(s).`);
-  console.log(`  Brands: ${brands.map(b => b.brand).join(', ')}`);
+  console.log(`Wrote ${path.join(outDir, 'data.json')} (brands scoped to each one's latest run; history covers up to 30 days)`);
+  console.log(`  ${currentRuns.length} current run(s) across ${brands.length} brand(s); ${days.length} day(s) of history.`);
+  console.log(`  Brands: ${brands.map(b => `${b.brand} (${b.lastRunDate})`).join(', ')}`);
 }
 
 main().catch(err => {
