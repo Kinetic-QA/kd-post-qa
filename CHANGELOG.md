@@ -9,6 +9,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-17
+
+### Added
+
+- **The public results website (qa-automated-regression-results.netlify.app) now shows a plain-English status banner at the very top** — something like "All clear — every test passed" or "SC has failing tests, see below" — plus each brand now gets a simple ✅ Healthy / 👀 Worth a look / ❌ Needs attention badge in the Brands table. Nobody has to read raw pass/fail numbers anymore to know if something needs attention.
+- **Added "Pass Rate" and "Total Tests" to the top of the results website**, replacing a "Total Runs" number that didn't mean anything to anyone outside QA. Every number now also has a one-line plain-English explanation underneath it (e.g. "Failed — needs a look", "Flaky — inconsistent, passed on a retry").
+- **The numbers and charts on the results website now animate in** (numbers count up, the chart bars grow, the donut chart draws itself) instead of just appearing instantly, so the page feels alive instead of static.
+- **A confirmed test-script problem (not a real site bug) can now be marked as a "known issue"** so the results website shows a calm, informational note instead of an alarming "failing tests" banner. If a different, genuinely new problem shows up later, the alarming message automatically comes back on its own — a known-issue note can never accidentally hide a real new problem.
+- **Calm/informational banners on the results website can now be closed with an "×" button** so people don't keep seeing the same already-acknowledged note every visit. A banner about a real, unresolved failure can never be closed — that one always stays visible until it's actually fixed.
+
+### Fixed
+
+- **The results website used to lose a brand's results completely the moment a different brand's results were uploaded** — for example, uploading today's LMS results made SC's results disappear entirely from the overview, even though nothing was wrong with them. Each brand now always keeps showing its own most recent results, and a real history of past runs is kept so a brand's results can be compared over time once it's tested again.
+- **Two numbers on the results website used to disagree with each other** — the summary said "498 tests" while the boxes above it added up to 342 — because they were quietly counting different things (one counted every historical run, the other only the latest). Both now always show the same, correct count.
+- **The results website was only ever showing whatever was tested "today," and quietly included some old unrelated test runs from before this month.** It now only shows brands and dates that are part of the actual current release cycle, kept up to date by hand as each brand's real release run finishes.
+
 ## [Unreleased] - 2026-09-15
 
 ### Added
