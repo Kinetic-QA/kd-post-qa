@@ -654,6 +654,16 @@ body {
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
+/* .health-banner's own `display: flex` has the same specificity as the
+   browser's built-in `[hidden] { display: none }` rule but lives in an
+   author stylesheet, which always wins over a user-agent rule regardless of
+   source order — so setting the `hidden` attribute via JS silently did
+   nothing visually here. This compound selector is more specific than
+   plain .health-banner, so it correctly wins instead. */
+.health-banner[hidden] {
+  display: none;
+}
+
 .health-icon {
   font-size: 22px;
   line-height: 1;
