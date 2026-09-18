@@ -125,6 +125,58 @@ async function notifySlack(card: SlackCard): Promise<void> {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Same service this project's helpers/ip-detect.ts and geo-features.ts
+// comments already use to manually confirm a VPN's real country. Returns
+// null (never throws) on any failure — a flaky/rate-limited IP-check
+// service must never be able to block a real run.
+async function fetchOutboundIp(): Promise<string | null> {
+  try {
+    const res = await axios.get('https://ipinfo.io/json', { timeout: 6_000 });
+    return typeof res.data?.ip === 'string' ? res.data.ip : null;
+  } catch {
+    return null;
+  }
+}
+
+// Clicking Continue used to fire the next GEO's Playwright process
+// instantly (confirmed live 2026-09-18: an SNG AB run failed immediately
+// after switching to Cyprus and hitting Continue) — a VPN client showing
+// "Connected" doesn't mean the OS's routing/DNS has actually finished
+// cutting over yet, so the test's very first request could still go out
+// the OLD route and fail before the new tunnel was really up. This polls
+// the outbound IP for up to ~12s waiting for it to differ from whatever it
+// was when the pause started; if it never changes (VPN check service down,
+// or the next GEO genuinely shares an IP with the last one), it logs a
+// warning and proceeds anyway rather than blocking a run indefinitely on a
+// third-party service.
+const VPN_SWITCH_POLL_MS = 2_000;
+const VPN_SWITCH_MAX_ATTEMPTS = 6;
+
+async function confirmVpnSwitched(session: MultiSession, geo: string): Promise<void> {
+  const emit = (data: Record<string, unknown>) => sendSSE(session.res, data);
+  if (!session.lastIpBeforeSwitch) {
+    // No usable baseline (IP-check failed when the pause started) — nothing
+    // to compare against, so there's no reliable check to run here.
+    return;
+  }
+
+  emit({ type: 'verifying-vpn', geo });
+  for (let attempt = 0; attempt < VPN_SWITCH_MAX_ATTEMPTS; attempt++) {
+    await sleep(VPN_SWITCH_POLL_MS);
+    const currentIp = await fetchOutboundIp();
+    if (currentIp && currentIp !== session.lastIpBeforeSwitch) return;
+  }
+
+  emit({
+    type: 'log',
+    text: `\n⚠️  Your outbound IP still looks the same as before Continue was clicked — the VPN switch to ${geo} may not have finished yet. Starting anyway.\n`,
+  });
+}
+
 // Sums the same fixed summary rows excel-reporter.cjs writes into each
 // sheet (row 2 Total, 3 Passed, 4 Failed, 5 Skipped — see scanRunReports
 // below) so the Slack card can show real pass/fail fields without a
@@ -1189,6 +1241,9 @@ type MultiSession = {
   // a chance to reconnect (see attachDisconnectHandler) — cleared the
   // moment a /run/:id/resume call reattaches a live response.
   disconnectTimer: NodeJS.Timeout | null;
+  // Outbound IP recorded the moment this session paused for a VPN switch —
+  // see confirmVpnSwitched()'s comment for why this exists.
+  lastIpBeforeSwitch: string | null;
 };
 
 const multiSessions = new Map<string, MultiSession>();
@@ -1300,6 +1355,7 @@ function runNextGeo(session: MultiSession): void {
     session.index += 1;
     if (session.index < session.geos.length) {
       session.state = 'awaiting-vpn';
+      session.lastIpBeforeSwitch = await fetchOutboundIp();
       const nextGeo = session.geos[session.index];
       emit({ type: 'awaiting-vpn', geo: nextGeo, step: session.index + 1, total: session.geos.length });
       notifySlack({
@@ -1416,6 +1472,7 @@ app.get('/run', (req, res) => {
     proc: null,
     stoppedByUser: false,
     disconnectTimer: null,
+    lastIpBeforeSwitch: null,
   };
   multiSessions.set(id, session);
 
@@ -1456,13 +1513,19 @@ app.get('/run/:id/resume', (req, res) => {
   attachDisconnectHandler(res, session);
 });
 
-app.post('/run/:id/continue', (req, res) => {
+app.post('/run/:id/continue', async (req, res) => {
   const session = multiSessions.get(req.params.id);
   if (!session || session.state !== 'awaiting-vpn') {
     res.status(400).json({ error: 'No session awaiting a continue right now.' });
     return;
   }
   res.json({ ok: true });
+  const nextGeo = session.geos[session.index];
+  await confirmVpnSwitched(session, nextGeo);
+  // The wait above can take up to ~12s — re-check rather than assume
+  // nothing happened in the meantime (the user may have clicked Stop while
+  // still paused, which already ended the stream and removed the session).
+  if (session.stoppedByUser) return;
   runNextGeo(session);
 });
 
