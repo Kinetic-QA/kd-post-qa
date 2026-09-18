@@ -301,7 +301,138 @@ body {
   font-size: 28px;
   font-weight: 700;
   color: var(--text-primary);
+  display: inline-block;
 }
+
+.stat-sub {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.stat-card.stat-hero {
+  background: #eef4ff;
+  border-color: #d7e4fb;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.stat-card.stat-hero .stat-value {
+  color: var(--accent-blue);
+  transition: color 0.3s ease;
+}
+
+.stat-card.stat-hero.hero-good { background: #eaf8ef; border-color: #cdedd8; }
+.stat-card.stat-hero.hero-good .stat-value { color: var(--accent-green); }
+
+.stat-card.stat-hero.hero-watch { background: #fdf3e2; border-color: #f7e4bd; }
+.stat-card.stat-hero.hero-watch .stat-value { color: var(--accent-flaky); }
+
+.stat-card.stat-hero.hero-issue { background: #fdecea; border-color: #f8d9d5; }
+.stat-card.stat-hero.hero-issue .stat-value { color: var(--accent-red); }
+
+.stat-card.stat-hero.hero-info { background: #eaf0fb; border-color: #d7e4fb; }
+.stat-card.stat-hero.hero-info .stat-value { color: var(--accent-blue); }
+
+@keyframes stat-pulse {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+.stat-value.stat-pulse {
+  animation: stat-pulse 0.7s cubic-bezier(.4,0,.2,1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-value.stat-pulse { animation: none; }
+}
+
+.health-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  margin-bottom: 20px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* .health-banner's own `display: flex` has the same specificity as the
+   browser's built-in `[hidden] { display: none }` rule but lives in an
+   author stylesheet, which always wins over a user-agent rule regardless of
+   source order — so setting the `hidden` attribute via JS would otherwise
+   silently do nothing visually. This compound selector is more specific
+   than plain .health-banner, so it correctly wins instead. */
+.health-banner[hidden] {
+  display: none;
+}
+
+.health-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.health-text {
+  flex: 1;
+}
+
+.health-dismiss {
+  border: none;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.health-dismiss:hover {
+  opacity: 1;
+}
+
+.health-banner.health-good {
+  background: #eaf8ef;
+  border-color: #cdedd8;
+  color: #0d7a3d;
+}
+
+.health-banner.health-watch {
+  background: #fdf3e2;
+  border-color: #f7e4bd;
+  color: #8a6413;
+}
+
+.health-banner.health-issue {
+  background: #fdecea;
+  border-color: #f8d9d5;
+  color: #a5301f;
+}
+
+.health-banner.health-info {
+  background: #eaf0fb;
+  border-color: #d7e4fb;
+  color: #2d4f9e;
+}
+
+.brand-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.brand-status-healthy { background: #eaf8ef; color: var(--accent-green); }
+.brand-status-watch { background: #fdf3e2; color: var(--accent-flaky); }
+.brand-status-issue { background: #fdecea; color: var(--accent-red); }
+.brand-status-known-issue { background: #eaf0fb; color: var(--accent-blue); cursor: help; }
 
 .last-run-note {
   margin-left: auto;
@@ -430,6 +561,19 @@ body {
   cursor: pointer;
 }
 
+.trend-svg .bar-row {
+  transform: scaleX(0);
+  transition: transform 0.5s cubic-bezier(.4,0,.2,1);
+}
+
+.trend-svg .bar-row.bar-row-in {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trend-svg .bar-row { transition-duration: 0.01ms; }
+}
+
 /* Donut chart */
 #status-donut {
   display: flex;
@@ -444,8 +588,12 @@ body {
 }
 
 .donut-seg {
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, stroke-dashoffset 0.8s cubic-bezier(.4,0,.2,1);
   cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .donut-seg { transition-duration: 0.01ms; }
 }
 
 .donut-seg.donut-dim {
@@ -635,6 +783,16 @@ body {
   background: #eef0f3;
   color: var(--text-primary);
   font-size: 11px;
+  font-weight: 700;
+}
+
+.geo-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.brand-cell {
   font-weight: 700;
 }
 

@@ -38,24 +38,68 @@
 
     <div id="tab-dashboard" class="tab-panel active">
 
+      <div id="health-banner" class="health-banner">
+        <span id="health-icon" class="health-icon">&#8987;</span>
+        <span id="health-text" class="health-text">Loading results&hellip;</span>
+        <button id="health-dismiss" class="health-dismiss" aria-label="Dismiss" hidden>&times;</button>
+      </div>
+
       <div class="stat-grid">
+        <div class="stat-card stat-hero" id="stat-pass-rate-card">
+          <div class="stat-label"><span class="icon">&#128202;</span> Pass Rate</div>
+          <div class="stat-value" id="stat-pass-rate">&mdash;</div>
+          <div class="stat-sub">of tests that ran</div>
+        </div>
         <button class="stat-card stat-clickable" data-filter="all">
           <div class="stat-label"><span class="icon">&#128193;</span> Total Runs</div>
           <div class="stat-value" id="stat-total-runs">&mdash;</div>
+          <div class="stat-sub">brand/GEO sessions run</div>
         </button>
+        <div class="stat-card">
+          <div class="stat-label"><span class="icon">&#128203;</span> Total Tests</div>
+          <div class="stat-value" id="stat-total-tests">&mdash;</div>
+          <div class="stat-sub">checks performed</div>
+        </div>
         <button class="stat-card stat-passed stat-clickable" data-filter="passed">
           <div class="stat-label"><span class="icon">&#9989;</span> Passed</div>
           <div class="stat-value" id="stat-passed">&mdash;</div>
+          <div class="stat-sub">working as expected</div>
         </button>
         <button class="stat-card stat-failed stat-clickable" data-filter="failed">
           <div class="stat-label"><span class="icon">&#10060;</span> Failed</div>
           <div class="stat-value" id="stat-failed">&mdash;</div>
+          <div class="stat-sub">needs a look</div>
         </button>
         <button class="stat-card stat-flaky stat-clickable" data-filter="flaky">
           <div class="stat-label"><span class="icon">&#128260;</span> Flaky</div>
           <div class="stat-value" id="stat-flaky">&mdash;</div>
+          <div class="stat-sub">inconsistent &mdash; passed on a retry</div>
         </button>
       </div>
+
+      <section class="card">
+        <div class="chart-split">
+          <div class="chart-pane">
+            <div class="card-header">
+              <span class="icon">&#128200;</span>
+              <h2 id="trend-title">Pass / Fail / Flaky Trend</h2>
+            </div>
+            <div id="trend-chart"></div>
+          </div>
+          <div class="chart-pane chart-pane-donut">
+            <div class="card-header">
+              <span class="icon">&#127760;</span>
+              <h2>Overall Split</h2>
+            </div>
+            <div id="status-donut"></div>
+          </div>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-item" data-series="passed"><span class="legend-swatch swatch-passed"></span>Passed</span>
+          <span class="legend-item" data-series="failed"><span class="legend-swatch swatch-failed"></span>Failed</span>
+          <span class="legend-item" data-series="flaky"><span class="legend-swatch swatch-flaky"></span>Flaky</span>
+        </div>
+      </section>
 
       <section id="drilldown-card" class="card drilldown-card" hidden>
         <div class="card-header">
@@ -82,27 +126,29 @@
       </section>
 
       <section class="card">
-        <div class="chart-split">
-          <div class="chart-pane">
-            <div class="card-header">
-              <span class="icon">&#128200;</span>
-              <h2 id="trend-title">Pass / Fail / Flaky Trend</h2>
-            </div>
-            <div id="trend-chart"></div>
-          </div>
-          <div class="chart-pane chart-pane-donut">
-            <div class="card-header">
-              <span class="icon">&#127760;</span>
-              <h2>Overall Split</h2>
-            </div>
-            <div id="status-donut"></div>
-          </div>
+        <div class="card-header">
+          <span class="icon">&#127942;</span>
+          <h2>Brands</h2>
+          <span class="last-run-note" id="brands-note">Each brand's most recent run</span>
         </div>
-        <div class="chart-legend">
-          <span class="legend-item" data-series="passed"><span class="legend-swatch swatch-passed"></span>Passed</span>
-          <span class="legend-item" data-series="failed"><span class="legend-swatch swatch-failed"></span>Failed</span>
-          <span class="legend-item" data-series="flaky"><span class="legend-swatch swatch-flaky"></span>Flaky</span>
+        <div class="runs-table-wrap">
+          <table class="runs-table">
+            <thead>
+              <tr>
+                <th>Brand</th>
+                <th>Status</th>
+                <th>GEOs Covered</th>
+                <th>Pass Rate</th>
+                <th>Passed</th>
+                <th>Failed</th>
+                <th>Flaky</th>
+                <th>Last Run</th>
+              </tr>
+            </thead>
+            <tbody id="brands-tbody"></tbody>
+          </table>
         </div>
+        <p id="brands-empty" class="runs-empty">No brands tested yet &mdash; run a test to see it here.</p>
       </section>
 
       <section class="card">

@@ -184,6 +184,43 @@ function shortDate(dateStr) {
   return dateStr.slice(5);
 }
 
+// Ticks an element's text from whatever it currently shows up/down to a new
+// number instead of just replacing it — makes a 30s auto-refresh read as a
+// live widget rather than numbers silently jumping between static states.
+// Skips the animation loop entirely when the value hasn't changed.
+const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+
+function animateNumber(el, to, { duration = 700, decimals = 0, suffix = '' } = {}) {
+  const from = Number(el.dataset.value || el.textContent.replace(/[^\d.-]/g, '')) || 0;
+  if (from === to) {
+    el.textContent = `${to}${suffix}`;
+    el.dataset.value = to;
+    return;
+  }
+  el.dataset.value = to;
+  el.classList.remove('stat-pulse');
+  void el.offsetWidth; // restart the CSS animation if it's already mid-pulse from a fast refresh
+  el.classList.add('stat-pulse');
+  const start = performance.now();
+  function tick(now) {
+    const progress = Math.min(1, (now - start) / duration);
+    const value = from + (to - from) * easeOutCubic(progress);
+    el.textContent = `${value.toFixed(decimals)}${suffix}`;
+    if (progress < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// SVG geometry/transform attributes set inline are only CSS-transitionable
+// once the browser has actually painted the "before" state — flipping to
+// the "after" state in the very same tick collapses the transition, so every
+// entrance animation below renders in a hidden/collapsed state first, then
+// waits two frames before applying the revealed state that the CSS
+// transition animates into.
+function nextPaint(fn) {
+  requestAnimationFrame(() => requestAnimationFrame(fn));
+}
+
 const TREND_TITLES = {
   all: 'Pass / Fail / Flaky Trend',
   passed: 'Passed Trend',
@@ -244,20 +281,27 @@ function renderTrendChart(days, filter) {
       .filter(s => s.value > 0);
 
     let x = leftMargin;
+    let rowShapes = '';
     segments.forEach((seg, idx) => {
       const isLast = idx === segments.length - 1;
       const w = Math.max(2, seg.value * scale) - (isLast ? 0 : GAP);
       if (isLast) {
         const r = Math.min(4, barH / 2, w);
-        bars += `<path class="${seg.cls}" d="M${x},${y} L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + barH - r} Q${x + w},${y + barH} ${x + w - r},${y + barH} L${x},${y + barH} Z" />`;
+        rowShapes += `<path class="${seg.cls}" d="M${x},${y} L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + barH - r} Q${x + w},${y + barH} ${x + w - r},${y + barH} L${x},${y + barH} Z" />`;
       } else {
-        bars += `<rect class="${seg.cls}" x="${x}" y="${y}" width="${w}" height="${barH}" />`;
+        rowShapes += `<rect class="${seg.cls}" x="${x}" y="${y}" width="${w}" height="${barH}" />`;
       }
       x += w + GAP;
     });
 
     const total = activeSeries.reduce((sum, k) => sum + day[k], 0);
-    bars += `<text class="bar-total" x="${x + 4}" y="${y + barH / 2 + 3}" text-anchor="start">${total || ''}</text>`;
+    rowShapes += `<text class="bar-total" x="${x + 4}" y="${y + barH / 2 + 3}" text-anchor="start">${total || ''}</text>`;
+
+    // Grows in from the left edge, one row after another — scaleX(0) here,
+    // flipped to scaleX(1) post-paint below (see nextPaint), with each row's
+    // transition-delay staggered so the chart visibly builds instead of
+    // appearing all at once.
+    bars += `<g class="bar-row" style="transform-origin:${leftMargin}px 0;transition-delay:${i * 45}ms;">${rowShapes}</g>`;
 
     bars += `<rect class="bar-hit" data-date="${escapeHtml(day.date)}" data-passed="${day.passed}" data-failed="${day.failed}" data-flaky="${day.flaky}" x="0" y="${rowTop}" width="${W}" height="${rowH}" />`;
 
@@ -272,6 +316,10 @@ function renderTrendChart(days, filter) {
     </svg>
     <div id="chart-tooltip" class="chart-tooltip" hidden></div>
   `;
+
+  nextPaint(() => {
+    for (const row of container.querySelectorAll('.bar-row')) row.classList.add('bar-row-in');
+  });
 
   const tooltip = document.getElementById('chart-tooltip');
   for (const hit of container.querySelectorAll('.bar-hit')) {
@@ -293,23 +341,19 @@ function renderTrendChart(days, filter) {
   }
 }
 
-// Donut showing the overall Passed/Failed/Flaky split across the same
-// window of dates as the trend chart — part-to-whole is what a donut is
-// for, so unlike the bars it always shows all three slices; an active stat
-// filter dims the other two rather than removing them, so the proportion
-// stays visible for context.
-function renderStatusDonut(days, filter) {
+// Donut showing the overall Passed/Failed/Flaky split — part-to-whole is
+// what a donut is for, so unlike the bars it always shows all three slices;
+// an active stat filter dims the other two rather than removing them, so
+// the proportion stays visible for context.
+//
+// Deliberately takes the SAME all-time stats object the top stat tiles use
+// — NOT a fresh sum over the trend chart's last-14-days window. Summing
+// just those rows produced a total that didn't match the tiles above it
+// whenever history ran past 14 days, exactly the confusion this donut needs
+// to not repeat.
+function renderStatusDonut(stats, filter) {
   const container = document.getElementById('status-donut');
-  const rows = [...days].slice(0, 14);
-  const totals = rows.reduce(
-    (acc, d) => {
-      acc.passed += d.passed;
-      acc.failed += d.failed;
-      acc.flaky += d.flaky;
-      return acc;
-    },
-    { passed: 0, failed: 0, flaky: 0 }
-  );
+  const totals = { passed: stats.totalPassed, failed: stats.totalFailed, flaky: stats.totalFlaky };
   const grand = totals.passed + totals.failed + totals.flaky;
 
   if (grand === 0) {
@@ -333,6 +377,7 @@ function renderStatusDonut(days, filter) {
 
   let offsetAccum = 0;
   let segments = '';
+  let idx = 0;
   for (const s of series) {
     const frac = s.value / grand;
     const length = frac * circumference;
@@ -340,18 +385,27 @@ function renderStatusDonut(days, filter) {
     const rotation = (offsetAccum / circumference) * 360 - 90;
     const isDimmed = filter && filter !== 'all' && s.key !== filter;
     const pct = Math.round(frac * 1000) / 10;
-    segments += `<circle class="donut-seg ${s.cls}${isDimmed ? ' donut-dim' : ''}" cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="${strokeW}" stroke-dasharray="${dash} ${circumference - dash}" transform="rotate(${rotation} ${cx} ${cy})"><title>${s.key}: ${s.value} (${pct}%)</title></circle>`;
+    // dasharray's gap is the full circumference (not circumference - dash) so
+    // it's always long enough to fully hide the dash via dashoffset below,
+    // regardless of how large this one segment is.
+    segments += `<circle class="donut-seg ${s.cls}${isDimmed ? ' donut-dim' : ''}" cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke-width="${strokeW}" stroke-dasharray="${dash} ${circumference}" stroke-dashoffset="${dash}" style="transition-delay:${idx * 130}ms;" transform="rotate(${rotation} ${cx} ${cy})"><title>${s.key}: ${s.value} (${pct}%)</title></circle>`;
     offsetAccum += length;
+    idx += 1;
   }
 
   container.innerHTML = `
     <svg viewBox="0 0 ${size} ${size}" class="donut-svg" role="img" aria-label="Overall passed, failed, and flaky split">
       <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${strokeW}" />
       ${segments}
-      <text x="${cx}" y="${cy - 2}" text-anchor="middle" class="donut-total">${grand}</text>
+      <text x="${cx}" y="${cy - 2}" text-anchor="middle" class="donut-total" data-value="0">0</text>
       <text x="${cx}" y="${cy + 16}" text-anchor="middle" class="donut-total-label">tests</text>
     </svg>
   `;
+
+  nextPaint(() => {
+    for (const seg of container.querySelectorAll('.donut-seg')) seg.setAttribute('stroke-dashoffset', '0');
+    animateNumber(container.querySelector('.donut-total'), grand);
+  });
 }
 
 function renderRunsTable(entries) {
@@ -473,6 +527,46 @@ function renderDaysList(days) {
   });
 }
 
+// Plain-language brand status — same three states the health banner above
+// uses, so a reader sees one consistent story instead of having to compare
+// Passed/Failed/Flaky columns themselves to decide if something's wrong.
+const BRAND_STATUS_META = {
+  healthy: { icon: '&#9989;', label: 'Healthy' },
+  watch: { icon: '&#128064;', label: 'Worth a look' },
+  'known-issue': { icon: '&#128295;', label: 'Known issue (script)' },
+  issue: { icon: '&#10060;', label: 'Needs attention' },
+};
+
+function renderBrandsTable(brands) {
+  const tbody = document.getElementById('brands-tbody');
+  const emptyEl = document.getElementById('brands-empty');
+  tbody.innerHTML = '';
+
+  if (!brands || brands.length === 0) {
+    emptyEl.style.display = 'block';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  for (const b of brands) {
+    const row = document.createElement('tr');
+    const geoPills = b.geos.map(g => `<span class="pill-tag">${escapeHtml(g)}</span>`).join('');
+    const statusMeta = BRAND_STATUS_META[b.status] || BRAND_STATUS_META.healthy;
+    const statusTitle = b.knownIssueNote ? ` title="${escapeHtml(b.knownIssueNote)}"` : '';
+    row.innerHTML = `
+      <td class="brand-cell">${escapeHtml(b.brand)}</td>
+      <td><span class="brand-status brand-status-${b.status}"${statusTitle}>${statusMeta.icon} ${statusMeta.label}</span></td>
+      <td><span class="geo-pill-list">${geoPills}</span></td>
+      <td>${b.passRatePct}%</td>
+      <td class="count-passed">${b.passed}</td>
+      <td class="count-failed">${b.failed}</td>
+      <td class="count-flaky">${b.flaky}</td>
+      <td>${escapeHtml(b.lastRunDate)}</td>
+    `;
+    tbody.appendChild(row);
+  }
+}
+
 const FILTER_META = {
   all: { title: 'All Tests', icon: '&#128203;' },
   passed: { title: 'Passed Tests', icon: '&#9989;' },
@@ -482,7 +576,9 @@ const FILTER_META = {
 
 let allTests = [];
 let lastDays = [];
+let lastStats = { totalRuns: 0, totalPassed: 0, totalFailed: 0, totalFlaky: 0, totalTests: 0, passRatePct: null, lastRunDate: null };
 let activeFilter = null;
+let lastDashboardPayload = null;
 
 function renderDrilldown(filter) {
   const card = document.getElementById('drilldown-card');
@@ -524,7 +620,7 @@ function closeDrilldown() {
   document.getElementById('drilldown-card').hidden = true;
   for (const btn of document.querySelectorAll('.stat-clickable')) btn.classList.remove('active');
   renderTrendChart(lastDays, null);
-  renderStatusDonut(lastDays, null);
+  renderStatusDonut(lastStats, null);
 }
 
 for (const btn of document.querySelectorAll('.stat-clickable')) {
@@ -538,20 +634,133 @@ for (const btn of document.querySelectorAll('.stat-clickable')) {
     for (const b of document.querySelectorAll('.stat-clickable')) b.classList.toggle('active', b === btn);
     renderDrilldown(filter);
     renderTrendChart(lastDays, filter);
-    renderStatusDonut(lastDays, filter);
+    renderStatusDonut(lastStats, filter);
   });
 }
 
 document.getElementById('drilldown-close').addEventListener('click', closeDrilldown);
 
+// Plain-language summary built from each brand's OWN most recent run (the
+// same "brands" data the table below renders) — deliberately NOT all-time
+// totals, so a failure that was already fixed on a later retest doesn't
+// keep alarming a reader forever. Dismiss is only ever offered for the calm
+// states; a real "issue" banner must never be dismissable, or someone could
+// hide a live product bug and a later visitor would see a false all-clear.
+// The dismissal is keyed to the banner's own status+text so it re-appears
+// the moment the underlying story actually changes instead of silently
+// swallowing whatever comes next.
+function readDismissedBannerKey() {
+  try { return localStorage.getItem('dashboardDismissedBanner'); } catch { return null; }
+}
+function writeDismissedBannerKey(key) {
+  try { localStorage.setItem('dashboardDismissedBanner', key); } catch { /* private mode etc — dismiss just won't persist */ }
+}
+
+function renderHealthBanner(brands) {
+  const banner = document.getElementById('health-banner');
+  const iconEl = document.getElementById('health-icon');
+  const textEl = document.getElementById('health-text');
+  const dismissBtn = document.getElementById('health-dismiss');
+  const heroCard = document.getElementById('stat-pass-rate-card');
+  if (!banner) return;
+
+  banner.classList.remove('health-good', 'health-watch', 'health-issue', 'health-info');
+  if (heroCard) heroCard.classList.remove('hero-good', 'hero-watch', 'hero-issue', 'hero-info');
+
+  // A brand marked "known-issue" (see dashboard/known-issues.json — a
+  // confirmed script bug, not a real product bug, and only for the exact
+  // run date it was confirmed against) is deliberately kept OUT of the
+  // alarming "issue" bucket — but it's still called out by name in a calm,
+  // informational tone rather than silently disappearing, so nobody
+  // mistakes "not alarming" for "nothing happened."
+  const issues = (brands || []).filter(b => b.status === 'issue');
+  const knownIssues = (brands || []).filter(b => b.status === 'known-issue');
+  const watches = (brands || []).filter(b => b.status === 'watch');
+
+  let statusKey, icon, text, dismissible;
+
+  if (!brands || brands.length === 0) {
+    statusKey = 'empty';
+    banner.classList.add('health-watch');
+    if (heroCard) heroCard.classList.add('hero-watch');
+    icon = '&#8987;';
+    text = 'No test runs yet — run a test to see results here.';
+    dismissible = true;
+  } else if (issues.length > 0) {
+    statusKey = 'issue';
+    banner.classList.add('health-issue');
+    if (heroCard) heroCard.classList.add('hero-issue');
+    icon = '&#10060;';
+    const names = issues.map(b => b.brand).join(', ');
+    text = issues.length === 1
+      ? `${names} has failing tests — see the Brands table below for details.`
+      : `${issues.length} brands have failing tests: ${names} — see the Brands table below for details.`;
+    dismissible = false;
+  } else if (knownIssues.length > 0) {
+    statusKey = 'known-issue';
+    banner.classList.add('health-info');
+    if (heroCard) heroCard.classList.add('hero-info');
+    icon = '&#128295;';
+    const names = knownIssues.map(b => b.brand).join(', ');
+    text = `No product issues — ${names} has a known test-script issue already being fixed (not a real bug).`;
+    dismissible = true;
+  } else if (watches.length > 0) {
+    statusKey = 'watch';
+    banner.classList.add('health-watch');
+    if (heroCard) heroCard.classList.add('hero-watch');
+    icon = '&#128064;';
+    const names = watches.map(b => b.brand).join(', ');
+    text = `All tests passed. ${names} had some inconsistent (flaky) results worth a look.`;
+    dismissible = true;
+  } else {
+    statusKey = 'good';
+    banner.classList.add('health-good');
+    if (heroCard) heroCard.classList.add('hero-good');
+    icon = '&#9989;';
+    text = `All clear — every test passed across ${brands.length} brand${brands.length === 1 ? '' : 's'}.`;
+    dismissible = true;
+  }
+
+  iconEl.innerHTML = icon;
+  textEl.textContent = text;
+
+  const dismissKey = `${statusKey}::${text}`;
+  const alreadyDismissed = dismissible && readDismissedBannerKey() === dismissKey;
+  banner.hidden = alreadyDismissed;
+  if (dismissBtn) {
+    dismissBtn.hidden = !dismissible;
+    dismissBtn.onclick = () => {
+      writeDismissedBannerKey(dismissKey);
+      banner.hidden = true;
+    };
+  }
+}
+
 function loadDashboard() {
   fetch('/dashboard')
     .then(res => res.json())
-    .then(({ stats, days, tests }) => {
-      document.getElementById('stat-total-runs').textContent = stats.totalRuns;
-      document.getElementById('stat-passed').textContent = stats.totalPassed;
-      document.getElementById('stat-failed').textContent = stats.totalFailed;
-      document.getElementById('stat-flaky').textContent = stats.totalFlaky;
+    .then(payload => {
+      // The 30s auto-refresh (below) re-fetches even when nothing on disk
+      // has changed — most ticks during a long idle stretch. Re-rendering
+      // unchanged data was pulsing every stat number and redrawing both
+      // charts every 30s for no reason, which read as the whole dashboard
+      // "refreshing" on its own. Skipping the render entirely when the
+      // payload is byte-for-byte the same as last time keeps the live
+      // auto-refresh (a real change during a long combined run still shows
+      // up within 30s) without the constant visual churn.
+      const raw = JSON.stringify(payload);
+      if (raw === lastDashboardPayload) return;
+      lastDashboardPayload = raw;
+
+      const { stats, days, tests, brands } = payload;
+      animateNumber(document.getElementById('stat-pass-rate'), stats.passRatePct ?? 0, { decimals: 1, suffix: '%' });
+      animateNumber(document.getElementById('stat-total-runs'), stats.totalRuns);
+      animateNumber(document.getElementById('stat-total-tests'), stats.totalTests);
+      animateNumber(document.getElementById('stat-passed'), stats.totalPassed);
+      animateNumber(document.getElementById('stat-failed'), stats.totalFailed);
+      animateNumber(document.getElementById('stat-flaky'), stats.totalFlaky);
+      lastStats = stats;
+      renderHealthBanner(brands);
 
       const noteEl = document.getElementById('last-run-note');
       noteEl.textContent = stats.lastRunDate ? `Last run: ${stats.lastRunDate}` : '';
@@ -561,8 +770,9 @@ function loadDashboard() {
       if (activeFilter) renderDrilldown(activeFilter);
 
       renderTrendChart(days, activeFilter);
-      renderStatusDonut(days, activeFilter);
+      renderStatusDonut(stats, activeFilter);
       renderDaysList(days);
+      renderBrandsTable(brands);
     });
 }
 
