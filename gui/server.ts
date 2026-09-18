@@ -1011,8 +1011,88 @@ type DayGroup = {
   }>;
 };
 
+type BrandSummary = {
+  brand: string;
+  geos: string[];
+  passed: number;
+  failed: number;
+  flaky: number;
+  passRatePct: number;
+  lastRunDate: string;
+  status: 'healthy' | 'watch' | 'issue' | 'known-issue';
+  knownIssueNote: string | null;
+};
+
+// Same file the Netlify overview's build-data.cjs reads — one shared source
+// of truth, so confirming a brand's failure as a script issue (not a real
+// product bug) in one place calms the alarm in both places. Scoped to
+// appliesToDate: if that brand's latest run moves to a new date, the entry
+// stops applying automatically and the brand goes back to full "Needs
+// attention" alarm until someone re-confirms the new failure — a stale note
+// must never silently mask a genuinely new failure landing on the same brand.
+const KNOWN_ISSUES_PATH = path.join(__dirname, '..', 'dashboard', 'known-issues.json');
+function loadKnownIssues(): Record<string, { appliesToDate: string; note: string }> {
+  try {
+    return JSON.parse(fs.readFileSync(KNOWN_ISSUES_PATH, 'utf8')).brands || {};
+  } catch {
+    return {};
+  }
+}
+
+// Each brand's OWN most-recent run only (not summed across every date it's
+// ever run) — mirrors the Netlify overview's Brands table: "how is this
+// brand doing right now", not a growing pile of stale numbers from weeks of
+// reruns. A brand that hasn't been retested today still shows its last real
+// result instead of vanishing from the table.
+function buildBrandSummary(runs: RunReport[]): BrandSummary[] {
+  const knownIssues = loadKnownIssues();
+  const latestDateByBrand = new Map<string, string>();
+  for (const r of runs) {
+    const cur = latestDateByBrand.get(r.brand);
+    if (!cur || r.date > cur) latestDateByBrand.set(r.brand, r.date);
+  }
+  const currentRuns = runs.filter(r => r.date === latestDateByBrand.get(r.brand));
+
+  const byBrand = new Map<string, { passed: number; failed: number; flaky: number; geos: Set<string>; lastRunDate: string }>();
+  for (const r of currentRuns) {
+    if (!byBrand.has(r.brand)) {
+      byBrand.set(r.brand, { passed: 0, failed: 0, flaky: 0, geos: new Set(), lastRunDate: r.date });
+    }
+    const agg = byBrand.get(r.brand)!;
+    agg.passed += r.passed;
+    agg.failed += r.failed;
+    agg.flaky += r.flaky;
+    agg.geos.add(r.geo);
+  }
+
+  return [...byBrand.entries()]
+    .map(([brand, agg]) => {
+      const totalExecuted = agg.passed + agg.failed + agg.flaky;
+      const known = knownIssues[brand];
+      const isKnownIssue = agg.failed > 0 && known && known.appliesToDate === agg.lastRunDate;
+      return {
+        brand,
+        geos: [...agg.geos].sort((a, b) => a.localeCompare(b)),
+        passed: agg.passed,
+        failed: agg.failed,
+        flaky: agg.flaky,
+        passRatePct: totalExecuted > 0 ? Math.round((agg.passed / totalExecuted) * 1000) / 10 : 0,
+        lastRunDate: agg.lastRunDate,
+        // Plain status for a non-technical glance: any real failure means
+        // "issue" regardless of how small; flaky-only (no hard failures,
+        // just an inconsistent result) is a lesser "watch" state — unless
+        // known-issues.json has already confirmed this exact failing run as
+        // a script bug, in which case it's calmed down to "known-issue".
+        status: isKnownIssue ? 'known-issue' : agg.failed > 0 ? 'issue' : agg.flaky > 0 ? 'watch' : 'healthy',
+        knownIssueNote: isKnownIssue ? known.note : null,
+      } as BrandSummary;
+    })
+    .sort((a, b) => b.lastRunDate.localeCompare(a.lastRunDate) || a.brand.localeCompare(b.brand));
+}
+
 app.get('/dashboard', async (_req, res) => {
   const { reports: runs, tests } = await scanRunReports();
+  const brands = buildBrandSummary(runs);
 
   const stats = runs.reduce(
     (acc, r) => {
@@ -1024,7 +1104,15 @@ app.get('/dashboard', async (_req, res) => {
       return acc;
     },
     { totalRuns: 0, totalPassed: 0, totalFailed: 0, totalFlaky: 0, lastRunDate: null as string | null }
-  );
+  ) as { totalRuns: number; totalPassed: number; totalFailed: number; totalFlaky: number; lastRunDate: string | null; totalTests: number; passRatePct: number | null };
+
+  // Plain-language headline for the Dashboard's hero tile: "of what actually
+  // ran, what fraction came back clean" — skipped tests aren't part of the
+  // denominator since they were never executed, so they can't count for or
+  // against health.
+  const totalExecuted = stats.totalPassed + stats.totalFailed + stats.totalFlaky;
+  stats.totalTests = totalExecuted;
+  stats.passRatePct = totalExecuted > 0 ? Math.round((stats.totalPassed / totalExecuted) * 1000) / 10 : null;
 
   // Grouped by date rather than one row per brand/GEO — one collapsible
   // card per day, one bar per day in the trend chart, each summing the
@@ -1052,7 +1140,7 @@ app.get('/dashboard', async (_req, res) => {
 
   // Capped rather than unbounded — this is a drill-down list for the stat
   // tiles (click Passed/Failed/Flaky), not a paginated results browser.
-  res.json({ stats, days, tests: tests.slice(0, 500) });
+  res.json({ stats, days, tests: tests.slice(0, 500), brands });
 });
 
 // proc is spawned with shell:true, so proc.kill() only kills the shell

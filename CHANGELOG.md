@@ -9,6 +9,20 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-18
+
+### Added
+
+- **The local QA Test Center tool's own Dashboard tab now matches the redesigned public results website** — a plain-English status banner at the top, "Pass Rate" and "Total Tests" numbers with one-line explanations, and numbers/charts that animate in instead of just appearing.
+- **New "Brands" section on the local Dashboard** showing each brand's own most recent run — GEOs covered, pass rate, passed/failed/flaky counts, last run date, and a simple ✅ Healthy / 👀 Worth a look / ❌ Needs attention badge — the same at-a-glance view already on the public site, now in the local tool too.
+- **A confirmed test-script problem (not a real site bug) marked as a "known issue" now shows the same calm note on the local Dashboard** as it does on the public results website, using the same shared file — so the two tools always agree instead of the local one separately raising an alarm the public site has already calmed down.
+
+### Fixed
+
+- **Clicking a Passed/Failed/Flaky number on the local Dashboard used to push the chart down below the table of matching tests that popped up.** The chart now always stays in place above the table.
+- **The local Dashboard's donut chart total used to disagree with the numbers in the boxes above it** once history ran past two weeks, for the same reason the public site had this bug — they were quietly counting different things. Both now always show the same, correct count.
+- **The local Dashboard used to visibly "refresh" every 30 seconds — numbers pulsing, charts redrawing — even when nothing had actually changed.** It now only updates on screen when there's a real change to show.
+
 ## [Unreleased] - 2026-09-17
 
 ### Added
