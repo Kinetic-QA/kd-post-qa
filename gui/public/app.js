@@ -890,6 +890,16 @@ runBtn.addEventListener('click', () => {
       return;
     }
 
+    if (data.type === 'verifying-vpn') {
+      // Fires right after Continue is clicked, before the next GEO actually
+      // starts — the server briefly polls for the outbound IP to actually
+      // change before launching, so a click that lands before the VPN
+      // finishes switching doesn't send the test out on the old connection.
+      // See server.ts's confirmVpnSwitched.
+      setStatus(statusEl, `Confirming VPN switch to ${data.geo}…`, 'running');
+      return;
+    }
+
     if (data.type === 'geo-start') {
       vpnPauseEl.hidden = true;
       continueBtn.disabled = true;
