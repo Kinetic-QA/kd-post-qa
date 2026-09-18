@@ -22,6 +22,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Clicking a Passed/Failed/Flaky number on the local Dashboard used to push the chart down below the table of matching tests that popped up.** The chart now always stays in place above the table.
 - **The local Dashboard's donut chart total used to disagree with the numbers in the boxes above it** once history ran past two weeks, for the same reason the public site had this bug — they were quietly counting different things. Both now always show the same, correct count.
 - **The local Dashboard used to visibly "refresh" every 30 seconds — numbers pulsing, charts redrawing — even when nothing had actually changed.** It now only updates on screen when there's a real change to show.
+- **Clicking Continue after a mid-run VPN switch could start the next GEO before the VPN had actually finished switching over**, sending the test out on the old connection and failing it instantly (seen live on an SNG AB run right after switching to Cyprus). The tool now briefly double-checks that your outbound connection has actually changed before starting the next GEO, waiting a few extra seconds if needed — and if it still can't confirm the switch, it clearly warns you in the run log rather than failing silently.
 
 ## [Unreleased] - 2026-09-17
 
