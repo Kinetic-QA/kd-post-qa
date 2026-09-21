@@ -63,12 +63,13 @@ function extractTestRows(sheet) {
   return rows;
 }
 
-// Finds a report-* folder's index.html so a drilldown row can link back to
-// the real Playwright HTML report — mirrors gui/server.ts's findReportFolder,
-// but this static site has no /reports/* route of its own, so these links
-// are left null; the day/brand tables just render "No report" for now.
-// (Wiring live report links into this static site is a separate follow-up —
-// it would need each report folder deployed alongside this dashboard.)
+// deploy-dashboard.cjs stages each brand/date/geo's Playwright HTML report
+// into dashboard/public/reports/<brand>/<date>/<geo>/index.html and deploys
+// it alongside this same data.json, so a drilldown row can link straight to
+// it with a site-relative URL.
+function reportUrlFor(brand, date, geo) {
+  return `/reports/${brand}/${date}/${geo}/index.html`;
+}
 
 async function scanRunReports() {
   const rootDir = path.join(ROOT, 'Test Reports');
@@ -132,7 +133,7 @@ async function scanRunReports() {
                   spec: row.spec,
                   testName: row.testName,
                   status: row.status,
-                  reportUrl: null,
+                  reportUrl: reportUrlFor(brand.name, dateEntry.name, geo.name),
                 });
               }
             });
@@ -144,7 +145,7 @@ async function scanRunReports() {
               runTime,
               total, passed, failed, skipped, flaky,
               specs: [...specSet].sort((a, b) => a.localeCompare(b)),
-              reportUrl: null,
+              reportUrl: reportUrlFor(brand.name, dateEntry.name, geo.name),
             });
           } catch {
             // Skip a corrupt/partially-written workbook rather than failing
@@ -205,7 +206,7 @@ async function scanCombinedReports() {
 
         for (const row of extractTestRows(sheet)) {
           agg.specs.add(row.spec);
-          tests.push({ date, brand, geo, spec: row.spec, testName: row.testName, status: row.status, reportUrl: null });
+          tests.push({ date, brand, geo, spec: row.spec, testName: row.testName, status: row.status, reportUrl: reportUrlFor(brand, date, geo) });
         }
       });
 
@@ -214,7 +215,7 @@ async function scanCombinedReports() {
           brand, geo, date, runTime,
           total: agg.total, passed: agg.passed, failed: agg.failed, skipped: agg.skipped, flaky: agg.flaky,
           specs: [...agg.specs].sort((a, b) => a.localeCompare(b)),
-          reportUrl: null,
+          reportUrl: reportUrlFor(brand, date, geo),
         });
       }
     } catch {

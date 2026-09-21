@@ -1,6 +1,6 @@
 {
   "note": "Scope for the public Netlify overview (qa-automated-regression-results.netlify.app): only these brand codes, and only runs on/after sinceDate. This is a manually curated 'real release cycle' scope, not everything under Test Reports/ — old dev/investigation/bug-repro runs (including a scoped brand's own pre-release-cycle runs, e.g. earlier dates while the GUI/framework itself was still being built) stay off the public site even though they're on disk. Add a brand's code once its official release run for the current cycle is done; bump sinceDate at the start of a new cycle/month so old noise doesn't reappear.",
-  "updated": "2026-09-17",
+  "updated": "2026-09-18",
   "sinceDate": "2026-09-01",
-  "brands": ["SC", "LMS"]
+  "brands": ["SC", "LMS", "SNG"]
 }

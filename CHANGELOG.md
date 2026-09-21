@@ -9,6 +9,13 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-21
+
+### Added
+
+- **Drilldown rows on the results dashboard now link straight to the real test report** — clicking a test or a run used to just say "No report"; now it opens the actual detailed Playwright report page for that brand/date/GEO, same as the results website's per-GEO reports already did.
+- **SNG is now included on the public results website** (qa-automated-regression-results.netlify.app) alongside SC and LMS, now that its release run is far enough along to show publicly.
+
 ## [Unreleased] - 2026-09-18
 
 ### Added
