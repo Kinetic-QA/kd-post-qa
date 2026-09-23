@@ -205,6 +205,14 @@ async function readExcelSummary(excelPath: string, geoFilter?: string): Promise<
 }
 
 const TEST_TIERS = ['p1', 'p2', 'p3'] as const;
+// Visual-priority tiers — separate from TEST_TIERS (functional priority) on
+// purpose: a component's functional criticality and its visual criticality
+// don't always match (see docs/Automated Regression Checklist 2026.xlsx,
+// "Visual Critical Priority" tab). Named lowercase 'v-p1' etc. (not 'V-P1')
+// so it sorts alphabetically after p1/p2/p3 regardless of case-sensitivity,
+// matching the intended run order below. Only v-p1 exists on disk today;
+// v-p2/v-p3 are reserved for when those checklist items get automated.
+const VISUAL_TIERS = ['v-p1', 'v-p2', 'v-p3'] as const;
 const ALL_SPECS_VALUE = '__all__';
 
 // Turns a filename like "feedback-form.spec.ts" into "Feedback Form" for
@@ -220,7 +228,7 @@ function humanizeSpecName(file: string): string {
 
 function discoverSpecs(): Array<{ value: string; label: string }> {
   const specs: Array<{ value: string; label: string }> = [];
-  for (const tier of TEST_TIERS) {
+  for (const tier of [...TEST_TIERS, ...VISUAL_TIERS]) {
     const dir = path.join(process.cwd(), 'tests', tier);
     if (!fs.existsSync(dir)) continue;
     for (const file of fs.readdirSync(dir)) {
@@ -1300,14 +1308,18 @@ function runNextGeo(session: MultiSession): void {
 
   const projectArgs =
     session.device === 'both' ? [] : ['--project', session.device === 'mobile' ? `${geo}-mobile` : geo];
-  // 'tests' alone would sweep in tests/tracking, tests/sample,
-  // tests/smoke.spec.ts, and tests/requirements-parser.spec.ts too — none of
-  // which are in scope for a Functional Check run (tracking's specs also
-  // require QA_TAG_ID/QA_BASE_URL that only the ticket-driven agent flow
-  // sets). "All Tests" means all of p1/p2/p3, not literally everything
-  // under tests/ — same TEST_TIERS discoverSpecs() already scopes to.
+  // 'tests' alone would sweep in tests/tracking and
+  // tests/requirements-parser.spec.ts too — neither is in scope for a
+  // Regression Check run (tracking's specs are a separate ticket-driven
+  // feature — see PLAN.md's Tracking Tag Checker — and require
+  // QA_TAG_ID/QA_BASE_URL that only src/agent.ts's flow sets, not this GUI
+  // run). "All Tests" means all of p1/p2/p3 plus v-p1/v-p2/v-p3, not
+  // literally everything under tests/ — same tiers discoverSpecs() scopes
+  // to. Functional tiers listed before visual ones so functional finishes
+  // first on a single-worker run (playwright.config.ts: workers: 1) — the
+  // team wants functional coverage confirmed before visual runs at all.
   const specArgs = session.spec === ALL_SPECS_VALUE
-    ? TEST_TIERS.map(tier => `tests/${tier}`)
+    ? [...TEST_TIERS, ...VISUAL_TIERS].map(tier => `tests/${tier}`)
     : [session.spec];
 
   const proc = spawn('npx', ['playwright', 'test', ...specArgs, ...projectArgs], {
