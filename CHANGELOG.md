@@ -9,6 +9,21 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-23
+
+### Added
+
+- **Started a new "Visual Check" system for SC UK, alongside the existing functional checks** — the first 3 checks are now automated: do the footer's regulator/licensing logos all display properly, does the header brand logo display without stretching or breaking, and does the homepage banner display correctly (including every slide in the rotating banner, checked across all 22 pages on the site, on both desktop and mobile).
+- **The "All Tests" run now does all the functional checks first, then the new visual checks after**, so visual checks never hold up or get mixed in with functional results. The new visual checks are also individually pickable from the test dropdown, same as any functional check.
+
+### Changed
+
+- **Moved the mobile banner size check (must be exactly 750x484) out of the functional checks and into the new visual checks** — it's a visual/appearance check, not a behavior check, so it belongs there. This only applies to brands using the newer one-piece banner design (GC, MC, SNG, SC, PC, ZI); brands still on the older banner design just get checked that the banner displays properly, with no fixed size requirement.
+
+### Removed
+
+- **Deleted two old test files that nothing in the project uses anymore**: a leftover YouTube navigation sample test, and the old basic "site is up" smoke test.
+
 ## [Unreleased] - 2026-09-21
 
 ### Added
