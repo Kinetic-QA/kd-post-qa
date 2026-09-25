@@ -762,10 +762,11 @@ app.post('/visual-check', uploadFields, async (req, res) => {
   }
 });
 
-// Builds a self-contained local folder (PDF/Excel + a subfolder of the
-// full-size images already rendered in the browser) — no re-comparison, no
-// upload, so it works fully offline and stays portable if the whole folder
-// is copied elsewhere. See gui/visual-export.ts for the actual builders.
+// Builds the PDF/Excel from the images already rendered in the browser (no
+// re-comparison, no upload) inside a throwaway temp folder, then streams the
+// single finished file back as a download so it lands in the browser's
+// Downloads folder. The temp folder is always removed afterwards, so nothing
+// is left in the project. See gui/visual-export.ts for the actual builders.
 app.post('/visual-check/export', async (req, res) => {
   const data = req.body?.data as VisualExportInput | undefined;
   const format = String(req.body?.format ?? '');
@@ -774,19 +775,22 @@ app.post('/visual-check/export', async (req, res) => {
     return;
   }
 
-  try {
-    const folderName = `${data.mode}-${localTimestampToken()}`;
-    const outDir = path.join(process.cwd(), 'Visual Check Exports', folderName);
-    fs.mkdirSync(outDir, { recursive: true });
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'visual-check-export-'));
+  const cleanUp = () => fs.rmSync(outDir, { recursive: true, force: true });
 
+  try {
     const sections = saveExportImages(data, outDir);
     const filePath = format === 'pdf'
       ? await buildPdfExport(sections, data.mode, data.model, outDir)
       : await buildExcelExport(sections, data.mode, outDir);
 
-    console.log(`[Visual Check] Exported ${format} to ${filePath}`);
-    res.json({ folderPath: outDir, filePath });
+    const downloadName = `visual-check-${data.mode}-${localTimestampToken()}.${format}`;
+    res.download(filePath, downloadName, err => {
+      if (err) console.error('Visual Check export download failed:', err.message);
+      cleanUp();
+    });
   } catch (err) {
+    cleanUp();
     const msg = err instanceof Error ? err.message : String(err);
     console.error('Visual Check export failed:', msg);
     res.status(200).json({ error: `Couldn't build the export: ${msg}` });
