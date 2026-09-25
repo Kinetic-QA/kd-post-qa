@@ -1390,29 +1390,45 @@ function exportVisualResult(format, btn) {
   visualExportStatusEl.hidden = true;
   visualExportStatusEl.classList.remove('visual-export-status-error');
 
+  // Success comes back as the file itself (saved to the browser's Downloads
+  // folder below); failures come back as JSON with an error message.
   fetch('/visual-check/export', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ data: lastVisualResult, format }),
   })
-    .then(res => res.json())
-    .then(result => {
+    .then(async res => {
+      if ((res.headers.get('Content-Type') || '').includes('application/json')) {
+        const result = await res.json();
+        throw new Error(result.error || 'Export failed.');
+      }
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const nameMatch = disposition.match(/filename="?([^";]+)"?/);
+      return { blob: await res.blob(), filename: nameMatch ? nameMatch[1] : `visual-check-report.${format}` };
+    })
+    .then(({ blob, filename }) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
       btn.disabled = false;
       btn.textContent = originalLabel;
       visualExportStatusEl.hidden = false;
-      if (result.error) {
-        visualExportStatusEl.classList.add('visual-export-status-error');
-        visualExportStatusEl.textContent = result.error;
-      } else {
-        visualExportStatusEl.textContent = `Saved to: ${result.folderPath}`;
-      }
+      visualExportStatusEl.textContent = `Downloaded: ${filename}`;
     })
-    .catch(() => {
+    .catch(err => {
       btn.disabled = false;
       btn.textContent = originalLabel;
       visualExportStatusEl.hidden = false;
       visualExportStatusEl.classList.add('visual-export-status-error');
-      visualExportStatusEl.textContent = 'Export failed — check your connection and try again.';
+      visualExportStatusEl.textContent = err instanceof TypeError
+        ? 'Export failed — check your connection and try again.'
+        : err.message;
     });
 }
 

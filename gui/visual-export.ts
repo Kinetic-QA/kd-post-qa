@@ -1,14 +1,19 @@
-// Self-contained PDF + Excel export for a Visual Check result — everything
-// (report + full-size images) lands in one timestamped local folder, so it
-// works entirely offline and stays portable if the whole folder is copied
-// or zipped up for someone else. No results are persisted anywhere else by
-// this feature (see the memoryStorage comment on the /visual-check route),
-// so export always operates on the JSON the client already rendered, not on
-// anything looked up server-side.
+// Self-contained PDF + Excel export for a Visual Check result. The report is
+// built in a throwaway temp folder (images are decoded there so Playwright /
+// exceljs can embed them), then the single finished file is sent to the
+// browser as a download and the temp folder is deleted — nothing is kept in
+// the project folder. Because only that one file leaves the temp folder,
+// "View Full Size" links point inside the file itself: a full-size page at
+// the end of the PDF, or a "Full Size Images" sheet in the Excel workbook.
+// No results are persisted anywhere else by this feature (see the
+// memoryStorage comment on the /visual-check route), so export always
+// operates on the JSON the client already rendered, not on anything looked
+// up server-side.
 import * as fs from 'fs';
 import * as path from 'path';
 import ExcelJS from 'exceljs';
 import { chromium } from '@playwright/test';
+import sharp from 'sharp';
 
 // Mirrors CAMPAIGN_SECTIONS in gui/public/app.js — kept in sync manually
 // since one lives in browser JS and the other in server TS.
@@ -154,6 +159,92 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// In-document anchor for an image's full-size page (see fullSizePagesHtml).
+// Chromium keeps #anchor links as internal PDF links, so clicking jumps to
+// the page inside the same file — works offline and when the PDF is shared.
+function fullSizeAnchor(imagePath: string): string {
+  return 'full-' + imagePath.replace(/[^a-zA-Z0-9-]/g, '-');
+}
+
+function linkedImg(imagePath: string, cls: string, alt = ''): string {
+  return `<a href="#${fullSizeAnchor(imagePath)}"><img src="images/${imagePath}" class="${cls}" alt="${escapeHtml(alt)}" /></a>`;
+}
+
+function fullSizeLink(imagePath: string): string {
+  return `<a class="full-size-link" href="#${fullSizeAnchor(imagePath)}">View Full Size</a>`;
+}
+
+// Every image shown in the report, in report order, with a caption — the
+// source for the PDF's full-size pages and the Excel "Full Size Images" sheet.
+function fullSizeImages(sections: SavedSection[]): { path: string; caption: string }[] {
+  const seen = new Set<string>();
+  const out: { path: string; caption: string }[] = [];
+  const add = (p: string | null, caption: string) => {
+    if (!p || seen.has(p)) return;
+    seen.add(p);
+    out.push({ path: p, caption });
+  };
+  for (const s of sections) {
+    const prefix = s.title ? `${s.title} — ` : '';
+    add(s.aImagePath, prefix + s.labels.a);
+    add(s.matchCropPath, `${prefix}${s.labels.b} — Close-up`);
+    s.bImagePaths.forEach((p, i) => add(p, `${prefix}${s.labels.b}${s.bLabels?.[i] ? ` — ${s.bLabels[i]}` : ''}`));
+  }
+  return out;
+}
+
+// A4 content area at 96dpi, after the page.pdf margins and body padding
+// below — used to cut tall images into page-sized slices.
+const PDF_CONTENT_WIDTH_PX = 700;
+const PDF_CONTENT_HEIGHT_PX = 1000;
+const PDF_HEADING_PX = 60;
+
+// Chromium won't split a tall image at a sensible point — it pushes the
+// whole image to the next page (leaving its heading stranded) and then
+// clips it. So each full-size image is cut into page-height slices first;
+// the first slice leaves room for the heading. Returns slice filenames
+// (relative to <outDir>/images/), or the original file if it already fits
+// or isn't a format sharp can slice.
+async function sliceForPdf(outDir: string, imagePath: string): Promise<string[]> {
+  const file = path.join(outDir, 'images', imagePath);
+  let meta: Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
+  try {
+    meta = await sharp(file).metadata();
+  } catch {
+    return [imagePath];
+  }
+  if (!meta.width || !meta.height) return [imagePath];
+
+  const pxPerCssPx = meta.width / PDF_CONTENT_WIDTH_PX;
+  const firstHeight = Math.floor((PDF_CONTENT_HEIGHT_PX - PDF_HEADING_PX) * pxPerCssPx);
+  const nextHeight = Math.floor(PDF_CONTENT_HEIGHT_PX * pxPerCssPx);
+  if (meta.height <= firstHeight) return [imagePath];
+
+  const slices: string[] = [];
+  const base = path.parse(imagePath).name;
+  for (let top = 0, i = 0; top < meta.height; i++) {
+    const height = Math.min(i === 0 ? firstHeight : nextHeight, meta.height - top);
+    const name = `${base}-slice-${i}.png`;
+    await sharp(file).extract({ left: 0, top, width: meta.width, height }).png().toFile(path.join(outDir, 'images', name));
+    slices.push(name);
+    top += height;
+  }
+  return slices;
+}
+
+async function fullSizePagesHtml(sections: SavedSection[], outDir: string): Promise<string> {
+  let html = '';
+  for (const img of fullSizeImages(sections)) {
+    const slices = await sliceForPdf(outDir, img.path);
+    html += `
+<section class="full-size-page" id="${fullSizeAnchor(img.path)}">
+<h2>${escapeHtml(img.caption)}${slices.length > 1 ? ` <span class="full-size-parts">(${slices.length} pages)</span>` : ''}</h2>
+${slices.map(sl => `<img src="images/${sl}" />`).join('')}
+</section>`;
+  }
+  return html;
+}
+
 function sectionHtml(s: SavedSection): string {
   let html = `<h2 class="visual-section-title">${escapeHtml(s.title || 'Comparison Result')}</h2>`;
   html += `<span class="status-pill visual-status-pill">${escapeHtml(statusLabel(s.status))}</span>`;
@@ -166,19 +257,19 @@ function sectionHtml(s: SavedSection): string {
 
   html += '<div class="visual-compare">';
   if (s.aImagePath) {
-    html += `<div class="visual-compare-pane"><span class="visual-pane-label">${escapeHtml(s.labels.a)}</span><a href="images/${s.aImagePath}"><img src="images/${s.aImagePath}" class="visual-compare-img" /></a></div>`;
+    html += `<div class="visual-compare-pane"><span class="visual-pane-label">${escapeHtml(s.labels.a)}</span>${linkedImg(s.aImagePath, 'visual-compare-img')}${fullSizeLink(s.aImagePath)}</div>`;
   } else if (s.aText) {
     html += `<div class="visual-compare-pane"><span class="visual-pane-label">${escapeHtml(s.labels.a)} (extracted text)</span><pre class="visual-compare-text">${escapeHtml(s.aText)}</pre></div>`;
   }
   if (bestPath) {
-    html += `<div class="visual-compare-pane"><span class="visual-pane-label">${escapeHtml(bLabel)}</span><a href="images/${bestPath}"><img src="images/${bestPath}" class="visual-compare-img" /></a></div>`;
+    html += `<div class="visual-compare-pane"><span class="visual-pane-label">${escapeHtml(bLabel)}</span>${linkedImg(bestPath, 'visual-compare-img')}${fullSizeLink(bestPath)}</div>`;
   }
   html += '</div>';
 
   if (s.bImagePaths.length > 1) {
     html += '<div class="visual-extra-frames-body">';
     html += s.bImagePaths
-      .map((p, i) => `<a href="images/${p}"><img src="images/${p}" class="visual-thumb" alt="${escapeHtml(s.bLabels?.[i] || `Site frame ${i}`)}" /></a>`)
+      .map((p, i) => linkedImg(p, 'visual-thumb', s.bLabels?.[i] || `Site frame ${i}`))
       .join('');
     html += '</div>';
   }
@@ -232,7 +323,8 @@ function loadGuiStyles(): string {
   }
 }
 
-export function buildReportHtml(sections: SavedSection[], mode: string, model?: string): string {
+export async function buildReportHtml(sections: SavedSection[], mode: string, model: string | undefined, outDir: string): Promise<string> {
+  const fullSizePages = await fullSizePagesHtml(sections, outDir);
   const body = sections.map(s => `<section class="visual-section">${sectionHtml(s)}</section>`).join('<hr/>');
   return `<!doctype html>
 <html>
@@ -243,18 +335,24 @@ body { background: #fff; padding: 24px; }
 .visual-compare-img { max-width: 480px; max-height: 360px; object-fit: contain; border: 1px solid var(--border); }
 .visual-thumb { max-width: 160px; max-height: 120px; margin: 4px; }
 a { text-decoration: none; }
+.full-size-link { display: block; margin-top: 4px; font-size: 12px; color: #0563c1; text-decoration: underline; }
+.full-size-page { break-before: page; }
+.full-size-page h2 { height: 40px; margin: 0 0 12px; font-size: 16px; }
+.full-size-parts { font-weight: normal; color: #666; font-size: 12px; }
+.full-size-page img { display: block; width: 100%; height: auto; break-inside: avoid; }
 </style>
 </head>
 <body>
 <h1>Visual Check Report — ${escapeHtml(mode)}</h1>
 ${body}
 ${model ? `<div class="visual-model-note">Powered by Claude (${escapeHtml(model)})</div>` : ''}
+${fullSizePages}
 </body>
 </html>`;
 }
 
 export async function buildPdfExport(sections: SavedSection[], mode: string, model: string | undefined, outDir: string): Promise<string> {
-  const html = buildReportHtml(sections, mode, model);
+  const html = await buildReportHtml(sections, mode, model, outDir);
   const pdfPath = path.join(outDir, 'visual-check-report.pdf');
   const browser = await chromium.launch({ headless: true });
   try {
@@ -277,7 +375,7 @@ export async function buildPdfExport(sections: SavedSection[], mode: string, mod
 
 // exceljs's addImage only accepts these three raster formats — an asset
 // reference can legitimately be svg/webp (Asset vs Site accepts both), which
-// still gets its "View Full Size" hyperlink but no inline thumbnail.
+// gets no inline thumbnail in the Excel export (the PDF still shows it).
 function excelImageExtension(filename: string): 'jpeg' | 'png' | 'gif' | null {
   const ext = path.extname(filename).slice(1).toLowerCase();
   if (ext === 'jpg') return 'jpeg';
@@ -292,8 +390,43 @@ export async function buildExcelExport(sections: SavedSection[], mode: string, o
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Visual Check Report');
   ws.columns = [
-    { width: 22 }, { width: 30 }, { width: 30 }, { width: 30 }, { width: 10 }, { width: 24 },
+    { width: 22 }, { width: 30 }, { width: 30 }, { width: 30 }, { width: 30 }, { width: 24 },
   ];
+
+  // Full-size images go on their own sheet, stacked vertically; each gets an
+  // anchor row the main sheet's "View Full Size" links jump to.
+  const fullWs = wb.addWorksheet('Full Size Images');
+  fullWs.getColumn(1).width = 140;
+  const FULL_WIDTH_PX = 1000;
+  const ROW_PX = 20; // exceljs default row height (15pt)
+  const fullSizeRow = new Map<string, number>();
+  let fullRowNum = 1;
+  for (const img of fullSizeImages(sections)) {
+    const captionCell = fullWs.getRow(fullRowNum).getCell(1);
+    captionCell.value = img.caption;
+    captionCell.font = { name: 'Arial', bold: true, size: 12 };
+    fullSizeRow.set(img.path, fullRowNum);
+    fullRowNum += 1;
+
+    const ext = excelImageExtension(img.path);
+    const filename = path.join(outDir, 'images', img.path);
+    if (!ext) {
+      fullWs.getRow(fullRowNum).getCell(1).value = 'This image format cannot be embedded in Excel — see the PDF export.';
+      fullRowNum += 2;
+      continue;
+    }
+    const meta = await sharp(filename).metadata();
+    const scale = Math.min(1, FULL_WIDTH_PX / (meta.width || FULL_WIDTH_PX));
+    const width = Math.round((meta.width || FULL_WIDTH_PX) * scale);
+    const height = Math.round((meta.height || 600) * scale);
+    const imgId = wb.addImage({ filename, extension: ext });
+    fullWs.addImage(imgId, { tl: { col: 0, row: fullRowNum - 1 }, ext: { width, height } });
+    fullRowNum += Math.ceil(height / ROW_PX) + 2;
+  }
+  const fullSizeCell = (imagePath: string, text: string): ExcelJS.CellValue => ({
+    text,
+    hyperlink: `#'Full Size Images'!A${fullSizeRow.get(imagePath) ?? 1}`,
+  });
 
   let rowNum = 1;
   const writeHeaderRow = (values: string[]) => {
@@ -330,6 +463,9 @@ export async function buildExcelExport(sections: SavedSection[], mode: string, o
           const imgId = wb.addImage({ filename: path.join(outDir, 'images', s.aImagePath), extension: ext });
           ws.addImage(imgId, { tl: { col: 1, row: rowNum - 1 }, ext: { width: 160, height: 120 } });
         }
+        const linkCell = imgRow.getCell(5);
+        linkCell.value = fullSizeCell(s.aImagePath, `${s.labels.a} (full size)`);
+        linkCell.font = { name: 'Arial', size: 10, underline: true, color: { argb: 'FF0563C1' } };
       }
       if (bestPath) {
         const ext = excelImageExtension(bestPath);
@@ -338,7 +474,7 @@ export async function buildExcelExport(sections: SavedSection[], mode: string, o
           ws.addImage(imgId, { tl: { col: 2, row: rowNum - 1 }, ext: { width: 160, height: 120 } });
         }
         const linkCell = imgRow.getCell(4);
-        linkCell.value = { text: 'View Full Size', hyperlink: `images/${bestPath}` };
+        linkCell.value = fullSizeCell(bestPath, `${s.labels.b} (full size)`);
         linkCell.font = { name: 'Arial', size: 10, underline: true, color: { argb: 'FF0563C1' } };
       }
       imgRow.height = 92;
