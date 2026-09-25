@@ -261,7 +261,7 @@
                 <option value="asset-vs-site">Asset vs Site</option>
                 <option value="site-vs-site">Site vs Site</option>
                 <option value="campaign-vs-site">Campaign Materials vs Site</option>
-                <option disabled>Mockup vs Site — Coming Soon</option>
+                <option value="figma-vs-site">Figma vs Site</option>
               </select>
             </div>
           </div>
@@ -286,6 +286,18 @@
               <label for="visual-prod-url">Production Site URL</label>
               <input type="url" id="visual-prod-url" placeholder="https://www.example.com/" />
             </div>
+          </div>
+
+          <div id="visual-widget-figma" class="form-grid" hidden>
+            <div class="field">
+              <label for="visual-figma-url">Figma Frame URL</label>
+              <input type="url" id="visual-figma-url" placeholder="https://www.figma.com/design/.../...?node-id=1-23" />
+            </div>
+            <div class="field">
+              <label for="visual-figma-site-url">Site URL</label>
+              <input type="url" id="visual-figma-site-url" placeholder="https://www.example.com/" />
+            </div>
+            <p class="visual-field-note">Select one specific frame in Figma, then use "Copy link to selection" — a whole-file link won't work.</p>
           </div>
 
           <div id="visual-widget-campaign" class="form-grid" hidden>
@@ -319,7 +331,12 @@
           <div class="card-header">
             <span class="icon">&#128203;</span>
             <h2>Comparison Results</h2>
+            <div class="visual-export-actions">
+              <button id="visual-export-pdf-btn" class="investigate-export-btn" disabled>&#11015; Export as PDF</button>
+              <button id="visual-export-xlsx-btn" class="investigate-export-btn" disabled>&#11015; Export as Excel</button>
+            </div>
           </div>
+          <div id="visual-export-status" class="visual-export-status" hidden></div>
           <div id="visual-error" class="visual-error" hidden></div>
           <div id="visual-report-body"></div>
         </section>

@@ -1586,6 +1586,23 @@ body {
   cursor: not-allowed;
 }
 
+.visual-export-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.visual-export-status {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  word-break: break-all;
+}
+
+.visual-export-status.visual-export-status-error {
+  color: var(--accent-red);
+}
+
 .investigate-url-link {
   color: var(--accent-blue);
   text-decoration: none;

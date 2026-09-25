@@ -22,9 +22,11 @@ import * as dotenv from 'dotenv';
 import axios from 'axios';
 import ExcelJS from 'exceljs';
 import mammoth from 'mammoth';
+import { PDFParse } from 'pdf-parse';
 import { BRAND_URLS } from '../helpers/brand-urls';
 import { captureFullPageScreenshot, captureMultipleFrames, captureWithPopupWait, captureSiteText, rasterizeSvgToPng, cropRegion } from './screenshot-capture';
 import { compareVisual, compareText, MODEL, VisualCheckMode, VisualStatus, VisualCompareResult, ImageInput, TextInput } from './visual-compare';
+import { parseFigmaUrl, fetchFigmaFrameImage } from './figma-client';
 import { crawlSite } from './site-crawler';
 // require(), not import — TS's module resolution doesn't match an explicit
 // .cjs extension against a .d.ts declaration file of the same base name
@@ -32,8 +34,9 @@ import { crawlSite } from './site-crawler';
 const { pruneOldRuns } = require('../helpers/prune-old-runs.cjs') as {
   pruneOldRuns: (brand: string, geo: string, dateStr: string, keep?: number) => void;
 };
-const { localTimeToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string };
+const { localTimeToken, localTimestampToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string; localTimestampToken: (d?: Date) => string };
 import { registerJiraCheckerRoutes } from './jira-checker';
+import { saveExportImages, buildPdfExport, buildExcelExport, VisualExportInput } from './visual-export';
 
 dotenv.config();
 
@@ -249,7 +252,11 @@ function geosByBrand(): Record<string, string[]> {
   return map;
 }
 
-app.use(express.json());
+// Raised well above the 100kb default: /visual-check/export's body is the
+// full result JSON the client already rendered, including every screenshot
+// as a base64 data URL (several MB is routine for a full-page PNG, more for
+// a multi-frame Campaign Materials result with 3 sections).
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/reports', express.static(path.join(process.cwd(), 'Test Reports')));
 // merge-reports.cjs's combined HTML report and excel-reporter.cjs's
@@ -282,7 +289,7 @@ const uploadFields = upload.fields([
 // (it fans out into up to three compareVisual/compareText calls) — not a
 // real VisualCheckMode compareVisual itself understands.
 type RouteMode = VisualCheckMode | 'campaign-vs-site';
-const VISUAL_MODES: RouteMode[] = ['document-vs-site', 'asset-vs-site', 'site-vs-site', 'campaign-vs-site'];
+const VISUAL_MODES: RouteMode[] = ['document-vs-site', 'asset-vs-site', 'site-vs-site', 'campaign-vs-site', 'figma-vs-site'];
 
 function fileFrom(req: express.Request, field: string): Express.Multer.File | undefined {
   const files = req.files as Record<string, Express.Multer.File[]> | undefined;
@@ -367,7 +374,25 @@ const MAX_EXTRACTED_DOC_CHARS = 50_000;
 // separately and sent to Claude as real image blocks so it can actually see
 // them, capped so one document with dozens of images can't blow up the
 // request.
-const MAX_EMBEDDED_IMAGES = 5;
+const MAX_EMBEDDED_IMAGES = 12;
+
+// PDF references get the same "did the document itself name a specific
+// page" treatment docx/xlsx already have (see extractSameSiteUrls below) —
+// pdf-parse pulls the text layer only; a scanned/image-only PDF just yields
+// an empty string, which extractSameSiteUrls already handles fine (finds no
+// URLs, falls back to single-page like before).
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    return result.text.trim();
+  } catch (e) {
+    console.warn('[WARN] Could not extract text from .pdf for page-scan (comparison itself is unaffected):', e instanceof Error ? e.message : e);
+    return '';
+  } finally {
+    await parser.destroy();
+  }
+}
 
 function mediaExtensionToMimeType(extension: string): string | null {
   const ext = extension.toLowerCase();
@@ -382,7 +407,17 @@ async function extractOfficeDocContent(buffer: Buffer, mimeType: string): Promis
   let images: ImageInput[] = [];
 
   if (mimeType === DOCX_MIME) {
-    text = (await mammoth.extractRawText({ buffer })).value;
+    try {
+      text = (await mammoth.extractRawText({ buffer })).value;
+    } catch (e) {
+      // Same graceful-degradation the .xlsx branch below already has — a
+      // corrupt/unusual .docx shouldn't fail the whole check via the outer
+      // route catch, just mean Claude gets a clear "couldn't read this"
+      // note instead of any document content.
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('[WARN] Could not parse .docx (falling back to no extracted content):', msg);
+      return { text: `(Could not read this Word document's content: ${msg})`, images: [] };
+    }
     try {
       await mammoth.convertToHtml({ buffer }, {
         convertImage: mammoth.images.imgElement(async image => {
@@ -552,6 +587,30 @@ app.post('/visual-check', uploadFields, async (req, res) => {
   }
 
   try {
+    if (mode === 'figma-vs-site') {
+      const figmaUrl = String(req.body.figmaUrl ?? '').trim();
+      const siteUrl = String(req.body.siteUrl ?? '').trim();
+      if (!figmaUrl || !siteUrl) {
+        res.status(400).json({ error: 'Both a Figma frame URL and a Site URL are required.' });
+        return;
+      }
+
+      const ref = parseFigmaUrl(figmaUrl);
+      if (!ref) {
+        res.status(400).json({ error: 'Could not read a frame from that Figma URL — select one specific frame in Figma, then use "Copy link to selection" (a whole-file link with no node-id isn\'t enough).' });
+        return;
+      }
+
+      const [figmaBuf, siteBuf] = await Promise.all([
+        fetchFigmaFrameImage(ref.fileKey, ref.nodeId),
+        captureFullPageScreenshot(siteUrl),
+      ]);
+
+      const { result, images } = await runImageSection('figma-vs-site', figmaBuf, 'image/png', [siteBuf]);
+      res.json({ ...result, mode, images });
+      return;
+    }
+
     if (mode === 'site-vs-site') {
       const qaUrl = String(req.body.qaUrl ?? '').trim();
       const prodUrl = String(req.body.prodUrl ?? '').trim();
@@ -658,19 +717,23 @@ app.post('/visual-check', uploadFields, async (req, res) => {
     // carousel gets at least one full rotation.
     //
     // Document vs Site instead looks for OTHER PAGES the reference document
-    // itself names (see extractSameSiteUrls) — only possible for Word/Excel
-    // references, since that's the only case with real extracted text to
-    // scan before ever capturing a screenshot; a PDF/image reference stays
-    // single-page for now.
+    // itself names (see extractSameSiteUrls) — possible for Word/Excel (real
+    // extracted text) and PDF (text-layer extraction via pdf-parse) alike;
+    // only a plain image reference stays single-page, since there's no text
+    // to scan before ever capturing a screenshot.
     let siteBufs: Buffer[];
     let siteLabels: string[] | undefined;
     if (mode === 'asset-vs-site') {
       siteBufs = await captureMultipleFrames(siteUrl);
     } else {
       let extraUrls: string[] = [];
-      if (isOfficeDoc(mimeTypeFor(file))) {
-        const preExtracted = await extractOfficeDocContent(file.buffer, mimeTypeFor(file));
+      const fileMime = mimeTypeFor(file);
+      if (isOfficeDoc(fileMime)) {
+        const preExtracted = await extractOfficeDocContent(file.buffer, fileMime);
         extraUrls = extractSameSiteUrls(preExtracted.text, siteUrl);
+      } else if (fileMime === 'application/pdf') {
+        const pdfText = await extractPdfText(file.buffer);
+        extraUrls = extractSameSiteUrls(pdfText, siteUrl);
       }
 
       const captured: { url: string; buf: Buffer }[] = [];
@@ -696,6 +759,37 @@ app.post('/visual-check', uploadFields, async (req, res) => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('Visual Check failed:', msg);
     res.status(200).json({ error: `Couldn't complete the comparison: ${msg}` });
+  }
+});
+
+// Builds a self-contained local folder (PDF/Excel + a subfolder of the
+// full-size images already rendered in the browser) — no re-comparison, no
+// upload, so it works fully offline and stays portable if the whole folder
+// is copied elsewhere. See gui/visual-export.ts for the actual builders.
+app.post('/visual-check/export', async (req, res) => {
+  const data = req.body?.data as VisualExportInput | undefined;
+  const format = String(req.body?.format ?? '');
+  if (!data || !data.mode || (format !== 'pdf' && format !== 'xlsx')) {
+    res.status(400).json({ error: 'Missing result data or an invalid export format.' });
+    return;
+  }
+
+  try {
+    const folderName = `${data.mode}-${localTimestampToken()}`;
+    const outDir = path.join(process.cwd(), 'Visual Check Exports', folderName);
+    fs.mkdirSync(outDir, { recursive: true });
+
+    const sections = saveExportImages(data, outDir);
+    const filePath = format === 'pdf'
+      ? await buildPdfExport(sections, data.mode, data.model, outDir)
+      : await buildExcelExport(sections, data.mode, outDir);
+
+    console.log(`[Visual Check] Exported ${format} to ${filePath}`);
+    res.json({ folderPath: outDir, filePath });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('Visual Check export failed:', msg);
+    res.status(200).json({ error: `Couldn't build the export: ${msg}` });
   }
 });
 
