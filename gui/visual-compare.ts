@@ -7,7 +7,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 export const MODEL = 'claude-sonnet-4-6';
 
-export type VisualCheckMode = 'document-vs-site' | 'asset-vs-site' | 'site-vs-site' | 'popup-vs-site';
+export type VisualCheckMode = 'document-vs-site' | 'asset-vs-site' | 'site-vs-site' | 'popup-vs-site' | 'figma-vs-site';
 
 // Shown directly in the UI as the headline verdict — kept small and fixed
 // so the frontend can map each one to a specific color/icon rather than
@@ -112,6 +112,15 @@ IMPORTANT — keep the box TIGHT around only the single matched slide/element it
 Identify meaningful visual differences: layout drift, missing/extra elements, text mismatches, color or branding inconsistencies, broken or missing images. A hero banner/carousel showing a different rotating slide between the two is not itself a defect unless the actual set of promotions differs.
 
 Set "status" to "issue_found" if you find any meaningful discrepancy, or "no_issues_found" if the two match. Leave "boundingBox" and "breakdown" empty/null — not applicable to this mode.`,
+  'figma-vs-site': `You are a QA analyst comparing a Figma design mockup (the FIRST attachment, a rendered export of one specific frame) against the live implementation of that same page (the "Site frame" attachment).
+
+Unlike asset-vs-site, this is a single static full-page (or full-section) design, not a rotating carousel element — only one site screenshot is provided, and it should be judged as-is, not excused as "might be a different carousel slide."
+
+Compare layout and structure, copy/text content, imagery and creative assets, colors/branding, and spacing/composition between the mockup and the live page. A mockup is a design intent, not a pixel-perfect contract — minor rendering differences (font-hinting, anti-aliasing, slightly different image compression) are not findings, but any discrepancy a reviewer would actually flag (wrong/missing copy, missing section, wrong image, wrong color/branding, structurally different layout) is.
+
+Also extract a field-by-field "breakdown" of every distinct piece of text the mockup shows (e.g. headline, subheadline, CTA button text, section headings) versus the equivalent text on the live page.
+
+Set "status" to "issue_found" if you find any meaningful discrepancy, or "no_issues_found" if the live page matches the mockup's intent. Set "bestFrameIndex" to 0 (only one site screenshot is provided). Set "boundingBox" to the normalized (0.0-1.0) location of the single most significant discrepancy WITHIN the site screenshot, if there is one clear area worth zooming into — otherwise null.`,
   'popup-vs-site': `You are a QA analyst checking whether a specific campaign pop-up (the FIRST attachment) appears correctly on a live website. The SECOND attachment ("Site frame 0") is a screenshot of the live page taken right after a pop-up was detected on screen.
 
 Determine: (1) does the pop-up shown in the site screenshot match the reference pop-up? (2) if present, does it match exactly (right imagery, right text, right CTA button, right promo/bonus code)? (3) if a different pop-up (or no pop-up at all) is visible instead, describe what's shown.

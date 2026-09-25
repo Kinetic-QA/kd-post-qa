@@ -9,6 +9,7 @@ playwright-report/
 playwright-report-*/
 .playwright/
 Test Reports/
+Visual Check Exports/
 
 ### Test report files ###
 *.xlsx

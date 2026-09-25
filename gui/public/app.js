@@ -1042,6 +1042,13 @@ const visualModeSelect = document.getElementById('visual-mode-select');
 const visualWidgetUpload = document.getElementById('visual-widget-upload');
 const visualWidgetSites = document.getElementById('visual-widget-sites');
 const visualWidgetCampaign = document.getElementById('visual-widget-campaign');
+const visualWidgetFigma = document.getElementById('visual-widget-figma');
+const visualFigmaUrl = document.getElementById('visual-figma-url');
+const visualFigmaSiteUrl = document.getElementById('visual-figma-site-url');
+const visualExportPdfBtn = document.getElementById('visual-export-pdf-btn');
+const visualExportXlsxBtn = document.getElementById('visual-export-xlsx-btn');
+const visualExportStatusEl = document.getElementById('visual-export-status');
+let lastVisualResult = null;
 const visualFileLabel = document.getElementById('visual-file-label');
 const visualFileInput = document.getElementById('visual-file-input');
 const visualSiteUrl = document.getElementById('visual-site-url');
@@ -1071,6 +1078,7 @@ const PANE_LABELS = {
   'document-vs-site': { a: 'Reference Document', b: 'Live Site' },
   'asset-vs-site': { a: 'Uploaded Asset', b: 'Live Site' },
   'site-vs-site': { a: 'QA Site', b: 'Production Site' },
+  'figma-vs-site': { a: 'Figma Mockup', b: 'Live Site' },
   banner: { a: 'Banner Image', b: 'Live Site' },
   popup: { a: 'Pop-up Image', b: 'Live Site' },
 };
@@ -1089,6 +1097,7 @@ function updateVisualWidgets() {
   visualWidgetUpload.hidden = !isUploadMode;
   visualWidgetSites.hidden = mode !== 'site-vs-site';
   visualWidgetCampaign.hidden = !isCampaign;
+  visualWidgetFigma.hidden = mode !== 'figma-vs-site';
   if (isUploadMode) {
     visualFileLabel.textContent = VISUAL_FILE_LABELS[mode];
     visualFileInput.accept = mode === 'asset-vs-site' ? '.png,.jpg,.jpeg,.webp,.gif,.svg' : '.pdf,.docx,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.svg';
@@ -1311,6 +1320,13 @@ visualRunBtn.addEventListener('click', () => {
     }
     formData.append('qaUrl', visualQaUrl.value.trim());
     formData.append('prodUrl', visualProdUrl.value.trim());
+  } else if (mode === 'figma-vs-site') {
+    if (!visualFigmaUrl.value.trim() || !visualFigmaSiteUrl.value.trim()) {
+      setStatus(visualStatusEl, 'Enter a Figma frame URL and a site URL', 'failed');
+      return;
+    }
+    formData.append('figmaUrl', visualFigmaUrl.value.trim());
+    formData.append('siteUrl', visualFigmaSiteUrl.value.trim());
   } else if (mode === 'campaign-vs-site') {
     const hasBanner = !!visualBannerInput.files[0];
     const hasPopup = !!visualPopupInput.files[0];
@@ -1349,15 +1365,59 @@ visualRunBtn.addEventListener('click', () => {
         const meta = STATUS_META[statusKey] || STATUS_META.issue_found;
         setStatus(visualStatusEl, meta.label, meta.variant);
       }
+      lastVisualResult = data.error ? null : data;
+      visualExportPdfBtn.disabled = !lastVisualResult;
+      visualExportXlsxBtn.disabled = !lastVisualResult;
+      visualExportStatusEl.hidden = true;
       renderVisualResults(data);
     })
     .catch(() => {
       visualRunBtn.disabled = false;
       visualProgressBar.classList.remove('active');
       setStatus(visualStatusEl, 'Request failed', 'failed');
+      lastVisualResult = null;
+      visualExportPdfBtn.disabled = true;
+      visualExportXlsxBtn.disabled = true;
       renderVisualResults({ error: 'The request failed — check your connection and try again.' });
     });
 });
+
+function exportVisualResult(format, btn) {
+  if (!lastVisualResult) return;
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Exporting…';
+  visualExportStatusEl.hidden = true;
+  visualExportStatusEl.classList.remove('visual-export-status-error');
+
+  fetch('/visual-check/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: lastVisualResult, format }),
+  })
+    .then(res => res.json())
+    .then(result => {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+      visualExportStatusEl.hidden = false;
+      if (result.error) {
+        visualExportStatusEl.classList.add('visual-export-status-error');
+        visualExportStatusEl.textContent = result.error;
+      } else {
+        visualExportStatusEl.textContent = `Saved to: ${result.folderPath}`;
+      }
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+      visualExportStatusEl.hidden = false;
+      visualExportStatusEl.classList.add('visual-export-status-error');
+      visualExportStatusEl.textContent = 'Export failed — check your connection and try again.';
+    });
+}
+
+visualExportPdfBtn.addEventListener('click', () => exportVisualResult('pdf', visualExportPdfBtn));
+visualExportXlsxBtn.addEventListener('click', () => exportVisualResult('xlsx', visualExportXlsxBtn));
 
 // ── Visual Check: Investigate (site crawl) ───────────────────────────────
 const investigateUrlInput = document.getElementById('investigate-url');

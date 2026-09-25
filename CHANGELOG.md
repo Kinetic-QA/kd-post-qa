@@ -9,6 +9,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-25
+
+### Added
+
+- **Visual Check now has a "Figma vs Site" comparison mode** — paste a link to one specific frame in a Figma design (select the frame in Figma, then "Copy link to selection"), enter the live site's URL, and it checks whether the real page matches the design: layout, wording, images, colors/branding, and gives the same field-by-field comparison table as the other Visual Check modes. This replaces the old "Mockup vs Site — Coming Soon" option, which never actually did anything.
+- **Visual Check results can now be exported as a PDF or an Excel file**, both saved into a self-contained local folder alongside a copy of every screenshot used in the check. Excel shows a small preview of each image plus a "View Full Size" link to open the real file; the PDF report lays out the same comparison view (status, screenshots, comparison table, findings) as the on-screen results, with each image also a clickable link to view it full-size.
+
+### Changed
+
+- **"Document vs Site" now also looks for pages a PDF reference document names**, the same way it already did for Word/Excel references — if a PDF brief mentions a specific page (e.g. "see the Help page at ..."), that page now gets checked too instead of only the one URL typed in.
+- **A Word document that can't be read properly (corrupted or unusual formatting) now shows a clear "couldn't read this file" message** instead of failing the whole comparison — matching how Excel files already behaved.
+- **Visual Check can now pull up to 12 images out of an uploaded Word/Excel document** (previously capped at 5), so image-heavy reference documents get fully checked instead of silently dropping extra pictures.
+
 ## [Unreleased] - 2026-09-23
 
 ### Added
