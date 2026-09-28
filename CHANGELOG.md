@@ -9,6 +9,16 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-28
+
+### Fixed
+
+- **GUI test runs for markets that aren't live yet (like SNG AB) were failing instantly** with a "No live URL found" error. The tool was always checking the live site, even for markets that only have a QA site so far. It now automatically checks the right site for these not-yet-live markets.
+
+### Added
+
+- **Test runs now show a live, step-by-step progress line in the GUI console** the moment each check starts (e.g. "→ Navigate to homepage"), instead of going quiet and only showing results once the whole test finishes. This makes it clear a run is still working through a slow step instead of looking stuck.
+
 ## [Unreleased] - 2026-09-25
 
 ### Added

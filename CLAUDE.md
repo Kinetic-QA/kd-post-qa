@@ -30,10 +30,12 @@ After every end-of-session push, create a new file at `docs/updates/YYYY-MM-DD-u
 
 **How to write it:**
 - Same plain layman's-terms voice as CHANGELOG.md — no dev jargon, write for teammates who don't code
-- Format it ready to paste directly into Slack (short paragraphs/bullets, no raw markdown tables, sparing use of bold for emphasis)
-- Cover: what changed today, why it matters, and anything the team should know or watch for (e.g. a pending finding, a decision made, next steps)
-- Keep it tight — a few short bullets beat a wall of text
-- If multiple sessions happen on the same date, append to that day's existing file rather than overwriting it
+- **Format (checklist, as of 2026-09-28):** two sections, each headed with a 🗓️ + bold label, checkbox items below (`- [ ] item`):
+  - **Today :** what was actually accomplished/verified this session, one short plain-language line per item
+  - **Tomorrow :** the concrete next items planned for the following session
+- No raw markdown tables, sparing use of bold for emphasis, ready to paste directly into Slack as-is
+- Keep it tight — a few short checklist items beat a wall of text
+- If multiple sessions happen on the same date, append to that day's existing file rather than overwriting it (add any new items under the existing Today/Tomorrow lists rather than starting a duplicate set of headers)
 - **Local-only — never commit this file.** `docs/updates/` is gitignored on purpose; these drafts stay on the user's machine for copy-pasting into Slack and are not part of repo history.
 
 ---

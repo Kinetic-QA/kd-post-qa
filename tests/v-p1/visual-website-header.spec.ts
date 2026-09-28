@@ -42,6 +42,7 @@ test.describe('Visual P1 - Website Header', () => {
     }
     async function runStep(label: string, fn: () => Promise<void>) {
       await test.step(label, async () => {
+        console.log(`  → ${label}`);
         try { await fn(); record(label, true); }
         catch (e) { record(label, false); throw e; }
       });

@@ -57,6 +57,7 @@ test.describe('P3 - Blog Search', () => {
     // Auto-records pass/fail — failed steps appear in summary as ❌
     async function runStep(label: string, fn: () => Promise<void>) {
       await test.step(label, async () => {
+        console.log(`  → ${label}`);
         try {
           await fn();
           await assertNoSiteError(page);

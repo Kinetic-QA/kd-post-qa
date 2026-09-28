@@ -53,6 +53,7 @@ test.describe('P3 - Contact Us Page', () => {
     }
     async function runStep(label: string, fn: () => Promise<void>) {
       await test.step(label, async () => {
+        console.log(`  → ${label}`);
         try { await fn(); await assertNoSiteError(page); record(label, true); }
         catch (e) { record(label, false); throw e; }
       });
