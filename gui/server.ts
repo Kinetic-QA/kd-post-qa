@@ -23,7 +23,7 @@ import axios from 'axios';
 import ExcelJS from 'exceljs';
 import mammoth from 'mammoth';
 import { PDFParse } from 'pdf-parse';
-import { BRAND_URLS } from '../helpers/brand-urls';
+import { BRAND_URLS, getLiveUrl } from '../helpers/brand-urls';
 import { captureFullPageScreenshot, captureMultipleFrames, captureWithPopupWait, captureSiteText, rasterizeSvgToPng, cropRegion } from './screenshot-capture';
 import { compareVisual, compareText, MODEL, VisualCheckMode, VisualStatus, VisualCompareResult, ImageInput, TextInput } from './visual-compare';
 import { parseFigmaUrl, fetchFigmaFrameImage } from './figma-client';
@@ -1420,6 +1420,12 @@ function runNextGeo(session: MultiSession): void {
     ? [...TEST_TIERS, ...VISUAL_TIERS].map(tier => `tests/${tier}`)
     : [session.spec];
 
+  // Markets with no live site yet (brand-urls.ts's liveUrl: null, e.g. SNG/AB,
+  // MC/AB) only have a QA environment to test against — playwright.config.ts
+  // defaults TEST_ENV to 'live', so without this the run fails instantly with
+  // "No live URL found" before a single test even opens a page.
+  const testEnv = getLiveUrl(session.brand, geo) === null ? 'qa' : undefined;
+
   const proc = spawn('npx', ['playwright', 'test', ...specArgs, ...projectArgs], {
     cwd: process.cwd(),
     shell: true,
@@ -1430,6 +1436,7 @@ function runNextGeo(session: MultiSession): void {
       CI: 'true',
       EXCEL_REPORT_FILE: session.excelReportFile,
       ...(session.device === 'mobile' || session.device === 'both' ? { TEST_MOBILE: 'true' } : {}),
+      ...(testEnv ? { TEST_ENV: testEnv } : {}),
     },
   });
   session.proc = proc;

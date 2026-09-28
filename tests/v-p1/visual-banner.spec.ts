@@ -194,6 +194,7 @@ test.describe('Visual P1 - Banner', () => {
       let note = '';
       try {
         await test.step(label, async () => {
+        console.log(`  → ${label}`);
         await test.step('Navigate and dismiss popups', async () => {
           await page.goto(path, { waitUntil: 'domcontentloaded' });
           await page.waitForLoadState('domcontentloaded');
