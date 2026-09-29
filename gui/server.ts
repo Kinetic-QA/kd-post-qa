@@ -25,6 +25,7 @@ import mammoth from 'mammoth';
 import { PDFParse } from 'pdf-parse';
 import { BRAND_URLS, getLiveUrl } from '../helpers/brand-urls';
 import { captureFullPageScreenshot, captureMultipleFrames, captureWithPopupWait, captureSiteText, rasterizeSvgToPng, cropRegion } from './screenshot-capture';
+import Anthropic from '@anthropic-ai/sdk';
 import { compareVisual, compareText, MODEL, VisualCheckMode, VisualStatus, VisualCompareResult, ImageInput, TextInput } from './visual-compare';
 import { parseFigmaUrl, fetchFigmaFrameImage } from './figma-client';
 import { crawlSite } from './site-crawler';
@@ -1530,7 +1531,11 @@ function finishMultiSession(session: MultiSession): void {
     const stats = await readExcelSummary(excelPath);
 
     session.state = 'done';
-    emit({ type: 'all-done', exitCode, mergedReportUrl, excelUrl });
+    // brand/dateStr included so the client can still call /review-run and
+    // /upload-to-netlify after this — the session itself is deleted right
+    // below, so those two fields won't be recoverable any other way once
+    // this event has gone out.
+    emit({ type: 'all-done', exitCode, mergedReportUrl, excelUrl, brand: session.brand, dateStr: session.dateStr });
     notifySlack({
       emoji: '🎉',
       title: `${session.brand} run complete`,
@@ -1542,6 +1547,302 @@ function finishMultiSession(session: MultiSession): void {
     multiSessions.delete(session.id);
   });
 }
+
+// ── Review + Upload-to-Netlify (Results panel) ─────────────────────────────
+// Added 2026-09-29 so reviewing a finished run's results and publishing them
+// to the QA Automated Regression Results Netlify site are GUI actions,
+// instead of asking Claude in chat to do both by hand every time (see
+// upload-todays-results.cjs's own header comment for the manual version of
+// step 2). Both take {brand, dateStr} in the POST body — the session itself
+// is already gone by the time these can be clicked (deleted right after
+// 'all-done' fires, see finishMultiSession above), so the client re-sends
+// what it captured from that event instead of a session id.
+
+function isValidBrand(brand: string): boolean {
+  return BRAND_URLS.some(e => e.brand === brand);
+}
+
+function isValidDateStr(dateStr: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+}
+
+// Mirrors findReportFolder's shape but for the raw run-<HH-MM-SS>/test-results
+// folders (Playwright's own JSON reporter output) rather than the merged
+// report-#### folders — see playwright.config.ts's outputDir for why every
+// invocation gets its own timestamped subfolder.
+function findLatestRunFolder(brand: string, geo: string, dateStr: string): string | null {
+  const dir = path.join(process.cwd(), 'Test Reports', brand, geo, dateStr);
+  if (!fs.existsSync(dir)) return null;
+  const candidates = fs.readdirSync(dir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && e.name.startsWith('run-'))
+    .map(e => e.name);
+  if (candidates.length === 0) return null;
+  return candidates
+    .map(name => ({ name, mtime: fs.statSync(path.join(dir, name)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime)[0].name;
+}
+
+type ReviewTestEntry = {
+  geo: string;
+  title: string;
+  status: string;
+  // Only populated for 'unexpected'/'flaky' — the real error message +
+  // source location from the LAST attempt that actually failed, stripped of
+  // ANSI color codes (Playwright embeds them raw in results.json, unreadable
+  // once dropped into a plain-text prompt or JSON string).
+  errorMessage: string | null;
+  errorLocation: string | null;
+};
+
+// eslint-disable-next-line no-control-regex
+const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
+
+// Playwright's JSON reporter nests specs inside an arbitrarily deep tree of
+// suites (describe blocks, project, file) — this just wants every leaf
+// spec's title + its test's final status, not the tree shape itself.
+function extractTestEntries(resultsJson: any, geo: string): ReviewTestEntry[] {
+  const out: ReviewTestEntry[] = [];
+  function walk(suite: any): void {
+    for (const spec of suite.specs ?? []) {
+      for (const test of spec.tests ?? []) {
+        const status = String(test.status ?? 'unknown');
+        let errorMessage: string | null = null;
+        let errorLocation: string | null = null;
+        if (status === 'unexpected' || status === 'flaky') {
+          // Walk attempts in reverse — the failure worth explaining is
+          // whichever attempt actually failed, not necessarily the last one
+          // in the array (a flaky test's final attempt passed with no error).
+          const results = Array.isArray(test.results) ? test.results : [];
+          for (let i = results.length - 1; i >= 0; i--) {
+            const r = results[i];
+            if (r?.error?.message) {
+              errorMessage = String(r.error.message).replace(ANSI_PATTERN, '').trim().slice(0, 500);
+              const loc = r.error.location;
+              if (loc?.file) {
+                errorLocation = `${String(loc.file).split(/[\\/]/).pop()}:${loc.line ?? '?'}`;
+              }
+              break;
+            }
+          }
+        }
+        out.push({ geo, title: spec.title, status, errorMessage, errorLocation });
+      }
+    }
+    for (const s of suite.suites ?? []) walk(s);
+  }
+  for (const s of resultsJson.suites ?? []) walk(s);
+  return out;
+}
+
+async function gatherRunReviewData(brand: string, dateStr: string): Promise<ReviewTestEntry[]> {
+  const brandDir = path.join(process.cwd(), 'Test Reports', brand);
+  if (!fs.existsSync(brandDir)) return [];
+  const geos = fs.readdirSync(brandDir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && !e.name.startsWith('_'))
+    .map(e => e.name);
+  const entries: ReviewTestEntry[] = [];
+  for (const geo of geos) {
+    const runFolder = findLatestRunFolder(brand, geo, dateStr);
+    if (!runFolder) continue;
+    const resultsPath = path.join(brandDir, geo, dateStr, runFolder, 'test-results', 'results.json');
+    if (!fs.existsSync(resultsPath)) continue;
+    try {
+      const json = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+      entries.push(...extractTestEntries(json, geo));
+    } catch {
+      // Unreadable/partial results.json (e.g. a run still in progress) — skip
+      // this GEO's contribution rather than failing the whole review.
+    }
+  }
+  return entries;
+}
+
+app.post('/review-run', async (req, res) => {
+  const brand = String(req.body?.brand ?? '');
+  const dateStr = String(req.body?.dateStr ?? '');
+  if (!isValidBrand(brand) || !isValidDateStr(dateStr)) {
+    res.status(400).json({ error: 'Invalid brand or date.' });
+    return;
+  }
+
+  const entries = await gatherRunReviewData(brand, dateStr);
+  if (entries.length === 0) {
+    res.json({ summary: `No test result data found for ${brand} on ${dateStr}.`, total: 0, geoBreakdown: [], failing: [], flaky: [] });
+    return;
+  }
+
+  // Playwright's JSON reporter uses 'expected'/'unexpected'/'flaky'/'skipped'
+  // on each test's own `status` field (the outcome relative to what was
+  // expected), NOT 'passed'/'failed'/'timedOut' — those only appear one
+  // level down, per-attempt, inside each test's own `results[]` array.
+  // Confirmed live against a real failing run (SNG AB 2026-09-28, 4 real
+  // failures) before trusting this — an earlier version of this filter
+  // checked for 'failed'/'timedOut'/'interrupted' here and would have
+  // silently never matched a single real failure.
+  const counts: Record<string, number> = {};
+  for (const e of entries) counts[e.status] = (counts[e.status] ?? 0) + 1;
+  const failing = entries.filter(e => e.status === 'unexpected');
+  const flaky = entries.filter(e => e.status === 'flaky');
+  const skipped = entries.filter(e => e.status === 'skipped');
+
+  // Per-GEO breakdown for the table the client renders under the AI
+  // headline — the AI summary alone doesn't give a per-market at-a-glance
+  // view the way a table does.
+  const geoOrder: string[] = [];
+  const geoTallies = new Map<string, { total: number; expected: number; unexpected: number; flaky: number; skipped: number }>();
+  for (const e of entries) {
+    if (!geoTallies.has(e.geo)) {
+      geoOrder.push(e.geo);
+      geoTallies.set(e.geo, { total: 0, expected: 0, unexpected: 0, flaky: 0, skipped: 0 });
+    }
+    const t = geoTallies.get(e.geo)!;
+    t.total += 1;
+    if (e.status === 'expected') t.expected += 1;
+    else if (e.status === 'unexpected') t.unexpected += 1;
+    else if (e.status === 'flaky') t.flaky += 1;
+    else if (e.status === 'skipped') t.skipped += 1;
+  }
+  const geoBreakdown = geoOrder.map(geo => ({ geo, ...geoTallies.get(geo)! }));
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    res.status(500).json({ error: 'ANTHROPIC_API_KEY is not set — add it to .env to use Review.' });
+    return;
+  }
+
+  const needsAttention = [...failing, ...flaky];
+
+  try {
+    const client = new Anthropic({ apiKey });
+    const prompt = `You are triaging a QA regression test run for the brand "${brand}", run on ${dateStr}.
+
+Result counts: ${JSON.stringify(counts)}
+Total checks: ${entries.length}
+
+Skipped checks (normal, expected exclusions — no action needed):
+${skipped.length ? skipped.map(f => `- [${f.geo}] ${f.title}`).join('\n') : '(none)'}
+
+${needsAttention.length === 0 ? 'There are no failing or flaky checks to classify.' : `For EACH of the following failing/flaky checks, decide whether it's more likely a REAL SITE ISSUE (a real problem with the actual website — broken content, missing page, wrong behavior, translation bug, etc.) or a SCRIPT ISSUE (a problem with the test code itself — wrong selector, timing/race condition, environment/VPN flakiness, outdated assumption about the page). Base this on the actual error message and source location given, not just the test name. Use "unclear" only when the error message genuinely gives no useful signal either way — it is not a safe default.
+
+${needsAttention.map((f, i) => `${i + 1}. [${f.geo}] ${f.title} (${f.status})
+   Error: ${f.errorMessage ?? '(no error message captured)'}
+   Location: ${f.errorLocation ?? '(unknown)'}`).join('\n\n')}`}
+
+Respond with ONLY a JSON object (no prose before or after it), in exactly this shape:
+{
+  "headline": "1-2 sentence plain-English overall health summary for a QA teammate, not a developer. State health plainly, don't manufacture concerns if everything's clean, don't downplay real failures.",
+  "verdicts": [
+    { "geo": "...", "title": "...", "classification": "likely_site_issue" | "likely_script_issue" | "unclear", "reasoning": "one short plain-English sentence, referencing the actual error" }
+  ]
+}
+"verdicts" must have exactly one entry per failing/flaky check listed above, in the same order, matching "geo" and "title" exactly. Omit "verdicts" entirely (or leave it an empty array) only if there were none to classify.`;
+
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const raw = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map(b => b.text)
+      .join('\n')
+      .trim();
+
+    // Same defensive-parse pattern as visual-compare.ts's own Claude calls —
+    // despite the "ONLY JSON" instruction, a stray prose prefix has been
+    // observed there too, so extract the outermost {...} rather than assume
+    // the whole response is bare JSON.
+    const jsonStart = raw.indexOf('{');
+    const jsonEnd = raw.lastIndexOf('}');
+    const jsonSlice = jsonStart !== -1 && jsonEnd > jsonStart ? raw.slice(jsonStart, jsonEnd + 1) : raw;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonSlice);
+    } catch {
+      // Model didn't return parseable JSON — fall back to showing its raw
+      // text as the headline rather than failing the whole review, but with
+      // no per-failure classification.
+      parsed = { headline: raw, verdicts: [] };
+    }
+
+    const summary = typeof parsed.headline === 'string' && parsed.headline.trim() ? parsed.headline.trim() : 'Review completed, but no summary text was returned.';
+    const rawVerdicts: any[] = Array.isArray(parsed.verdicts) ? parsed.verdicts : [];
+    const validClassifications = new Set(['likely_site_issue', 'likely_script_issue', 'unclear']);
+    const verdictFor = (geo: string, title: string) => {
+      const v = rawVerdicts.find(x => x?.geo === geo && x?.title === title);
+      if (!v) return { classification: 'unclear' as const, reasoning: 'No classification returned for this check.' };
+      return {
+        classification: validClassifications.has(v.classification) ? v.classification : 'unclear',
+        reasoning: typeof v.reasoning === 'string' && v.reasoning.trim() ? v.reasoning.trim() : '',
+      };
+    };
+
+    res.json({
+      summary,
+      counts,
+      total: entries.length,
+      geoBreakdown,
+      failing: failing.map(f => ({ geo: f.geo, title: f.title, errorMessage: f.errorMessage, ...verdictFor(f.geo, f.title) })),
+      flaky: flaky.map(f => ({ geo: f.geo, title: f.title, errorMessage: f.errorMessage, ...verdictFor(f.geo, f.title) })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: `Review failed: ${(err as Error).message}` });
+  }
+});
+
+function runNodeScript(scriptArgs: string[], extraEnv: Record<string, string> = {}): Promise<{ code: number; output: string }> {
+  return new Promise(resolve => {
+    const proc = spawn('node', scriptArgs, { cwd: process.cwd(), shell: true, env: { ...process.env, ...extraEnv } });
+    let output = '';
+    proc.stdout.on('data', chunk => { output += chunk.toString(); });
+    proc.stderr.on('data', chunk => { output += chunk.toString(); });
+    proc.on('close', code => resolve({ code: code ?? 1, output }));
+    proc.on('error', err => resolve({ code: 1, output: output + '\n' + err.message }));
+  });
+}
+
+app.post('/upload-to-netlify', async (req, res) => {
+  const brand = String(req.body?.brand ?? '');
+  const dateStr = String(req.body?.dateStr ?? '');
+  if (!isValidBrand(brand) || !isValidDateStr(dateStr)) {
+    res.status(400).json({ error: 'Invalid brand or date.' });
+    return;
+  }
+
+  const build = await runNodeScript(['dashboard/build-data.cjs']);
+  if (build.code !== 0) {
+    res.status(500).json({ error: 'dashboard/build-data.cjs failed.', output: build.output });
+    return;
+  }
+
+  const deploy = await runNodeScript(['deploy-dashboard.cjs'], { TEST_BRAND: brand, TEST_DATE: dateStr });
+  if (deploy.code !== 0) {
+    res.status(500).json({ error: 'deploy-dashboard.cjs failed.', output: deploy.output });
+    return;
+  }
+
+  // release-scope.json is a deliberately human-curated allowlist (see its
+  // own header comment) — this deliberately does NOT auto-add brand to it,
+  // even though the report files upload fine either way. Surface the gap
+  // instead of silently publishing a brand to the management-facing Brands
+  // table without a human decision.
+  let scopeNote: string | null = null;
+  try {
+    const scope = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'dashboard', 'release-scope.json'), 'utf8'));
+    if (!Array.isArray(scope.brands) || !scope.brands.includes(brand)) {
+      scopeNote = `${brand} isn't in dashboard/release-scope.json yet, so it won't show on the public Brands overview until someone adds it there.`;
+    }
+  } catch {
+    // Non-fatal — the upload itself already succeeded either way.
+  }
+
+  res.json({
+    success: true,
+    url: 'https://qa-automated-regression-results.netlify.app',
+    scopeNote,
+    output: deploy.output,
+  });
+});
 
 app.get('/run', (req, res) => {
   const brand = String(req.query.brand ?? '');

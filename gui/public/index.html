@@ -232,8 +232,24 @@
         <div class="results-body">
           <span id="status-detail" class="status-pill"></span>
           <span id="report-link" class="report-link"></span>
+          <button id="review-btn" class="action-btn" hidden>Review</button>
           <span id="excel-link" class="report-link"></span>
         </div>
+        <div id="review-output" class="review-output" hidden>
+          <p id="review-summary"></p>
+          <table id="review-table" class="review-table" hidden>
+            <thead>
+              <tr><th>GEO</th><th class="num">Total</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Flaky</th><th class="num">Skipped</th></tr>
+            </thead>
+            <tbody id="review-table-body"></tbody>
+          </table>
+          <div id="review-attention" class="review-attention" hidden></div>
+          <div class="review-actions">
+            <button id="upload-netlify-btn" class="action-btn action-btn-primary">Upload to Netlify</button>
+            <button id="review-cancel-btn" class="action-btn">Cancel</button>
+          </div>
+        </div>
+        <div id="upload-output" class="review-output" hidden></div>
       </section>
 
     </div>
