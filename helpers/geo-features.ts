@@ -705,7 +705,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       locale: 'en', uiLocalized: false, // confirmed live: <html lang="en">
       hasBlog: false, blogPath: null, // confirmed 404 pre-test via curl
       hasPromotionsPage: true, promotionsPath: 'promotions/', // confirmed live 200 via curl (real "bonus"/"promotion" copy found, though the page's own <title> tag is empty — a QA-environment quirk, not a missing page)
-      featuresPath: null, // confirmed 404 pre-test via curl
+      featuresPath: null, // RE-CONFIRMED 2026-09-29 via a real Playwright run (not just curl, per the lesson that this platform is Next.js/client-rendered): features-page.spec.ts timed out finding any nav link to /features/ at all — still genuinely absent, not a selector gap
       mobileAppPath: 'mobile-app/', // confirmed live 200 via curl, real title ("Mega Casino Alberta Mobile Casino Apps")
       bingoCardGeneratorPath: 'bingo-card-generator/', // unconfirmed — no such link exists for this brand family, skips cleanly if 404
       currencySymbol: '$', // CAD — confirmed via homepage bonus copy ("$10", "$500")
@@ -721,12 +721,12 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasLoginRegistration: true, // confirmed live via curl: header shows real "Login"/"Join"/"Register" text — widget exists and is safe to inspect (registration.spec.ts never submits, login-widget.spec.ts only ever uses a deliberately wrong username/password), same as SNG AB
       hasTestAccount: false, // no test account provided for this GEO this session — skip only login.spec.ts's real successful-login test, same as SNG AB (also has no working account per its own hasTestAccount:false)
       hasAccountModal: true, // unconfirmed via real click this session — cloned from the SNG AB precedent (LOG IN/JOIN can be unreliable, but a game tile's Play CTA reliably opens a real #account modal), verify on first real run
-      hasPaymentMethodsPage: false, // confirmed live via curl: BOTH 'payment-methods/' and 'payment-options/' 404 (real "Page not found" title), despite the footer's own nav link pointing to /payment-options/ — a real broken-link QA-environment gap, not a selector issue
+      hasPaymentMethodsPage: true, // CORRECTED 2026-09-29: re-tested live with a real Playwright run (payment-method-strip.spec.ts) rather than trusting the 2026-07-27 curl/real-browser 404 finding — /payment-options/ now renders 7 real payment-provider logos and the Visa/Mastercard deep link genuinely navigates to /payment-options/visa-mastercard/. MC's dev team appears to have fixed this page sometime in the ~2 months since the original check (pre-live QA environments change under us) — this is a real site improvement, not a test artifact.
       paymentMethodsPath: 'payment-options/', // confirmed live via real browser run 2026-07-27: footer-navigation.spec.ts's Payment Options step clicks a real footer link that genuinely navigates here (the click/navigation behavior is real even though the destination itself 404s — see hasPaymentMethodsPage above for the content gap)
       hasBlogDesktopSearch: false, // no blog for AB anyway (hasBlog: false) — set false for consistency
       hasBlogSearch: false, // no blog for AB anyway — set false for consistency
-      hasRegulationLogos: false, // confirmed live via curl: no <son-license-logos> element exists anywhere in the homepage HTML at all (0 occurrences) — a real QA-environment gap (this market hasn't gone live yet), not a shadow-DOM timing issue
-      hasHelpFaqAccordion: false, // confirmed live via curl: the Help page's 'accordion-button' class only appears inside a <style> block's CSS rule — no actual <button class="accordion-button"> element renders, meaning no real FAQ content is configured yet on this pre-launch QA site
+      hasRegulationLogos: true, // CORRECTED 2026-09-29: re-tested live with a real Playwright run (footer-regulations.spec.ts) rather than trusting the 2026-07-27 curl-only "0 occurrences" finding (curl can't execute JS, and this platform's regulation logos render inside a <son-license-logos> custom element's shadow DOM — exactly the class of false negative already seen elsewhere on this codebase, e.g. Slingo ROW's help accordion). 2 real logos now found (abigaming.ca, selfexclusion.ca), both redirect correctly.
+      hasHelpFaqAccordion: false, // RE-CONFIRMED 2026-09-29 via a real Playwright run (not just curl): help-page.spec.ts found zero button.accordion-button elements on either attempt — still genuinely no real FAQ content configured on this pre-launch QA site
       hasPromotionsIconInHeader: false, // confirmed live via curl: the promotions nav link (data-tk-value="promotions") uses the "MainMenu_" CSS prefix, the same sidebar/hamburger-menu class family already confirmed to live outside the header banner on MC ES — not the header's own "Nav_"/"Header_" prefix
     },
   },

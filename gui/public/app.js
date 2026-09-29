@@ -15,8 +15,22 @@ const resultsCardEl = document.getElementById('results-card');
 const statusDetailEl = document.getElementById('status-detail');
 const reportLinkEl = document.getElementById('report-link');
 const excelLinkEl = document.getElementById('excel-link');
+const reviewBtn = document.getElementById('review-btn');
+const uploadNetlifyBtn = document.getElementById('upload-netlify-btn');
+const reviewCancelBtn = document.getElementById('review-cancel-btn');
+const reviewOutputEl = document.getElementById('review-output');
+const reviewSummaryEl = document.getElementById('review-summary');
+const reviewTableEl = document.getElementById('review-table');
+const reviewTableBodyEl = document.getElementById('review-table-body');
+const reviewAttentionEl = document.getElementById('review-attention');
+const uploadOutputEl = document.getElementById('upload-output');
 
 let geosByBrand = {};
+// Captured from the 'all-done' SSE event — the run session itself is
+// deleted server-side right after that event fires, so this is the only
+// place Review/Upload-to-Netlify can still get brand/date from afterward.
+let lastRunBrand = null;
+let lastRunDateStr = null;
 
 // ── Desktop alerts (real run finished, or combined run paused for a VPN
 // switch) ─────────────────────────────────────────────────────────────
@@ -835,6 +849,11 @@ runBtn.addEventListener('click', () => {
   resultsCardEl.classList.remove('visible');
   reportLinkEl.textContent = '';
   excelLinkEl.textContent = '';
+  reviewBtn.hidden = true;
+  resetReviewPanel();
+  uploadOutputEl.hidden = true;
+  lastRunBrand = null;
+  lastRunDateStr = null;
 
   const params = new URLSearchParams({
     brand,
@@ -936,6 +955,19 @@ runBtn.addEventListener('click', () => {
       endRun(label, allPassed ? 'passed' : 'failed');
       notify('Test run finished', `${runSteps.map(s => s.geo).join(', ')} — ${label}`);
 
+      lastRunBrand = data.brand ?? null;
+      lastRunDateStr = data.dateStr ?? null;
+      // Upload only ever appears after a completed Review (see reviewBtn's
+      // own handler) — Review is the only button shown right after a run.
+      resetReviewPanel();
+      uploadOutputEl.hidden = true;
+      uploadOutputEl.textContent = '';
+      uploadOutputEl.classList.remove('error');
+      const canReview = Boolean(lastRunBrand && lastRunDateStr);
+      reviewBtn.hidden = !canReview;
+      reviewBtn.disabled = false;
+      reviewBtn.textContent = 'Review';
+
       if (data.mergedReportUrl) {
         const a = document.createElement('a');
         a.href = data.mergedReportUrl;
@@ -1004,6 +1036,162 @@ stopBtn.addEventListener('click', () => {
   stopBtn.disabled = true;
   if (!runSessionId) return;
   fetch(`/run/${runSessionId}/stop`, { method: 'POST' }).catch(() => {});
+});
+
+// Upload to Netlify and Cancel only ever exist inside the Review output —
+// there's nothing to upload until Review has actually run, and Cancel backs
+// all the way out of that decision, not just this one panel.
+function resetReviewPanel() {
+  reviewOutputEl.hidden = true;
+  reviewOutputEl.classList.remove('error');
+  reviewSummaryEl.textContent = '';
+  reviewTableEl.hidden = true;
+  reviewTableBodyEl.innerHTML = '';
+  reviewAttentionEl.hidden = true;
+  reviewAttentionEl.innerHTML = '';
+}
+
+reviewBtn.addEventListener('click', async () => {
+  if (!lastRunBrand || !lastRunDateStr) return;
+  reviewBtn.disabled = true;
+  reviewBtn.textContent = 'Reviewing…';
+  resetReviewPanel();
+  try {
+    const res = await fetch('/review-run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brand: lastRunBrand, dateStr: lastRunDateStr }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      reviewSummaryEl.textContent = data.error ?? 'Review failed.';
+      reviewOutputEl.classList.add('error');
+      reviewOutputEl.hidden = false;
+      return;
+    }
+
+    reviewSummaryEl.textContent = data.summary;
+
+    if (Array.isArray(data.geoBreakdown) && data.geoBreakdown.length > 0) {
+      for (const row of data.geoBreakdown) {
+        const tr = document.createElement('tr');
+        const cell = (text, numeric, isBad) => {
+          const td = document.createElement('td');
+          td.textContent = String(text);
+          if (numeric) td.classList.add('num');
+          if (isBad) td.classList.add('has-failures');
+          return td;
+        };
+        tr.appendChild(cell(row.geo, false, false));
+        tr.appendChild(cell(row.total, true, false));
+        tr.appendChild(cell(row.expected, true, false));
+        tr.appendChild(cell(row.unexpected, true, row.unexpected > 0));
+        tr.appendChild(cell(row.flaky, true, false));
+        tr.appendChild(cell(row.skipped, true, false));
+        reviewTableBodyEl.appendChild(tr);
+      }
+      reviewTableEl.hidden = false;
+    }
+
+    const failing = Array.isArray(data.failing) ? data.failing : [];
+    const flaky = Array.isArray(data.flaky) ? data.flaky : [];
+    if (failing.length > 0 || flaky.length > 0) {
+      reviewAttentionEl.innerHTML = '';
+      const heading = document.createElement('strong');
+      heading.textContent = 'Needs attention:';
+      reviewAttentionEl.appendChild(heading);
+      const note = document.createElement('p');
+      note.className = 'review-attention-note';
+      note.textContent = 'Site/script classification is an AI best-effort guess based on the error message — spot-check before treating it as final, especially for anything going into a tracker or Status field.';
+      reviewAttentionEl.appendChild(note);
+      const ul = document.createElement('ul');
+      const addItem = (f, kind) => {
+        const li = document.createElement('li');
+        const badge = document.createElement('span');
+        badge.className = `classification-badge classification-${f.classification ?? 'unclear'}`;
+        badge.textContent = f.classification === 'likely_site_issue' ? 'Likely site issue'
+          : f.classification === 'likely_script_issue' ? 'Likely script issue'
+          : 'Unclear';
+        const label = document.createElement('span');
+        label.textContent = `[${f.geo}] ${f.title} — ${kind}`;
+        li.appendChild(badge);
+        li.appendChild(label);
+        if (f.reasoning) {
+          const reasoning = document.createElement('div');
+          reasoning.className = 'review-reasoning';
+          reasoning.textContent = f.reasoning;
+          li.appendChild(reasoning);
+        }
+        ul.appendChild(li);
+      };
+      for (const f of failing) addItem(f, 'failed');
+      for (const f of flaky) addItem(f, 'flaky');
+      reviewAttentionEl.appendChild(ul);
+      reviewAttentionEl.hidden = false;
+    }
+
+    reviewOutputEl.hidden = false;
+  } catch (e) {
+    reviewSummaryEl.textContent = `Could not reach the server: ${e}`;
+    reviewOutputEl.classList.add('error');
+    reviewOutputEl.hidden = false;
+  } finally {
+    reviewBtn.disabled = false;
+    reviewBtn.textContent = 'Review';
+  }
+});
+
+uploadNetlifyBtn.addEventListener('click', async () => {
+  if (!lastRunBrand || !lastRunDateStr) return;
+  uploadNetlifyBtn.disabled = true;
+  uploadNetlifyBtn.textContent = 'Uploading…';
+  uploadOutputEl.hidden = true;
+  uploadOutputEl.classList.remove('error');
+  try {
+    const res = await fetch('/upload-to-netlify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brand: lastRunBrand, dateStr: lastRunDateStr }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      uploadOutputEl.textContent = data.error ?? 'Upload failed.';
+      uploadOutputEl.classList.add('error');
+    } else {
+      uploadOutputEl.innerHTML = '';
+      const label = document.createElement('p');
+      label.textContent = 'Uploaded successfully.';
+      uploadOutputEl.appendChild(label);
+      const link = document.createElement('a');
+      link.href = data.url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.className = 'action-btn action-btn-primary';
+      link.textContent = 'Open on Netlify';
+      uploadOutputEl.appendChild(link);
+      if (data.scopeNote) {
+        const note = document.createElement('p');
+        note.className = 'review-attention-note';
+        note.textContent = data.scopeNote;
+        uploadOutputEl.appendChild(note);
+      }
+    }
+    uploadOutputEl.hidden = false;
+  } catch (e) {
+    uploadOutputEl.textContent = `Could not reach the server: ${e}`;
+    uploadOutputEl.classList.add('error');
+    uploadOutputEl.hidden = false;
+  } finally {
+    uploadNetlifyBtn.disabled = false;
+    uploadNetlifyBtn.textContent = 'Upload to Netlify';
+  }
+});
+
+// Cancel backs all the way out — Reeve's own call was that this should
+// reset the whole page, not just collapse the Review panel, so the next
+// action starts from a genuinely clean slate rather than a half-reset UI.
+reviewCancelBtn.addEventListener('click', () => {
+  location.reload();
 });
 
 // ── Visual Check sub-tabs (Compare / Investigate) ────────────────────────

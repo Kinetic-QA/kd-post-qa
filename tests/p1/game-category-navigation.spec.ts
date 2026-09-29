@@ -292,6 +292,26 @@ test.describe('P1 - Game Category Navigation', () => {
     const isLpEsFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'LP'
       && test.info().project.name.replace(/-mobile$/, '') === 'ES';
 
+    // Mega Casino (MC) — CONFIRMED LIVE 2026-09-29 on AB via a real
+    // server-rendered homepage fetch: this brand was NEVER covered by this
+    // spec at all (no isMcFormat branch existed anywhere below), so every
+    // MC market's header nav check was silently skipping all 17 hardcoded
+    // Slingo/SC/SNG steps (none of their hrefs — /slots/, /casino/,
+    // /casino/roulette/, etc. — exist on MC) and reporting a false "Pass"
+    // via the skip path, not a real verified navigation check. MC's actual
+    // header nav (`Nav_nav___GogH`) has exactly 3 real categories (Home
+    // excluded): the visible label doesn't always match its own href —
+    // "Casino" routes to /live-casino/, "Slots" to /online-slots/, "Games"
+    // to /casino-games/. Same trio already confirmed consistent across
+    // MC's other markets (UK/COM/CA/IE/FR-CA/DK — see geo-features.ts's
+    // gameTileHrefSubstrings on each), so this branch is brand-wide rather
+    // than AB-only, but only actually verified live against AB so far —
+    // re-confirm before trusting it on another MC GEO for the first time.
+    // No Roulette/Blackjack sub-tabs exist in this header nav on AB at all
+    // (confirmed live) — those only live in the mobile hamburger sidebar,
+    // which sidebar-navigation.spec.ts already covers separately.
+    const isMcFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'MC';
+
     async function clickSidebarSubCategoryAndVerify(categoryClass: string, hrefPart: string, label: string) {
       await page.evaluate(() => (document.querySelector('[class*="hamburger" i], #menu-X') as HTMLElement | null)?.click());
       await page.waitForTimeout(600);
@@ -480,6 +500,84 @@ test.describe('P1 - Game Category Navigation', () => {
       });
 
       // No Poker/Scratch Cards sub-items on ES (confirmed live — UK has both, ES has Video Bingo instead).
+    }
+
+    // MC's sub-category tabs (Megaways, Jackpots, Roulette, etc.) live in a
+    // SEPARATE nav wrapper from the top-level bar — confirmed live via a
+    // real server-rendered fetch of each category page: `Nav_sub-nav__CRsFV`,
+    // not `Nav_nav___GogH` (the `NAV` constant clickNavAndVerify is scoped
+    // to). They only render once you're already on a parent category page
+    // (same "stays visible, no need to re-navigate" pattern as SC/SNG's own
+    // sub-tabs), each with an "All" link back to the parent plus its real
+    // sub-tabs — all flat top-level hrefs (e.g. /megaways/, /roulette/), not
+    // nested under their parent's path.
+    async function clickMcSubNavAndVerify(hrefPart: string, label: string) {
+      const expectedUrl = siteUrl(hrefPart);
+      const link = page.locator('[class*="Nav_sub-nav__"]').locator(`a[href$="${hrefPart}"]`).filter({ visible: true }).first();
+      const exists = await link.isVisible({ timeout: 3_000 }).catch(() => false);
+      if (!exists) {
+        results.push({ label: `${label} (skipped — not offered for this GEO)`, status: 'Pass' });
+        console.log('SKIP | ' + label + ' | link not found for this GEO');
+        return;
+      }
+      await link.evaluate((el: HTMLElement) => el.click());
+      await page.waitForLoadState('domcontentloaded');
+      await dismissCampaignPopup(page);
+      const redirected = await page.waitForURL(url => url.toString() === expectedUrl || url.toString().startsWith(expectedUrl), { timeout: 12_000 }).then(() => true).catch(() => false);
+      const actualUrl = page.url();
+      const passed = redirected || actualUrl === expectedUrl || actualUrl.startsWith(expectedUrl);
+      results.push({ label, status: passed ? 'Pass' : 'Fail' });
+      console.log((passed ? 'PASS' : 'FAIL') + ' | ' + label + ' | ' + actualUrl);
+      await expect.soft(page).toHaveURL(expectedUrl, { timeout: 12_000 });
+    }
+
+    if (isMcFormat) {
+      // Visible label and real href diverge here — checking by href (not
+      // label text) via clickNavAndVerify, same as every other branch above.
+      await test.step('Slots category (Online Slots) → /online-slots/', async () => {
+        await clickNavAndVerify('/online-slots/', 'Online Slots');
+      });
+      await test.step('Online Slots > Megaways → /megaways/', async () => {
+        await clickMcSubNavAndVerify('/megaways/', 'Megaways');
+      });
+      await test.step('Online Slots > Jackpots → /jackpots/', async () => {
+        await clickMcSubNavAndVerify('/jackpots/', 'Jackpots');
+      });
+      await test.step('Online Slots > Daily Jackpots → /daily-jackpots/', async () => {
+        await clickMcSubNavAndVerify('/daily-jackpots/', 'Daily Jackpots');
+      });
+      await test.step('Online Slots > Jackpot King → /jackpot-king/', async () => {
+        await clickMcSubNavAndVerify('/jackpot-king/', 'Jackpot King');
+      });
+      await test.step('Online Slots > New Slots → /new/', async () => {
+        await clickMcSubNavAndVerify('/new/', 'New Slots');
+      });
+
+      await test.step('Casino category (Live Casino) → /live-casino/', async () => {
+        await clickNavAndVerify('/live-casino/', 'Live Casino');
+      });
+      await test.step('Live Casino > Blackjack → /blackjack/', async () => {
+        await clickMcSubNavAndVerify('/blackjack/', 'Blackjack');
+      });
+      await test.step('Live Casino > Roulette → /roulette/', async () => {
+        await clickMcSubNavAndVerify('/roulette/', 'Roulette');
+      });
+      await test.step('Live Casino > Baccarat → /baccarat/', async () => {
+        await clickMcSubNavAndVerify('/baccarat/', 'Baccarat');
+      });
+      await test.step('Live Casino > Game Shows → /game-shows/', async () => {
+        await clickMcSubNavAndVerify('/game-shows/', 'Game Shows');
+      });
+
+      await test.step('Games category (Casino Games) → /casino-games/', async () => {
+        await clickNavAndVerify('/casino-games/', 'Casino Games');
+      });
+      await test.step('Casino Games > Scratch Cards → /scratch-cards/', async () => {
+        await clickMcSubNavAndVerify('/scratch-cards/', 'Scratch Cards');
+      });
+      await test.step('Casino Games > Video Poker → /video-poker/', async () => {
+        await clickMcSubNavAndVerify('/video-poker/', 'Video Poker');
+      });
     }
 
     // ── Prime Slots (PSL) UK — brand-new brand, onboarded 2026-07-30 ──────

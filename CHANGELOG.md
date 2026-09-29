@@ -9,6 +9,24 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-09-29
+
+### Fixed
+
+- **Mega Casino's Alberta market couldn't complete registration at all.** The sign-up form needed the same special handling already built for Spin Genie's Alberta market (forcing the country to Canada, using Alberta's address and consent-form shape), but that handling had never been extended to cover Mega Casino too — so every sign-up attempt failed. Both brands now share the same working sign-up flow.
+- **The mobile version of that same Alberta sign-up also got stuck on the last screen**, because our check was waiting on a page label that Mega Casino's site currently shows as raw unreadable placeholder text (a real translation gap on Mega Casino's own site, reported separately) instead of real wording. The check now watches for something that always renders correctly instead, so it no longer gets stuck waiting on broken wording that isn't ours to fix.
+- **Category navigation checks (Slots, Casino, Games, and all their sub-menus like Roulette, Blackjack, Jackpots) were silently doing nothing at all for every Mega Casino market**, not just Alberta — they were built only for other brands' menu layouts and always reported a false "all clear" instead of actually checking anything. Mega Casino's real menu structure is now checked properly across the board.
+- **Mega Casino's Alberta results weren't showing up on the public results website** because Mega Casino had never been added to the list of brands allowed to appear there. Added.
+- Confirmed two previously-flagged gaps on Mega Casino's Alberta site (missing licensing logos, missing payment page) have since been fixed on the live site — updated our tracking to match instead of continuing to flag them.
+
+### Added
+
+- **New "Review" and "Upload to Netlify" buttons** on the results screen after a test run finishes, so reviewing results and publishing them to the shared results website no longer requires asking Claude to do it by hand. Clicking "Review" shows a plain-English summary, a pass/fail breakdown table by market, and — for anything that failed or was inconsistent — a best-effort AI guess at whether it looks like a real site problem or a test-script problem, with the reasoning shown alongside it (clearly labeled as a starting point to double check, not a final answer). "Upload to Netlify" and "Cancel" only appear after reviewing, and "Cancel" resets the screen completely.
+
+### Changed
+
+- The "Uploaded to Netlify" confirmation after a successful upload now shows a proper clickable button to open the results site, instead of just printing the web address as plain text.
+
 ## [Unreleased] - 2026-09-28
 
 ### Fixed

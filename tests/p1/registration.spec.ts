@@ -97,7 +97,21 @@ test.describe('Registration Flow', () => {
     // Brand read directly from process.env.TEST_BRAND, same as
     // helpers/geo-features.ts/test-credentials.ts — safe here because brand
     // (unlike GEO) is fixed for the whole process, not per-project.
-    const isAlbertaFormat = (process.env.TEST_BRAND ?? 'SC').toUpperCase() === 'SNG'
+    // CONFIRMED LIVE 2026-09-29: MC/AB shares this exact form shape with
+    // SNG/AB (same underlying SkillOnNet pre-live AB environment — MC's own
+    // AB config block was explicitly modeled on SNG AB's per an earlier
+    // session's onboarding notes), but this flag was left scoped to SNG only
+    // when MC/AB was onboarded, so REG-01 always fell through to the plain
+    // default path here: no explicit "Canada" country-code selection (so
+    // the dropdown kept whatever country the tester's real VPN/IP resolved
+    // to — Cyprus/+357 for this pre-live market — instead of Canada/+1) and
+    // no Alberta-shaped address/consent-checkbox handling. Real run
+    // confirmed "Invalid phone number" looping every retry until the whole
+    // test timed out. Widened to both brands rather than adding a
+    // brand-specific isMcAbFormat, since every downstream AB-shaped helper
+    // (fillStep2AB, fillMobileStep3AddressAB, etc.) already takes no
+    // brand-specific behavior — the shape is GEO-driven, not brand-driven.
+    const isAlbertaFormat = ['SNG', 'MC'].includes((process.env.TEST_BRAND ?? 'SC').toUpperCase())
       && test.info().project.name.replace(/-mobile$/, '') === 'AB';
     // SNG ON — confirmed live 2026-07-21: real Ontario-regulated market.
     // Step 0 (mobile+DOB) and Step 1 (name/gender/email) match CA's shape
@@ -2687,19 +2701,23 @@ async function fillMobileStep4CredentialsAB(page: Page, scope: Scope, data: Regi
   const continueBtn = scope.getByRole('button', { name: 'Continue' }).first();
   await expect(continueBtn).toBeEnabled({ timeout: 10_000 });
   await continueBtn.click({ force: true });
-  // Wait for the PEP declaration TEXT, not the #isPepConsent checkbox itself
-  // — confirmed live: that checkbox is deliberately hidden via a "hidden"
-  // CSS class (its visible representation is this text label a user
-  // actually clicks, same shadow-DOM/hidden-checkbox pattern
-  // fillMobileStep5Final already handles for UK's checkboxes), and it's
-  // already attached to the DOM even before Continue is clicked, so
-  // checking mere attachment wouldn't reliably confirm we've advanced.
-  const pepText = scope.getByText(/Politically Exposed Person/i).first();
-  const advanced = await pepText.waitFor({ state: 'visible', timeout: 4_000 }).then(() => true).catch(() => false);
+  // FIXED 2026-09-29: this used to wait for the PEP declaration TEXT
+  // ("Politically Exposed Person") as its "did Step 5 actually load" signal
+  // — confirmed live that text is broken on MC AB (renders as the raw
+  // untranslated key "labels.reg.pep.ab.consent" instead of real copy), so
+  // that wait always timed out even though the page had genuinely advanced.
+  // The step-count heading ("STEP 5 OF 6") is real, working text on both
+  // MC and SNG AB, so it's a translation-proof signal instead. Kept the
+  // original single-retry-click pattern (a bare first click can silently
+  // not register under load, confirmed elsewhere in this file, e.g. ES's
+  // Continuar retry) rather than dropping it, since removing it caused this
+  // step to intermittently never advance at all.
+  const step5Heading = scope.getByText(/step 5 of/i).first();
+  const advanced = await step5Heading.waitFor({ state: 'visible', timeout: 4_000 }).then(() => true).catch(() => false);
   if (!advanced) {
     await page.waitForTimeout(1_000);
     await continueBtn.click({ force: true });
-    await pepText.waitFor({ state: 'visible', timeout: 15_000 });
+    await step5Heading.waitFor({ state: 'visible', timeout: 15_000 });
   }
   console.log('REG-01 (AB mobile) Step 4/6 complete');
 }
@@ -2715,6 +2733,11 @@ async function fillMobileStep4CredentialsAB(page: Page, scope: Scope, data: Regi
  */
 async function fillMobileStep5FinalAB(page: Page, scope: Scope): Promise<void> {
   console.log('REG-01 (AB mobile) Step 5/6 consents');
+  // CONFIRMED LIVE 2026-09-29 on MC AB: this screen actually has 7 checkboxes
+  // (over_18, gdpr, terms_accept, playerDeclaration, dataAccuracy, fitToPlay,
+  // isPepConsent), 3 more than the 4 this list checks — but checking just
+  // these 4 is still sufficient to enable GO PLAY (confirmed: the extra 3
+  // aren't gating). Same 4 ids as SNG AB's own consent set.
   await fillMobileStep5Final(page, scope, ['isPepConsent', 'gdpr', 'terms_accept', 'playerDeclaration'], true);
   console.log('REG-01 (AB mobile) Step 5/6 complete');
 }
@@ -2741,49 +2764,58 @@ async function fillMobileStep5Final(
     await page.waitForTimeout(300);
   }
 
-  for (const id of checkboxIds) {
-    try {
-      const label = page.locator(`label[for="${id}"]`).first();
-      if (await label.isVisible({ timeout: 3_000 }).catch(() => false)) {
-        await label.click({ position: { x: 5, y: 10 } });
-        await page.waitForTimeout(500);
-      } else {
-        await page.evaluate((cbId) => {
-          function findInShadow(root: ShadowRoot | Document): HTMLElement | null {
-            const el = root.querySelector(`#${cbId}`) as HTMLElement;
-            if (el) return el;
-            for (const node of Array.from(root.querySelectorAll('*'))) {
-              if ((node as Element).shadowRoot) {
-                const found = findInShadow((node as Element).shadowRoot!);
-                if (found) return found;
-              }
-            }
-            return null;
-          }
-          const cb = findInShadow(document);
-          cb?.click();
-        }, id);
-        await page.waitForTimeout(500);
-      }
-    } catch { /* try next checkbox */ }
-  }
-
-  for (const id of checkboxIds) {
-    const checked = await page.evaluate((cbId) => {
-      function findInShadow(root: ShadowRoot | Document): HTMLInputElement | null {
-        const el = root.querySelector(`#${cbId}`) as HTMLInputElement;
-        if (el) return el;
-        for (const node of Array.from(root.querySelectorAll('*'))) {
-          if ((node as Element).shadowRoot) {
-            const found = findInShadow((node as Element).shadowRoot!);
-            if (found) return found;
-          }
+  const isCheckedInPage = (cbId: string) => page.evaluate((id) => {
+    function findInShadow(root: ShadowRoot | Document): HTMLInputElement | null {
+      const el = root.querySelector(`#${id}`) as HTMLInputElement;
+      if (el) return el;
+      for (const node of Array.from(root.querySelectorAll('*'))) {
+        if ((node as Element).shadowRoot) {
+          const found = findInShadow((node as Element).shadowRoot!);
+          if (found) return found;
         }
-        return null;
       }
-      return findInShadow(document)?.checked ?? false;
-    }, id);
-    if (!checked) throw new Error(`REG-01 (mobile): consent checkbox "${id}" did not get checked`);
+      return null;
+    }
+    return findInShadow(document)?.checked ?? false;
+  }, cbId);
+
+  // FIXED 2026-09-29: this used to click every checkbox once, THEN verify
+  // all of them in a separate pass — confirmed live on MC AB this is flaky
+  // for whichever checkbox happens to render/hydrate slightly later than
+  // the others (intermittently failed on "isPepConsent" specifically across
+  // otherwise-identical runs). Each checkbox now retries its own click until
+  // ITS OWN checked state is confirmed, instead of a single blind click
+  // followed by a single check with no chance to recover.
+  for (const id of checkboxIds) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (await isCheckedInPage(id).catch(() => false)) break;
+      try {
+        const label = page.locator(`label[for="${id}"]`).first();
+        if (await label.isVisible({ timeout: 3_000 }).catch(() => false)) {
+          await label.click({ position: { x: 5, y: 10 } });
+        } else {
+          await page.evaluate((cbId) => {
+            function findInShadow(root: ShadowRoot | Document): HTMLElement | null {
+              const el = root.querySelector(`#${cbId}`) as HTMLElement;
+              if (el) return el;
+              for (const node of Array.from(root.querySelectorAll('*'))) {
+                if ((node as Element).shadowRoot) {
+                  const found = findInShadow((node as Element).shadowRoot!);
+                  if (found) return found;
+                }
+              }
+              return null;
+            }
+            const cb = findInShadow(document);
+            cb?.click();
+          }, id);
+        }
+      } catch { /* retry */ }
+      await page.waitForTimeout(600);
+    }
+    if (!(await isCheckedInPage(id).catch(() => false))) {
+      throw new Error(`REG-01 (mobile): consent checkbox "${id}" did not get checked`);
+    }
   }
 
   console.log('REG-01 (mobile) Step 5/5 complete');
