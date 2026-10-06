@@ -134,6 +134,7 @@ async function scanRunReports() {
                   testName: row.testName,
                   status: row.status,
                   reportUrl: reportUrlFor(brand.name, dateEntry.name, geo.name),
+                  runTime,
                 });
               }
             });
@@ -159,9 +160,29 @@ async function scanRunReports() {
   reports.push(...combined.reports);
   tests.push(...combined.tests);
 
+  return keepFullRunPerGeoDay(reports, tests);
+}
+
+// Several runs of the same brand+GEO on the same day (e.g. a one-spec re-run
+// after the full run) were all being added together, inflating the totals and
+// the pass rate (confirmed live: SNG AB 2026-09-28 = full 54-test run + a
+// 1-test "feedback form" re-run, shown as 55). Only the fullest run of each
+// brand+GEO+day counts — most tests executed, newest wins a tie — and its
+// tests are kept with it; the smaller re-runs are dropped from the snapshot.
+function keepFullRunPerGeoDay(reports, tests) {
+  const keyOf = r => `${r.brand}|${r.geo}|${r.date}`;
+  const winners = new Map();
+  for (const r of reports) {
+    const cur = winners.get(keyOf(r));
+    if (!cur || r.total > cur.total || (r.total === cur.total && r.runTime > cur.runTime)) winners.set(keyOf(r), r);
+  }
+  const keptReports = reports.filter(r => winners.get(keyOf(r)) === r);
+  const keptTests = tests
+    .filter(t => winners.get(keyOf(t)).runTime === t.runTime)
+    .map(({ runTime, ...rest }) => rest);
   return {
-    reports: reports.sort((a, b) => b.date.localeCompare(a.date)),
-    tests: tests.sort((a, b) => b.date.localeCompare(a.date)),
+    reports: keptReports.sort((a, b) => b.date.localeCompare(a.date)),
+    tests: keptTests.sort((a, b) => b.date.localeCompare(a.date)),
   };
 }
 
@@ -206,7 +227,7 @@ async function scanCombinedReports() {
 
         for (const row of extractTestRows(sheet)) {
           agg.specs.add(row.spec);
-          tests.push({ date, brand, geo, spec: row.spec, testName: row.testName, status: row.status, reportUrl: reportUrlFor(brand, date, geo) });
+          tests.push({ date, brand, geo, spec: row.spec, testName: row.testName, status: row.status, reportUrl: reportUrlFor(brand, date, geo), runTime });
         }
       });
 
