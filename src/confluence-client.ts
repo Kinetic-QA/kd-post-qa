@@ -23,8 +23,17 @@ interface ChildrenCacheEntry {
   fetchedAt: number;
 }
 const childrenCache = new Map<string, ChildrenCacheEntry>();
+const versionCache = new Map<string, { version: ConfluencePageVersion; fetchedAt: number }>();
 
 const MAX_CHARS = 8000;
+// The cache keeps the whole page (up to this cap) and each caller's own size
+// limit is applied when it READS — so one caller asking for a long page never
+// leaves a truncated copy behind for another.
+const HARD_MAX_CHARS = 80000;
+
+function clip(text: string, maxChars: number): string {
+  return text.length > maxChars ? text.slice(0, maxChars) + '\n\n[...truncated...]' : text;
+}
 
 // Confluence's "storage" format is XHTML-ish. This is a lightweight
 // stripper, not a full parser — good enough to hand readable text to an AI
@@ -55,14 +64,14 @@ function storageHtmlToText(html: string): string {
  * redeploy needed. On any fetch error, serves the last good cached copy if
  * one exists, otherwise returns null.
  */
-export async function getConfluencePageText(pageId: string, ttlMs = 10 * 60 * 1000): Promise<string | null> {
+export async function getConfluencePageText(pageId: string, ttlMs = 10 * 60 * 1000, maxChars = MAX_CHARS): Promise<string | null> {
   const cached = cache.get(pageId);
-  if (cached && Date.now() - cached.fetchedAt < ttlMs) return cached.text;
+  if (cached && Date.now() - cached.fetchedAt < ttlMs) return clip(cached.text, maxChars);
 
   const email = process.env.JIRA_EMAIL;
   const token = process.env.JIRA_API_TOKEN;
   const baseUrl = process.env.JIRA_BASE_URL?.replace(/\/$/, '');
-  if (!email || !token || !baseUrl) return cached?.text ?? null;
+  if (!email || !token || !baseUrl) return cached ? clip(cached.text, maxChars) : null;
 
   try {
     const res = await axios.get(`${baseUrl}/wiki/rest/api/content/${pageId}`, {
@@ -72,16 +81,13 @@ export async function getConfluencePageText(pageId: string, ttlMs = 10 * 60 * 10
       timeout: 8000,
     });
     const storage = res.data?.body?.storage?.value ?? '';
-    let text = storageHtmlToText(storage);
-    if (text.length > MAX_CHARS) {
-      text = text.slice(0, MAX_CHARS) + '\n\n[...truncated...]';
-    }
+    const text = storageHtmlToText(storage).slice(0, HARD_MAX_CHARS);
     cache.set(pageId, { text, fetchedAt: Date.now() });
-    return text;
+    return clip(text, maxChars);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[Confluence] Could not fetch page ${pageId} (serving ${cached ? 'stale cache' : 'nothing'}): ${msg}`);
-    return cached?.text ?? null;
+    return cached ? clip(cached.text, maxChars) : null;
   }
 }
 
@@ -118,5 +124,46 @@ export async function getConfluencePageChildren(pageId: string, ttlMs = 10 * 60 
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[Confluence] Could not fetch children of page ${pageId} (serving ${cached ? 'stale cache' : 'nothing'}): ${msg}`);
     return cached?.children ?? [];
+  }
+}
+
+export interface ConfluencePageVersion {
+  number: number;
+  when: string;
+  by: string;
+}
+
+/**
+ * A page's current version number + when/who last saved it — no body, so it's
+ * a tiny request. Used to notice when a page that some code was written
+ * against has since been edited. Short cache (a minute) because the whole
+ * point is catching a recent edit; fail-soft like the other readers: null on
+ * any error, never throws.
+ */
+export async function getConfluencePageVersion(pageId: string, ttlMs = 60 * 1000): Promise<ConfluencePageVersion | null> {
+  const cached = versionCache.get(pageId);
+  if (cached && Date.now() - cached.fetchedAt < ttlMs) return cached.version;
+
+  const email = process.env.JIRA_EMAIL;
+  const token = process.env.JIRA_API_TOKEN;
+  const baseUrl = process.env.JIRA_BASE_URL?.replace(/\/$/, '');
+  if (!email || !token || !baseUrl) return cached?.version ?? null;
+
+  try {
+    const res = await axios.get(`${baseUrl}/wiki/rest/api/content/${pageId}`, {
+      params: { expand: 'version' },
+      auth: { username: email, password: token },
+      headers: { Accept: 'application/json' },
+      timeout: 8000,
+    });
+    const v = res.data?.version;
+    if (typeof v?.number !== 'number') return cached?.version ?? null;
+    const version: ConfluencePageVersion = { number: v.number, when: String(v.when ?? ''), by: String(v.by?.displayName ?? '') };
+    versionCache.set(pageId, { version, fetchedAt: Date.now() });
+    return version;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[Confluence] Could not read version of page ${pageId}: ${msg}`);
+    return cached?.version ?? null;
   }
 }

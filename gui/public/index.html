@@ -243,13 +243,26 @@
             </thead>
             <tbody id="review-table-body"></tbody>
           </table>
-          <div id="review-attention" class="review-attention" hidden></div>
           <div class="review-actions">
             <button id="upload-netlify-btn" class="action-btn action-btn-primary">Upload to Netlify</button>
             <button id="review-cancel-btn" class="action-btn">Cancel</button>
           </div>
         </div>
         <div id="upload-output" class="review-output" hidden></div>
+      </section>
+
+      <section id="triage-card" class="card triage-card">
+        <div class="card-header">
+          <span class="icon">&#129657;</span>
+          <h2>Triage</h2>
+        </div>
+        <p id="triage-note" class="triage-note"></p>
+        <table id="triage-table" class="review-table triage-table" hidden>
+          <thead>
+            <tr><th>Where</th><th>Test</th><th>Result</th><th>What happened</th><th>Review</th><th>Outcome</th></tr>
+          </thead>
+          <tbody id="triage-table-body"></tbody>
+        </table>
       </section>
 
     </div>
@@ -515,6 +528,52 @@
     </div>
 
   </div>
+  <!-- Create JIRA ticket popup (proof of concept: drafts + validates, dry run only) -->
+  <div id="jira-modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="jira-modal-title">
+      <div class="modal-header">
+        <h2 id="jira-modal-title">Create issue</h2>
+        <button id="jira-modal-close" class="modal-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="jira-modal-loading" class="modal-loading">Drafting the ticket from the failure and the QA standards&hellip; this takes about 15 seconds.</p>
+        <div id="jira-modal-error" class="review-output error" hidden></div>
+        <form id="jira-modal-form" hidden autocomplete="off">
+          <div class="jira-meta">
+            <div class="jira-meta-item"><span class="jira-meta-label">Space</span><span id="jira-space"></span></div>
+            <div class="jira-meta-item"><span class="jira-meta-label">Work type</span><span id="jira-worktype"></span></div>
+            <div class="jira-meta-item"><span class="jira-meta-label">Environment</span><span id="jira-env"></span></div>
+          </div>
+          <div id="jira-flags" class="jira-flags" hidden></div>
+
+          <label class="jira-label" for="jira-summary">Summary <span class="jira-req">*</span></label>
+          <input id="jira-summary" class="jira-input" type="text" />
+
+          <div class="jira-label">Description</div>
+          <div id="jira-sections" class="jira-sections"></div>
+
+          <div class="jira-label">Attachments</div>
+          <div id="jira-evidence" class="jira-evidence"></div>
+
+          <div class="jira-fields">
+            <div class="jira-field"><label class="jira-label" for="jira-priority">Priority</label><select id="jira-priority" class="jira-input"></select></div>
+            <div class="jira-field"><span class="jira-label">Assignee</span><div id="jira-assignee" class="jira-static"></div></div>
+            <div class="jira-field"><label class="jira-label" for="jira-fixversion">Fix version</label><select id="jira-fixversion" class="jira-input"></select></div>
+            <div class="jira-field"><label class="jira-label" for="jira-sitever">Site version (footer, e.g. 2.19.0)</label><input id="jira-sitever" class="jira-input" type="text" placeholder="2.19.0" /></div>
+            <div class="jira-field"><label class="jira-label" for="jira-affects">Affects version</label><select id="jira-affects" class="jira-input"></select></div>
+            <div class="jira-field"><span class="jira-label">Labels</span><div id="jira-labels" class="jira-static"></div></div>
+          </div>
+
+          <div id="jira-dryrun-output" class="jira-dryrun" hidden></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button id="jira-modal-cancel" class="action-btn" type="button">Cancel</button>
+        <button id="jira-create-btn" class="action-btn action-btn-primary" type="button" disabled>Create (dry run &mdash; nothing is sent to Jira)</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

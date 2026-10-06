@@ -37,6 +37,8 @@ const { pruneOldRuns } = require('../helpers/prune-old-runs.cjs') as {
 };
 const { localTimeToken, localTimestampToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string; localTimestampToken: (d?: Date) => string };
 import { registerJiraCheckerRoutes } from './jira-checker';
+import { registerJiraTicketRoutes, findingEnvironment, Finding } from './jira-ticket';
+import { plainError } from './plain-error';
 import { saveExportImages, buildPdfExport, buildExcelExport, VisualExportInput } from './visual-export';
 
 dotenv.config();
@@ -1584,6 +1586,11 @@ function findLatestRunFolder(brand: string, geo: string, dateStr: string): strin
 
 type ReviewTestEntry = {
   geo: string;
+  // Playwright runs desktop and mobile as separate projects (`AB` vs
+  // `AB-mobile`), so the same spec fails once per platform — the Jira ticket
+  // needs to say which, and the Triage table needs one row per platform.
+  platform: 'Desktop' | 'Mobile';
+  specFile: string;
   title: string;
   status: string;
   // Only populated for 'unexpected'/'flaky' — the real error message +
@@ -1592,6 +1599,10 @@ type ReviewTestEntry = {
   // once dropped into a plain-text prompt or JSON string).
   errorMessage: string | null;
   errorLocation: string | null;
+  // Absolute paths to the failing attempt's screenshot and Playwright
+  // error-context.md (page snapshot at the moment of failure). Server-side
+  // only — never sent to the browser; evidence is served by finding id.
+  evidence: { screenshot: string | null; errorContext: string | null };
 };
 
 // eslint-disable-next-line no-control-regex
@@ -1600,14 +1611,19 @@ const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
 // Playwright's JSON reporter nests specs inside an arbitrarily deep tree of
 // suites (describe blocks, project, file) — this just wants every leaf
 // spec's title + its test's final status, not the tree shape itself.
-function extractTestEntries(resultsJson: any, geo: string): ReviewTestEntry[] {
+function extractTestEntries(resultsJson: any, geo: string, resultsDir: string): ReviewTestEntry[] {
   const out: ReviewTestEntry[] = [];
+  // Playwright writes attachment paths absolute, but resolve a relative one
+  // against results.json's own folder rather than assume.
+  const abs = (p: unknown): string | null =>
+    typeof p === 'string' && p ? (path.isAbsolute(p) ? p : path.join(resultsDir, p)) : null;
   function walk(suite: any): void {
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests ?? []) {
         const status = String(test.status ?? 'unknown');
         let errorMessage: string | null = null;
         let errorLocation: string | null = null;
+        const evidence: ReviewTestEntry['evidence'] = { screenshot: null, errorContext: null };
         if (status === 'unexpected' || status === 'flaky') {
           // Walk attempts in reverse — the failure worth explaining is
           // whichever attempt actually failed, not necessarily the last one
@@ -1621,11 +1637,15 @@ function extractTestEntries(resultsJson: any, geo: string): ReviewTestEntry[] {
               if (loc?.file) {
                 errorLocation = `${String(loc.file).split(/[\\/]/).pop()}:${loc.line ?? '?'}`;
               }
+              const attachments: any[] = Array.isArray(r.attachments) ? r.attachments : [];
+              evidence.screenshot = abs(attachments.find(a => a?.name === 'screenshot')?.path);
+              evidence.errorContext = abs(attachments.find(a => a?.name === 'error-context')?.path);
               break;
             }
           }
         }
-        out.push({ geo, title: spec.title, status, errorMessage, errorLocation });
+        const platform = /mobile/i.test(String(test.projectName ?? '')) ? 'Mobile' : 'Desktop';
+        out.push({ geo, platform, specFile: String(spec.file ?? ''), title: spec.title, status, errorMessage, errorLocation, evidence });
       }
     }
     for (const s of suite.suites ?? []) walk(s);
@@ -1648,7 +1668,7 @@ async function gatherRunReviewData(brand: string, dateStr: string): Promise<Revi
     if (!fs.existsSync(resultsPath)) continue;
     try {
       const json = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
-      entries.push(...extractTestEntries(json, geo));
+      entries.push(...extractTestEntries(json, geo, path.dirname(resultsPath)));
     } catch {
       // Unreadable/partial results.json (e.g. a run still in progress) — skip
       // this GEO's contribution rather than failing the whole review.
@@ -1656,6 +1676,173 @@ async function gatherRunReviewData(brand: string, dateStr: string): Promise<Revi
   }
   return entries;
 }
+
+// ── Triage findings ──────────────────────────────────────────────────────
+// A "finding" is one failing/flaky test in one GEO, however many platforms it
+// failed on — a Login bug that breaks on desktop AND mobile is ONE problem
+// and gets ONE row and ONE Jira ticket (QA Reporting Protocol §4.7: state an
+// issue once, list everything it affects). This is the single place that
+// decides what a finding is; Triage rows, Review verdicts and the saved
+// outcomes all hang off the same id so they can't drift apart.
+// (Finding type lives in ./jira-ticket so both modules share one definition.)
+
+const findingId = (geo: string, title: string): string => `${geo}|${title}`;
+
+function groupFindings(entries: ReviewTestEntry[]): Finding[] {
+  const byId = new Map<string, Finding>();
+  for (const e of entries) {
+    if (e.status !== 'unexpected' && e.status !== 'flaky') continue;
+    const status: Finding['status'] = e.status === 'unexpected' ? 'failed' : 'flaky';
+    const id = findingId(e.geo, e.title);
+    const cur = byId.get(id);
+    if (!cur) {
+      byId.set(id, {
+        id, geo: e.geo, title: e.title, specFile: e.specFile, platforms: [e.platform],
+        status, errorMessage: e.errorMessage, errorLocation: e.errorLocation,
+        evidence: [{ platform: e.platform, ...e.evidence }],
+      });
+      continue;
+    }
+    if (!cur.platforms.includes(e.platform)) {
+      cur.platforms.push(e.platform);
+      cur.evidence.push({ platform: e.platform, ...e.evidence });
+    }
+    // A real failure on one platform outranks a flake on the other, and the
+    // error shown should be the failing one's.
+    if (status === 'failed' && cur.status === 'flaky') {
+      cur.status = 'failed';
+      cur.errorMessage = e.errorMessage;
+      cur.errorLocation = e.errorLocation;
+    } else if (!cur.errorMessage && e.errorMessage) {
+      cur.errorMessage = e.errorMessage;
+      cur.errorLocation = e.errorLocation;
+    }
+  }
+  const findings = [...byId.values()];
+  for (const f of findings) f.platforms.sort((a, b) => (a === b ? 0 : a === 'Desktop' ? -1 : 1));
+  // Failures before flakes; Array.sort is stable so GEO/test order is kept.
+  return findings.sort((a, b) => Number(b.status === 'failed') - Number(a.status === 'failed'));
+}
+
+// ── Saved triage outcomes ────────────────────────────────────────────────
+// What a human decided about each finding, kept per brand + run date (a new
+// run date never inherits an old verdict — same deliberate scoping as
+// dashboard/known-issues.json). Lives under the brand's reserved `_triage`
+// folder: every Test Reports scanner already skips `_`-prefixed folders.
+// 'ticket_created' is written only by the Jira-create step, never by the
+// manual buttons.
+type TriageOutcomeKind = 'script_issue' | 'ignored' | 'ticket_created';
+type StoredOutcome = {
+  geo: string;
+  title: string;
+  outcome: TriageOutcomeKind;
+  ticketKey?: string;
+  ticketUrl?: string;
+  updatedAt: string;
+};
+
+const triageStorePath = (brand: string, dateStr: string): string =>
+  path.join(process.cwd(), 'Test Reports', brand, '_triage', `${dateStr}.json`);
+
+function readTriageStore(brand: string, dateStr: string): Record<string, StoredOutcome> {
+  const file = triageStorePath(brand, dateStr);
+  if (!fs.existsSync(file)) return {};
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return parsed && typeof parsed.findings === 'object' && parsed.findings ? parsed.findings : {};
+  } catch {
+    // Never overwrite an unreadable file in place — set it aside so whatever
+    // was in it can still be recovered by hand, then start clean.
+    try { fs.renameSync(file, file.replace(/\.json$/, `.corrupt-${Date.now()}.json`)); } catch { /* best effort */ }
+    return {};
+  }
+}
+
+// Temp file + rename: a crash mid-write leaves the old file intact instead of
+// a half-written one.
+function writeTriageStore(brand: string, dateStr: string, findings: Record<string, StoredOutcome>): void {
+  const file = triageStorePath(brand, dateStr);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ version: 1, brand, dateStr, findings }, null, 2));
+  fs.renameSync(tmp, file);
+}
+
+// The Triage table's rows — straight from Playwright's own results, no AI, so
+// it fills in the moment a run finishes. Review (below) adds the
+// site-vs-script verdict per row, matched back by finding id; any outcome a
+// human already saved comes back attached to its row.
+app.post('/triage-run', async (req, res) => {
+  const brand = String(req.body?.brand ?? '');
+  const dateStr = String(req.body?.dateStr ?? '');
+  if (!isValidBrand(brand) || !isValidDateStr(dateStr)) {
+    res.status(400).json({ error: 'Invalid brand or date.' });
+    return;
+  }
+
+  const entries = await gatherRunReviewData(brand, dateStr);
+  const saved = readTriageStore(brand, dateStr);
+
+  res.json({
+    brand,
+    dateStr,
+    total: entries.length,
+    // `evidence` holds absolute file paths — server-side only.
+    findings: groupFindings(entries).map(f => {
+      const { evidence: _evidence, ...rest } = f;
+      return {
+        ...rest,
+        environment: findingEnvironment(brand, f),
+        plainError: plainError(f.errorMessage),
+        saved: saved[f.id] ?? null,
+      };
+    }),
+  });
+});
+
+// One finding in full (incl. evidence paths) for the Jira ticket module.
+// Re-derived from the run's own results on every call, so a caller can only
+// ever reach a finding that really exists in that run.
+async function findFinding(brand: string, dateStr: string, geo: string, title: string): Promise<Finding | null> {
+  return groupFindings(await gatherRunReviewData(brand, dateStr)).find(f => f.id === findingId(geo, title)) ?? null;
+}
+
+registerJiraTicketRoutes(app, { isValidBrand, isValidDateStr, findFinding });
+
+// Manual outcomes only: "this is a script problem" / "not an issue", or
+// clearing one again. Refuses anything that isn't a real finding in that run
+// (no junk keys) and never touches a finding that already has a Jira ticket.
+app.post('/triage-outcome', async (req, res) => {
+  const brand = String(req.body?.brand ?? '');
+  const dateStr = String(req.body?.dateStr ?? '');
+  const geo = String(req.body?.geo ?? '');
+  const title = String(req.body?.title ?? '');
+  const outcome = String(req.body?.outcome ?? '');
+  if (!isValidBrand(brand) || !isValidDateStr(dateStr) || !['script_issue', 'ignored', 'clear'].includes(outcome)) {
+    res.status(400).json({ error: 'Invalid brand, date or outcome.' });
+    return;
+  }
+
+  const finding = groupFindings(await gatherRunReviewData(brand, dateStr)).find(f => f.id === findingId(geo, title));
+  if (!finding) {
+    res.status(404).json({ error: 'That finding is not part of this run.' });
+    return;
+  }
+
+  const saved = readTriageStore(brand, dateStr);
+  if (saved[finding.id]?.outcome === 'ticket_created') {
+    res.status(409).json({ error: 'This finding already has a Jira ticket.', saved: saved[finding.id] });
+    return;
+  }
+
+  if (outcome === 'clear') {
+    delete saved[finding.id];
+  } else {
+    saved[finding.id] = { geo: finding.geo, title: finding.title, outcome: outcome as TriageOutcomeKind, updatedAt: new Date().toISOString() };
+  }
+  writeTriageStore(brand, dateStr, saved);
+  res.json({ saved: saved[finding.id] ?? null });
+});
 
 app.post('/review-run', async (req, res) => {
   const brand = String(req.body?.brand ?? '');
@@ -1667,7 +1854,7 @@ app.post('/review-run', async (req, res) => {
 
   const entries = await gatherRunReviewData(brand, dateStr);
   if (entries.length === 0) {
-    res.json({ summary: `No test result data found for ${brand} on ${dateStr}.`, total: 0, geoBreakdown: [], failing: [], flaky: [] });
+    res.json({ summary: `No test result data found for ${brand} on ${dateStr}.`, total: 0, geoBreakdown: [], findings: [] });
     return;
   }
 
@@ -1681,8 +1868,6 @@ app.post('/review-run', async (req, res) => {
   // silently never matched a single real failure.
   const counts: Record<string, number> = {};
   for (const e of entries) counts[e.status] = (counts[e.status] ?? 0) + 1;
-  const failing = entries.filter(e => e.status === 'unexpected');
-  const flaky = entries.filter(e => e.status === 'flaky');
   const skipped = entries.filter(e => e.status === 'skipped');
 
   // Per-GEO breakdown for the table the client renders under the AI
@@ -1710,7 +1895,10 @@ app.post('/review-run', async (req, res) => {
     return;
   }
 
-  const needsAttention = [...failing, ...flaky];
+  // One entry per finding (desktop + mobile of the same test in the same GEO
+  // collapse into one) — half the prompt for a typical run, and exactly one
+  // verdict per Triage row.
+  const needsAttention = groupFindings(entries);
 
   try {
     const client = new Anthropic({ apiKey });
@@ -1724,7 +1912,10 @@ ${skipped.length ? skipped.map(f => `- [${f.geo}] ${f.title}`).join('\n') : '(no
 
 ${needsAttention.length === 0 ? 'There are no failing or flaky checks to classify.' : `For EACH of the following failing/flaky checks, decide whether it's more likely a REAL SITE ISSUE (a real problem with the actual website — broken content, missing page, wrong behavior, translation bug, etc.) or a SCRIPT ISSUE (a problem with the test code itself — wrong selector, timing/race condition, environment/VPN flakiness, outdated assumption about the page). Base this on the actual error message and source location given, not just the test name. Use "unclear" only when the error message genuinely gives no useful signal either way — it is not a safe default.
 
-${needsAttention.map((f, i) => `${i + 1}. [${f.geo}] ${f.title} (${f.status})
+How to write your notes (they are read by QA teammates and managers, not developers): plain everyday English only. Describe what a person visiting the page would see wrong. NEVER mention selectors, CSS classes, element names, locators, timeouts, test code, frameworks or file names. Name the environment correctly from the "Environment" line of each check — say "the QA site" for a QA-site result and "the live site" for a live one, and never call a QA-site result live. If you are not sure it is a real site issue, say what would settle it in plain words.
+
+${needsAttention.map((f, i) => `${i + 1}. [${f.geo}] ${f.title} (${f.status} on ${f.platforms.join(' + ')})
+   Environment: ${({ QA: 'the QA (pre-release test) site', Live: 'the live site', Unknown: 'not known' } as const)[findingEnvironment(brand, f)]}
    Error: ${f.errorMessage ?? '(no error message captured)'}
    Location: ${f.errorLocation ?? '(unknown)'}`).join('\n\n')}`}
 
@@ -1732,7 +1923,7 @@ Respond with ONLY a JSON object (no prose before or after it), in exactly this s
 {
   "headline": "1-2 sentence plain-English overall health summary for a QA teammate, not a developer. State health plainly, don't manufacture concerns if everything's clean, don't downplay real failures.",
   "verdicts": [
-    { "geo": "...", "title": "...", "classification": "likely_site_issue" | "likely_script_issue" | "unclear", "reasoning": "one short plain-English sentence, referencing the actual error" }
+    { "geo": "...", "title": "...", "classification": "likely_site_issue" | "likely_script_issue" | "unclear", "plainSummary": "ONE short plain-English sentence saying what is wrong on the page from a visitor's point of view, e.g. 'The Help page shows no FAQ questions.' No technical terms.", "reasoning": "ONE short plain-English sentence (about 25 words at most) on why you think it is a site issue or a test problem" }
   ]
 }
 "verdicts" must have exactly one entry per failing/flaky check listed above, in the same order, matching "geo" and "title" exactly. Omit "verdicts" entirely (or leave it an empty array) only if there were none to classify.`;
@@ -1770,10 +1961,11 @@ Respond with ONLY a JSON object (no prose before or after it), in exactly this s
     const validClassifications = new Set(['likely_site_issue', 'likely_script_issue', 'unclear']);
     const verdictFor = (geo: string, title: string) => {
       const v = rawVerdicts.find(x => x?.geo === geo && x?.title === title);
-      if (!v) return { classification: 'unclear' as const, reasoning: 'No classification returned for this check.' };
+      if (!v) return { classification: 'unclear' as const, reasoning: 'No classification returned for this check.', plainSummary: '' };
       return {
         classification: validClassifications.has(v.classification) ? v.classification : 'unclear',
         reasoning: typeof v.reasoning === 'string' && v.reasoning.trim() ? v.reasoning.trim() : '',
+        plainSummary: typeof v.plainSummary === 'string' ? v.plainSummary.trim() : '',
       };
     };
 
@@ -1782,8 +1974,7 @@ Respond with ONLY a JSON object (no prose before or after it), in exactly this s
       counts,
       total: entries.length,
       geoBreakdown,
-      failing: failing.map(f => ({ geo: f.geo, title: f.title, errorMessage: f.errorMessage, ...verdictFor(f.geo, f.title) })),
-      flaky: flaky.map(f => ({ geo: f.geo, title: f.title, errorMessage: f.errorMessage, ...verdictFor(f.geo, f.title) })),
+      findings: needsAttention.map(f => ({ id: f.id, ...verdictFor(f.geo, f.title) })),
     });
   } catch (err) {
     res.status(500).json({ error: `Review failed: ${(err as Error).message}` });

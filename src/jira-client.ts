@@ -184,6 +184,40 @@ export class JiraClient {
     console.log(`[JIRA] Comment posted on ${issueKey}`);
   }
 
+  // ── Read-only lookups used to build/validate a new bug ticket ───────────────
+  // The account the API token belongs to (the default assignee for new bugs).
+  async getMyself(): Promise<{ accountId: string; displayName: string }> {
+    const res = await this.http.get('/myself');
+    return { accountId: String(res.data.accountId), displayName: String(res.data.displayName ?? '') };
+  }
+
+  async getProjectVersions(projectKey: string): Promise<Array<{ id: string; name: string; released: boolean; archived: boolean }>> {
+    const res = await this.http.get(`/project/${encodeURIComponent(projectKey)}/versions`);
+    return (res.data as any[]).map(v => ({ id: String(v.id), name: String(v.name), released: Boolean(v.released), archived: Boolean(v.archived) }));
+  }
+
+  // What the project's create-issue screen offers for one issue type: which
+  // fields exist, which are required, and the allowed option names (priority
+  // etc.). Null when the project has no issue type by that name.
+  async getIssueTypeFields(
+    projectKey: string,
+    issueTypeName = 'Bug',
+  ): Promise<{ issueTypeId: string; fields: Record<string, { required: boolean; allowedValues: string[] }> } | null> {
+    const key = encodeURIComponent(projectKey);
+    const types = await this.http.get(`/issue/createmeta/${key}/issuetypes`, { params: { maxResults: 100 } });
+    const type = ((types.data?.issueTypes ?? types.data?.values ?? []) as any[]).find(t => t.name === issueTypeName);
+    if (!type) return null;
+    const meta = await this.http.get(`/issue/createmeta/${key}/issuetypes/${type.id}`, { params: { maxResults: 100 } });
+    const fields: Record<string, { required: boolean; allowedValues: string[] }> = {};
+    for (const f of (meta.data?.fields ?? meta.data?.values ?? []) as any[]) {
+      fields[String(f.fieldId)] = {
+        required: Boolean(f.required),
+        allowedValues: Array.isArray(f.allowedValues) ? f.allowedValues.map((v: any) => String(v.name ?? v.value ?? v.id)) : [],
+      };
+    }
+    return { issueTypeId: String(type.id), fields };
+  }
+
   // ── Helper: print transition IDs (run once to find your IDs) ───────────────
   async printTransitions(issueKey: string): Promise<void> {
     const transitions = await this.getTransitions(issueKey);

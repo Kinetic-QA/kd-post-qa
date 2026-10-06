@@ -1,5 +1,39 @@
 # CLAUDE.md — kd-post-qa Project Rules
 
+## Session Start Trigger
+
+When the user says **"Let's begin"** (or a clear variant of it), get fully up to date **before any work starts**. Do both halves, in order, and report back before touching the day's task:
+
+**1. Sync the repo — look first, change nothing until it's safe**
+- Run `git fetch origin`, then report: current branch, whether the working tree is clean, how far the branch is ahead/behind its remote, and whether `main` has moved on since this branch was cut.
+- Only fast-forward (`git pull --ff-only`) when it is clearly safe: working tree clean **and** no local-only commits. If the tree is dirty, the branch has diverged, or it's a feature branch with unpushed work, do **not** pull, merge, rebase, stash or switch branches on your own — say what you found and ask.
+- Check whether the current branch's PR was already merged (`gh pr list --state all --head <branch>`). If it was, say so — new work goes on a new branch (see Branch Rules).
+- Mention leftover uncommitted files or stashes from the last session so nothing gets forgotten.
+
+**2. Read the latest Confluence updates (QA Knowledge Base, space `QKB`)**
+- Confluence is the source of truth for QA standards. Where it disagrees with a local doc or an older memory, **Confluence wins** — re-read the page, never rely on a remembered copy.
+- Find what changed since the last time this ran: search with CQL `space = QKB AND type = page AND lastmodified >= "<date>" ORDER BY lastmodified DESC`. Use the last-sync date saved in memory; if none is saved, use the last 7 days.
+- **Read in full** every changed page among these core standards, and always check their last-modified time even if unchanged:
+  - QA Reporting Protocols & Guidelines 2026 (`281935875`)
+  - Bug Ticket Standard (`291209218`)
+  - QA Lessons — Standing Rules (`282001429`)
+  - QA Role & Working Conventions (`281739267`)
+  - Kinetic Digital — Brands & GEO Mapping (`281870363`)
+  - QA Test Intake Workflow (`298385411` — a draft; treat as guidance, not settled rule)
+- Any other changed page (test-cycle write-ups, release summaries, etc.): just list title, author and date — read it only if it looks like a standard, rule, protocol or workflow, or the user asks.
+- When fetching long pages, request the full text — the shared Confluence client cuts pages at 8,000 characters by default (`getConfluencePageText(id, undefined, 60000)`).
+- If a changed core page affects the hard-coded checks in `gui/jira-ticket.ts`, tell the user — and only after re-reading the page and updating those checks, bump `CHECKS_WRITTEN_AGAINST` in that file. (The Jira popup also warns on its own when any of those pages has been edited since the checks were written; never bump the number without actually updating the checks, or the warning is silenced for nothing.)
+- Afterwards, save today's date in memory as the new last-sync date.
+
+**3. Report back — short and in plain language**
+- Repo: branch, clean or dirty, ahead/behind, and what (if anything) was pulled.
+- Confluence: what changed — rules added, changed or reversed — and whether any of it affects code we've already written (for example the checks in `gui/jira-ticket.ts`, which hard-code Bug Ticket Standard rules). If nothing changed, say so.
+- Then ask what we're working on.
+
+Ground rules: this is **read-only** — never write to Jira or Confluence, never push, never discard local changes. If Confluence or `git fetch` can't be reached, say so plainly instead of silently skipping that half.
+
+---
+
 ## Test Results Upload Trigger
 
 When the user says **"Done Today's test"** (or a clear variant of it), automatically upload today's GUI test results to the QA Automated Regression Results Netlify site — the user should not have to name a brand or run any commands themselves:

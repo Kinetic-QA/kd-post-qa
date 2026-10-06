@@ -9,6 +9,26 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-06
+
+### Added
+
+- **A new "Triage" table now appears under the results after a test run, listing every problem that was found.** Each problem gets its own row. If the same check fails on both desktop and mobile in the same market, that is one row (not two), because it is one problem and should become one ticket. Each row shows the market with a small QA or Live tag, which devices were affected, and what happened in plain English. The original technical error text is still there behind a small "Technical details" link for anyone who wants it.
+- **Each problem can be marked "Script problem" or "Not an issue", and that choice is remembered** for that brand and run date (it survives closing and reopening the tool), with an Undo link. A new run on a different date never inherits an old choice, so an old note can't hide a new failure.
+- **A "Create JIRA ticket" button now appears on each problem once you have clicked Review, and it opens a ticket draft that looks like Jira's own create screen.** The AI fills in the title and the ten Description sections in the order our Bug Ticket Standard asks for, attaches the failure screenshots, picks the right Jira space for the brand, and sets you as the assignee. It reads the current Bug Ticket Standard and QA Reporting Protocol straight from Confluence each time. It flags anything it had to guess, and it warns if the failure came from the QA site (where the Protocol normally says to comment on the original task rather than open a new bug). You type the version shown in the site footer and it works out the Affects Version and the "-post" label. **This is a trial run only: pressing Create checks the draft against the standard and shows exactly what would be sent, but nothing is created in Jira yet.**
+- **The ticket draft warns you if the Confluence pages its checks were based on have been edited since**, so the checks can't quietly fall out of date.
+- **New "Let's begin" start-of-session routine in the project rules.** Saying it makes Claude check the repo is up to date and read the latest changes to our standards in Confluence before any work starts, then report what changed in plain language.
+
+### Changed
+
+- **Review's notes are now plain English with no technical wording.** They no longer mention page elements or test code, they name the right site (QA or live — a QA result is no longer called "live"), and each problem gets one short explanation and one short "what is wrong on the page" sentence. Review now gives one verdict per problem rather than one per device.
+- **Error messages in the Regression Check screen are in everyday English** (for example "The page showed none where at least one was expected" instead of raw test-tool text, and "Could not reach the QA Test Center" instead of a technical error).
+- **The part of the tool that reads pages from Confluence can now read a whole long page when asked.** Before, it silently stopped after about 8,000 characters, which meant the bug-reporting part of the QA Reporting Protocol was never read. Everything that already used it still gets the same amount as before.
+
+### Fixed
+
+- **The results overview was counting extra re-runs on top of the full run.** For example SNG's Alberta market on 28 September showed 55 tests instead of 54, because a one-test re-run was added to the full run, which also nudged the pass rate. Now only the fullest run for each market on each day is counted.
+
 ## [Unreleased] - 2026-09-29
 
 ### Fixed
