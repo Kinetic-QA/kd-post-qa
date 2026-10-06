@@ -22,8 +22,11 @@ const reviewOutputEl = document.getElementById('review-output');
 const reviewSummaryEl = document.getElementById('review-summary');
 const reviewTableEl = document.getElementById('review-table');
 const reviewTableBodyEl = document.getElementById('review-table-body');
-const reviewAttentionEl = document.getElementById('review-attention');
 const uploadOutputEl = document.getElementById('upload-output');
+const triageCardEl = document.getElementById('triage-card');
+const triageNoteEl = document.getElementById('triage-note');
+const triageTableEl = document.getElementById('triage-table');
+const triageTableBodyEl = document.getElementById('triage-table-body');
 
 let geosByBrand = {};
 // Captured from the 'all-done' SSE event — the run session itself is
@@ -851,6 +854,7 @@ runBtn.addEventListener('click', () => {
   excelLinkEl.textContent = '';
   reviewBtn.hidden = true;
   resetReviewPanel();
+  resetTriage();
   uploadOutputEl.hidden = true;
   lastRunBrand = null;
   lastRunDateStr = null;
@@ -967,6 +971,7 @@ runBtn.addEventListener('click', () => {
       reviewBtn.hidden = !canReview;
       reviewBtn.disabled = false;
       reviewBtn.textContent = 'Review';
+      if (canReview) loadTriage();
 
       if (data.mergedReportUrl) {
         const a = document.createElement('a');
@@ -1047,9 +1052,513 @@ function resetReviewPanel() {
   reviewSummaryEl.textContent = '';
   reviewTableEl.hidden = true;
   reviewTableBodyEl.innerHTML = '';
-  reviewAttentionEl.hidden = true;
-  reviewAttentionEl.innerHTML = '';
 }
+
+// ── Triage table ─────────────────────────────────────────────────────────
+// One row per FINDING — a failing test in one GEO, however many platforms it
+// failed on — straight from Playwright's results (no AI), so it fills in the
+// moment a run finishes. "What happened" starts as a plain-English restatement
+// of the error (raw text tucked behind "Technical details"); Review then
+// swaps in the AI's own one-line summary and fills the verdict. The Outcome
+// cell lets a person record what they decided, saved server-side so it
+// survives a reload. Rows are keyed by the server's own finding id.
+const triageRows = new Map();
+
+function resetTriage() {
+  triageRows.clear();
+  triageTableBodyEl.innerHTML = '';
+  triageTableEl.hidden = true;
+  triageNoteEl.textContent = '';
+  triageCardEl.classList.remove('visible');
+}
+
+const OUTCOME_LABELS = {
+  script_issue: 'Script problem',
+  ignored: 'Not an issue',
+  ticket_created: 'JIRA ticket created',
+};
+
+function triageLinkButton(label, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'triage-link';
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function renderTriageOutcome(row) {
+  const { finding, outcomeTd } = row;
+  outcomeTd.textContent = '';
+  const saved = finding.saved;
+
+  if (!saved) {
+    // The main action only appears once Review has said something about this
+    // row. The person still decides (the AI verdict is a guess); there's just
+    // nothing to base a ticket on before it.
+    if (row.reviewed) {
+      const create = document.createElement('button');
+      create.type = 'button';
+      create.className = 'action-btn action-btn-primary triage-create-btn';
+      create.textContent = 'Create JIRA ticket';
+      create.addEventListener('click', () => openJiraModal(row));
+      outcomeTd.appendChild(create);
+    }
+    const quiet = document.createElement('div');
+    quiet.className = 'triage-quiet';
+    quiet.append(
+      triageLinkButton('Script problem', () => saveTriageOutcome(row, 'script_issue')),
+      ' · ',
+      triageLinkButton('Not an issue', () => saveTriageOutcome(row, 'ignored')),
+    );
+    outcomeTd.appendChild(quiet);
+    return;
+  }
+
+  const done = document.createElement('div');
+  done.className = `triage-outcome-done triage-outcome-${saved.outcome}`;
+  if (saved.outcome === 'ticket_created' && saved.ticketUrl) {
+    const a = document.createElement('a');
+    a.href = saved.ticketUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = saved.ticketKey ?? OUTCOME_LABELS.ticket_created;
+    done.append(`${OUTCOME_LABELS.ticket_created}: `, a);
+  } else {
+    done.textContent = OUTCOME_LABELS[saved.outcome] ?? saved.outcome;
+  }
+  outcomeTd.appendChild(done);
+  // A real ticket can't be undone from here — the server refuses it too.
+  if (saved.outcome !== 'ticket_created') {
+    const quiet = document.createElement('div');
+    quiet.className = 'triage-quiet';
+    quiet.appendChild(triageLinkButton('Undo', () => saveTriageOutcome(row, 'clear')));
+    outcomeTd.appendChild(quiet);
+  }
+}
+
+async function saveTriageOutcome(row, outcome) {
+  const buttons = row.outcomeTd.querySelectorAll('button');
+  buttons.forEach(b => { b.disabled = true; });
+  const showError = text => {
+    const err = document.createElement('div');
+    err.className = 'triage-outcome-error';
+    err.textContent = text;
+    row.outcomeTd.appendChild(err);
+  };
+  try {
+    const res = await fetch('/triage-outcome', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brand: lastRunBrand, dateStr: lastRunDateStr, geo: row.finding.geo, title: row.finding.title, outcome }),
+    });
+    const data = await res.json();
+    // On a 409 the server sends back what is really saved (a ticket already
+    // exists) — show that, not what was clicked.
+    if (res.ok || data.saved) row.finding.saved = data.saved;
+    renderTriageOutcome(row);
+    if (!res.ok) showError(data.error ?? 'Could not save. Please try again.');
+  } catch (e) {
+    buttons.forEach(b => { b.disabled = false; });
+    showError('Could not reach the QA Test Center. Check that it is still running, then try again.');
+  }
+}
+
+async function loadTriage() {
+  resetTriage();
+  triageCardEl.classList.add('visible');
+  triageNoteEl.textContent = 'Loading results…';
+  try {
+    const res = await fetch('/triage-run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brand: lastRunBrand, dateStr: lastRunDateStr }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      triageNoteEl.textContent = data.error ?? 'Could not load the results for this run.';
+      return;
+    }
+    if (data.total === 0) {
+      triageNoteEl.textContent = 'No test results were found for this run.';
+      return;
+    }
+    if (data.findings.length === 0) {
+      triageNoteEl.textContent = `All ${data.total} checks passed or were skipped — nothing to triage.`;
+      return;
+    }
+    const n = data.findings.length;
+    triageNoteEl.textContent = `${n} problem${n === 1 ? '' : 's'} found. Click Review to see which look like real site issues.`;
+    const frag = document.createDocumentFragment();
+    for (const finding of data.findings) {
+      const tr = document.createElement('tr');
+      const cell = text => {
+        const td = document.createElement('td');
+        td.textContent = text ?? '';
+        tr.appendChild(td);
+        return td;
+      };
+
+      const geoTd = cell(finding.geo);
+      if (finding.environment === 'QA' || finding.environment === 'Live') {
+        const chip = document.createElement('span');
+        chip.className = `env-chip env-${finding.environment.toLowerCase()}`;
+        chip.textContent = finding.environment;
+        chip.title = finding.environment === 'QA' ? 'Found on the QA (pre-release test) site' : 'Found on the live site';
+        geoTd.append(' ', chip);
+      }
+      const platformLine = document.createElement('div');
+      platformLine.className = 'triage-platforms';
+      platformLine.textContent = finding.platforms.join(', ');
+      geoTd.appendChild(platformLine);
+      cell(finding.title);
+      cell(finding.status === 'failed' ? 'Failed' : 'Flaky')
+        .classList.add(finding.status === 'failed' ? 'has-failures' : 'triage-flaky');
+
+      const whatTd = cell('');
+      const plainEl = document.createElement('div');
+      plainEl.className = 'triage-plain';
+      plainEl.textContent = finding.plainError;
+      whatTd.appendChild(plainEl);
+      if (finding.errorMessage) {
+        const details = document.createElement('details');
+        details.className = 'triage-tech';
+        const summary = document.createElement('summary');
+        summary.textContent = 'Technical details';
+        const pre = document.createElement('pre');
+        pre.textContent = `${finding.errorMessage}${finding.errorLocation ? `\n(${finding.errorLocation})` : ''}`;
+        details.append(summary, pre);
+        whatTd.appendChild(details);
+      }
+
+      const reviewTd = cell('Not reviewed yet');
+      reviewTd.classList.add('triage-pending');
+      const outcomeTd = cell('');
+      const row = { finding, reviewTd, outcomeTd, plainEl };
+      triageRows.set(finding.id, row);
+      renderTriageOutcome(row);
+      frag.appendChild(tr);
+    }
+    triageTableBodyEl.appendChild(frag);
+    triageTableEl.hidden = false;
+  } catch (e) {
+    triageNoteEl.textContent = 'Could not reach the QA Test Center. Check that it is still running, then try again.';
+  }
+}
+
+function fillTriageVerdicts(items) {
+  for (const f of items) {
+    const row = triageRows.get(f.id);
+    if (!row) continue;
+    // The AI's own one-line summary reads better than the generic restatement.
+    if (f.plainSummary) row.plainEl.textContent = f.plainSummary;
+    const td = row.reviewTd;
+    td.className = '';
+    td.textContent = '';
+    const badge = document.createElement('span');
+    const classification = f.classification ?? 'unclear';
+    badge.className = `classification-badge classification-${classification}`;
+    badge.textContent = classification === 'likely_site_issue' ? 'Likely site issue'
+      : classification === 'likely_script_issue' ? 'Likely script issue'
+      : 'Unclear';
+    td.appendChild(badge);
+    if (f.reasoning) {
+      const reasoning = document.createElement('div');
+      reasoning.className = 'review-reasoning';
+      reasoning.textContent = f.reasoning;
+      td.appendChild(reasoning);
+    }
+    row.reviewed = true;
+    renderTriageOutcome(row);
+  }
+}
+
+// ── Create JIRA ticket popup ─────────────────────────────────────────────
+// PROOF OF CONCEPT: opens a Jira-style create screen pre-filled by the AI
+// from the failure + the QKB Confluence standards, one ticket per Triage row.
+// "Create" is a DRY RUN — it validates the draft and shows the exact payload
+// that would be sent, but nothing is written to Jira (Jira writes need
+// explicit per-action approval; real creation is a later, separate step).
+const jiraModalEl = document.getElementById('jira-modal');
+const jiraLoadingEl = document.getElementById('jira-modal-loading');
+const jiraErrorEl = document.getElementById('jira-modal-error');
+const jiraFormEl = document.getElementById('jira-modal-form');
+const jiraSpaceEl = document.getElementById('jira-space');
+const jiraWorktypeEl = document.getElementById('jira-worktype');
+const jiraEnvEl = document.getElementById('jira-env');
+const jiraFlagsEl = document.getElementById('jira-flags');
+const jiraSummaryEl = document.getElementById('jira-summary');
+const jiraSectionsEl = document.getElementById('jira-sections');
+const jiraEvidenceEl = document.getElementById('jira-evidence');
+const jiraPriorityEl = document.getElementById('jira-priority');
+const jiraAssigneeEl = document.getElementById('jira-assignee');
+const jiraFixVersionEl = document.getElementById('jira-fixversion');
+const jiraSiteVerEl = document.getElementById('jira-sitever');
+const jiraAffectsEl = document.getElementById('jira-affects');
+const jiraLabelsEl = document.getElementById('jira-labels');
+const jiraDryRunEl = document.getElementById('jira-dryrun-output');
+const jiraCreateBtn = document.getElementById('jira-create-btn');
+
+// The Bug Ticket Standard's Description order and labels.
+const JIRA_SECTIONS = [
+  ['summaryOfBug', 'Summary of Bug'],
+  ['affectedGeo', 'Affected GEO'],
+  ['affectedPlatform', 'Affected Platform'],
+  ['affectedPages', 'Affected Pages'],
+  ['environment', 'Environment'],
+  ['stepsToReplicate', 'Steps to Replicate'],
+  ['actualResult', 'Actual Result'],
+  ['expectedResult', 'Expected Result'],
+  ['impactNotes', 'Impact/Notes'],
+  ['ccQaTeam', 'CC'],
+];
+
+let jiraDraft = null;
+let jiraLabels = [];
+const jiraSectionInputs = {};
+
+function closeJiraModal() {
+  jiraModalEl.hidden = true;
+  jiraDraft = null;
+  document.body.classList.remove('modal-open');
+}
+
+function jiraOption(value, label, selected) {
+  const o = document.createElement('option');
+  o.value = value;
+  o.textContent = label;
+  o.selected = Boolean(selected);
+  return o;
+}
+
+async function openJiraModal(row) {
+  jiraDraft = null;
+  jiraLoadingEl.hidden = false;
+  jiraErrorEl.hidden = true;
+  jiraErrorEl.textContent = '';
+  jiraFormEl.hidden = true;
+  jiraDryRunEl.hidden = true;
+  jiraDryRunEl.textContent = '';
+  jiraCreateBtn.disabled = true;
+  jiraModalEl.hidden = false;
+  document.body.classList.add('modal-open');
+
+  try {
+    const res = await fetch('/jira-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brand: lastRunBrand, dateStr: lastRunDateStr, geo: row.finding.geo, title: row.finding.title }),
+    });
+    const data = await res.json();
+    jiraLoadingEl.hidden = true;
+    if (!res.ok) {
+      jiraErrorEl.textContent = data.error ?? 'Could not write the ticket draft. Please try again.';
+      jiraErrorEl.hidden = false;
+      return;
+    }
+    renderJiraDraft(data);
+  } catch (e) {
+    jiraLoadingEl.hidden = true;
+    jiraErrorEl.textContent = 'Could not reach the QA Test Center. Check that it is still running, then try again.';
+    jiraErrorEl.hidden = false;
+  }
+}
+
+function renderJiraDraft(d) {
+  jiraDraft = d;
+  jiraSpaceEl.textContent = `${d.project.key} — ${d.project.name}`;
+  jiraWorktypeEl.textContent = d.issueType;
+  jiraEnvEl.textContent = d.environment;
+
+  // Things to read before creating: standard/Jira problems (flags) and what
+  // the AI inferred rather than saw (needsHumanCheck).
+  jiraFlagsEl.textContent = '';
+  const addList = (heading, items, cls) => {
+    if (!items.length) return;
+    const h = document.createElement('strong');
+    h.textContent = heading;
+    const ul = document.createElement('ul');
+    for (const text of items) {
+      const li = document.createElement('li');
+      li.textContent = text;
+      ul.appendChild(li);
+    }
+    const box = document.createElement('div');
+    box.className = cls;
+    box.append(h, ul);
+    jiraFlagsEl.appendChild(box);
+  };
+  addList('Before you create this', d.flags ?? [], 'jira-flag-box');
+  addList('Please verify (the AI inferred these, it did not see them)', d.needsHumanCheck ?? [], 'jira-flag-box jira-flag-verify');
+  jiraFlagsEl.hidden = jiraFlagsEl.childElementCount === 0;
+
+  jiraSummaryEl.value = d.summary;
+
+  jiraSectionsEl.textContent = '';
+  for (const key of Object.keys(jiraSectionInputs)) delete jiraSectionInputs[key];
+  for (const [key, label] of JIRA_SECTIONS) {
+    const wrap = document.createElement('div');
+    wrap.className = 'jira-section';
+    const l = document.createElement('label');
+    l.className = 'jira-section-label';
+    l.textContent = label;
+    const ta = document.createElement('textarea');
+    ta.className = 'jira-input jira-textarea';
+    ta.value = d.sections[key] ?? '';
+    ta.rows = Math.min(10, Math.max(2, ta.value.split('\n').length + 1));
+    l.htmlFor = `jira-section-${key}`;
+    ta.id = `jira-section-${key}`;
+    jiraSectionInputs[key] = ta;
+    wrap.append(l, ta);
+    jiraSectionsEl.appendChild(wrap);
+  }
+
+  jiraEvidenceEl.textContent = '';
+  if ((d.evidence ?? []).length === 0) {
+    jiraEvidenceEl.textContent = 'No screenshot was captured for this failure.';
+  }
+  for (const ev of d.evidence ?? []) {
+    const a = document.createElement('a');
+    a.href = ev.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.className = 'jira-evidence-item';
+    const img = document.createElement('img');
+    img.src = ev.url;
+    img.alt = `${ev.platform} screenshot`;
+    const cap = document.createElement('span');
+    cap.textContent = `${ev.platform} screenshot`;
+    a.append(img, cap);
+    jiraEvidenceEl.appendChild(a);
+  }
+
+  jiraPriorityEl.textContent = '';
+  const priorities = d.fields.priorityOptions ?? [];
+  if (priorities.length === 0) jiraPriorityEl.appendChild(jiraOption('', '(unknown — set in Jira)', true));
+  for (const p of priorities) jiraPriorityEl.appendChild(jiraOption(p, p, p === d.fields.priority));
+
+  jiraAssigneeEl.textContent = d.fields.assignee ? d.fields.assignee.displayName : '— unavailable —';
+
+  const versions = d.fields.versionOptions ?? [];
+  jiraFixVersionEl.textContent = '';
+  jiraFixVersionEl.appendChild(jiraOption('', '— none —', !d.fields.fixVersion));
+  for (const v of versions) jiraFixVersionEl.appendChild(jiraOption(v.id, v.name, d.fields.fixVersion && v.id === d.fields.fixVersion.id));
+  jiraAffectsEl.textContent = '';
+  jiraAffectsEl.appendChild(jiraOption('', '— none —', true));
+  for (const v of versions) jiraAffectsEl.appendChild(jiraOption(v.id, v.name, false));
+
+  jiraSiteVerEl.value = '';
+  updateJiraVersionFields();
+
+  jiraFormEl.hidden = false;
+  jiraCreateBtn.disabled = !d.fields.assignee;
+}
+
+// Affects Version + the x.xx-post label come from the version the person reads
+// off the site footer ("V: 2.19.0" -> "<BRAND> 2.19" / "2.19-post"). Never
+// guessed. The -post label is for LIVE issues only; QA-site findings leave it
+// unset (the pre-check label scheme isn't in the Protocol).
+function updateJiraVersionFields() {
+  if (!jiraDraft) return;
+  const m = /(\d+)\.(\d+)/.exec(jiraSiteVerEl.value);
+  jiraLabels = [];
+  if (!m) {
+    jiraLabelsEl.textContent = '— (enter the site version)';
+    return;
+  }
+  const majMin = `${m[1]}.${m[2]}`;
+  // Jira's version names carry suffixes ("SNG 2.19 CMS - themes/...", "SNG 2.20
+  // Autumn 28/09"), so match the version NUMBER as a whole token — "2.1" must
+  // not match "2.10" or "2.1.1". Exactly one match gets selected; several is
+  // ambiguous, so leave it for the person rather than pick one.
+  const token = new RegExp('(^|[^0-9.])' + majMin.replace('.', '[.]') + '(?![0-9.])');
+  const matches = (jiraDraft.fields.versionOptions ?? []).filter(v => token.test(v.name));
+  const match = matches.length === 1 ? matches[0] : null;
+  jiraAffectsEl.value = match ? match.id : '';
+  if (jiraDraft.environment === 'Live') {
+    jiraLabels = [`${majMin}-post`];
+    jiraLabelsEl.textContent = jiraLabels[0];
+  } else {
+    jiraLabelsEl.textContent = '— (the x.xx-post label is for live-site issues)';
+  }
+  if (matches.length === 0) jiraLabelsEl.textContent += `  ·  no version containing ${majMin} exists in Jira — set Affects version by hand`;
+  else if (matches.length > 1) jiraLabelsEl.textContent += `  ·  ${matches.length} Jira versions match ${majMin} — pick the right Affects version`;
+}
+
+jiraSiteVerEl.addEventListener('input', updateJiraVersionFields);
+
+jiraCreateBtn.addEventListener('click', async () => {
+  if (!jiraDraft) return;
+  jiraCreateBtn.disabled = true;
+  const sections = {};
+  for (const [key] of JIRA_SECTIONS) sections[key] = jiraSectionInputs[key].value;
+  try {
+    const res = await fetch('/jira-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brand: lastRunBrand,
+        dryRun: true,
+        draft: {
+          summary: jiraSummaryEl.value,
+          sections,
+          priority: jiraPriorityEl.value,
+          assigneeAccountId: jiraDraft.fields.assignee ? jiraDraft.fields.assignee.accountId : '',
+          fixVersionId: jiraFixVersionEl.value,
+          affectsVersionId: jiraAffectsEl.value,
+          labels: jiraLabels,
+          evidencePlatforms: (jiraDraft.evidence ?? []).map(e => e.platform),
+        },
+      }),
+    });
+    const data = await res.json();
+    jiraDryRunEl.textContent = '';
+    const banner = document.createElement('div');
+    banner.className = 'jira-dryrun-banner';
+    banner.textContent = data.note ?? data.error ?? 'Request failed.';
+    jiraDryRunEl.appendChild(banner);
+    if (res.ok) {
+      const verdict = document.createElement('p');
+      verdict.className = data.ok ? 'jira-dryrun-ok' : 'jira-dryrun-bad';
+      verdict.textContent = data.ok ? 'The draft meets the written standard.' : 'Fix these before this could be created:';
+      jiraDryRunEl.appendChild(verdict);
+      if (!data.ok) {
+        const ul = document.createElement('ul');
+        for (const p of data.problems) {
+          const li = document.createElement('li');
+          li.textContent = p;
+          ul.appendChild(li);
+        }
+        jiraDryRunEl.appendChild(ul);
+      }
+      if (data.unsetFieldsToFlagInRemarks && data.unsetFieldsToFlagInRemarks.length) {
+        const p = document.createElement('p');
+        p.className = 'jira-dryrun-note';
+        p.textContent = `Not set (the standard says to flag these in Remarks): ${data.unsetFieldsToFlagInRemarks.join(', ')}.`;
+        jiraDryRunEl.appendChild(p);
+      }
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = 'Exact request Jira would receive';
+      const pre = document.createElement('pre');
+      pre.textContent = `${data.wouldPostTo}\n\n${JSON.stringify(data.payload, null, 2)}\n\nThen attach: ${(data.thenAttach ?? []).join('; ') || 'nothing'}`;
+      details.append(summary, pre);
+      jiraDryRunEl.appendChild(details);
+    }
+    jiraDryRunEl.hidden = false;
+    jiraDryRunEl.scrollIntoView({ block: 'nearest' });
+  } catch (e) {
+    jiraDryRunEl.textContent = 'Could not reach the QA Test Center. Check that it is still running, then try again.';
+    jiraDryRunEl.hidden = false;
+  } finally {
+    jiraCreateBtn.disabled = !(jiraDraft && jiraDraft.fields.assignee);
+  }
+});
+
+document.getElementById('jira-modal-close').addEventListener('click', closeJiraModal);
+document.getElementById('jira-modal-cancel').addEventListener('click', closeJiraModal);
+jiraModalEl.addEventListener('click', e => { if (e.target === jiraModalEl) closeJiraModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !jiraModalEl.hidden) closeJiraModal(); });
 
 reviewBtn.addEventListener('click', async () => {
   if (!lastRunBrand || !lastRunDateStr) return;
@@ -1093,46 +1602,15 @@ reviewBtn.addEventListener('click', async () => {
       reviewTableEl.hidden = false;
     }
 
-    const failing = Array.isArray(data.failing) ? data.failing : [];
-    const flaky = Array.isArray(data.flaky) ? data.flaky : [];
-    if (failing.length > 0 || flaky.length > 0) {
-      reviewAttentionEl.innerHTML = '';
-      const heading = document.createElement('strong');
-      heading.textContent = 'Needs attention:';
-      reviewAttentionEl.appendChild(heading);
-      const note = document.createElement('p');
-      note.className = 'review-attention-note';
-      note.textContent = 'Site/script classification is an AI best-effort guess based on the error message — spot-check before treating it as final, especially for anything going into a tracker or Status field.';
-      reviewAttentionEl.appendChild(note);
-      const ul = document.createElement('ul');
-      const addItem = (f, kind) => {
-        const li = document.createElement('li');
-        const badge = document.createElement('span');
-        badge.className = `classification-badge classification-${f.classification ?? 'unclear'}`;
-        badge.textContent = f.classification === 'likely_site_issue' ? 'Likely site issue'
-          : f.classification === 'likely_script_issue' ? 'Likely script issue'
-          : 'Unclear';
-        const label = document.createElement('span');
-        label.textContent = `[${f.geo}] ${f.title} — ${kind}`;
-        li.appendChild(badge);
-        li.appendChild(label);
-        if (f.reasoning) {
-          const reasoning = document.createElement('div');
-          reasoning.className = 'review-reasoning';
-          reasoning.textContent = f.reasoning;
-          li.appendChild(reasoning);
-        }
-        ul.appendChild(li);
-      };
-      for (const f of failing) addItem(f, 'failed');
-      for (const f of flaky) addItem(f, 'flaky');
-      reviewAttentionEl.appendChild(ul);
-      reviewAttentionEl.hidden = false;
+    const findings = Array.isArray(data.findings) ? data.findings : [];
+    if (findings.length > 0) {
+      fillTriageVerdicts(findings);
+      triageNoteEl.textContent = 'These verdicts are a best guess by the AI from what went wrong. Check them yourself before you act on them.';
     }
 
     reviewOutputEl.hidden = false;
   } catch (e) {
-    reviewSummaryEl.textContent = `Could not reach the server: ${e}`;
+    reviewSummaryEl.textContent = 'Could not reach the QA Test Center. Check that it is still running, then try again.';
     reviewOutputEl.classList.add('error');
     reviewOutputEl.hidden = false;
   } finally {
@@ -1178,7 +1656,7 @@ uploadNetlifyBtn.addEventListener('click', async () => {
     }
     uploadOutputEl.hidden = false;
   } catch (e) {
-    uploadOutputEl.textContent = `Could not reach the server: ${e}`;
+    uploadOutputEl.textContent = 'Could not reach the QA Test Center. Check that it is still running, then try again.';
     uploadOutputEl.classList.add('error');
     uploadOutputEl.hidden = false;
   } finally {
