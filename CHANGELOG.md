@@ -9,6 +9,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-07
+
+### Changed
+
+- **The ticket draft's "standards have changed" warning is now up to date.** The QA Reporting Protocol was edited on 6 October (post-checks can now start from "Approved" as well as "Production QA", the steps heading is "Steps to Replicate" everywhere, and one ticket can cover an issue shared across several brands). We re-read it and none of it changes how the ticket checks work, so the tool no longer shows a "page has changed" warning for it. A note in the code lists the two points the QA lead has not yet settled (who a new bug is assigned to, and whether Actual or Expected Result comes first).
+
 ## [Unreleased] - 2026-10-06
 
 ### Added
