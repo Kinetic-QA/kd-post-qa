@@ -177,11 +177,17 @@ const STANDARDS_MAX_CHARS = 60000;
 // WHEN YOU UPDATE THE CHECKS: re-read the page, change the code to match,
 // THEN bump the version number here (and the date). Never bump it without
 // re-reading — that would just silence the warning.
+//
+// Open on the QA PIC's side (not decided by this code, re-check when these
+// pages change): the Protocol §4.9 default assignee ("Boaz") vs the Bug
+// Ticket Standard's reporter-as-assignee (this file uses the reporter), and
+// Actual-vs-Expected order (the Protocol contradicts itself; this file uses
+// Actual first, as the Bug Ticket Standard does).
 export const CHECKS_WRITTEN_AGAINST = {
-  asOf: '2026-10-06',
+  asOf: '2026-10-07',
   pages: [
     { id: BUG_STANDARD_PAGE_ID, title: 'Bug Ticket Standard', version: 3 },
-    { id: PROTOCOL_PAGE_ID, title: 'QA Reporting Protocols & Guidelines 2026', version: 2 },
+    { id: PROTOCOL_PAGE_ID, title: 'QA Reporting Protocols & Guidelines 2026', version: 3 },
     { id: '281870363', title: 'Kinetic Digital — Brands & GEO Mapping', version: 2 }, // basis of the COM-vs-UK rule
   ],
 };
