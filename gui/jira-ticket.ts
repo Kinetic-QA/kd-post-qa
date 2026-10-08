@@ -5,11 +5,13 @@
 // here): QA Reporting Protocols & Guidelines 2026 (page 281935875, §4) and
 // the Bug Ticket Standard (page 291209218, ten-paragraph Description).
 //
-// NOTHING IS WRITTEN TO JIRA by this module. Every Jira call here is a
-// read-only lookup (who am I, project versions, create-screen fields), and
-// /jira-create only ever returns the exact payload it WOULD send (dryRun).
-// Jira writes need explicit per-action approval (Bug Ticket Standard,
-// "Non-negotiable cross-cutting rules") — real creation is a separate step.
+// The only Jira write in this module is /jira-create with confirm:true, which
+// creates one new Bug and attaches the finding's screenshots to it. Jira writes
+// need explicit per-action approval (Bug Ticket Standard, "Non-negotiable
+// cross-cutting rules"), so that route refuses unless the person has just
+// approved THIS ticket in the popup's confirm step (destination, assignee and
+// attachment count shown). Everything else here is a read-only lookup, and
+// /jira-create with dryRun:true still only returns the payload it would send.
 import type { Express } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,6 +20,24 @@ import { BRAND_URLS } from '../helpers/brand-urls';
 import { JiraClient } from '../src/jira-client';
 import { getConfluencePageText, getConfluencePageVersion } from '../src/confluence-client';
 import { MODEL } from './visual-compare';
+
+// Who a new ticket can be assigned to, looked up in Jira by name (never a
+// guessed account id). Rosters per the Confluence "Team & Resource Directory"
+// (Projects and QA / Product and R&D) and the people on recent Jira bugs: the QA
+// team and the three developers. The person running the GUI (the Jira token's
+// owner) is the default and is listed first: tickets are created under the owner
+// of the web release project, who then passes them to Boaz (the standards'
+// default developer, Protocol §4.9 step 12). The confirm step names the
+// assignee before anything is created, so the person is always asked.
+const ASSIGNEE_LOOKUP: Array<{ name: string; role: 'QA' | 'Dev' }> = [
+  { name: 'Reeve', role: 'QA' },
+  { name: 'Edward', role: 'QA' },
+  { name: 'Kristel', role: 'QA' },
+  { name: 'Reyn', role: 'QA' },
+  { name: 'Boaz', role: 'Dev' },
+  { name: 'Oleg', role: 'Dev' },
+  { name: 'Gerline', role: 'Dev' },
+];
 
 const PROTOCOL_PAGE_ID = '281935875';      // QA Reporting Protocols & Guidelines 2026
 const BUG_STANDARD_PAGE_ID = '291209218';  // Bug Ticket Standard
@@ -58,6 +78,10 @@ type Deps = {
   isValidBrand: (brand: string) => boolean;
   isValidDateStr: (dateStr: string) => boolean;
   findFinding: (brand: string, dateStr: string, geo: string, title: string) => Promise<Finding | null>;
+  // The Jira ticket already recorded for a finding (null if none) and the write
+  // that records a new one — owned by the Triage store in server.ts.
+  getSavedTicket: (brand: string, dateStr: string, finding: Finding) => { key: string; url: string } | null;
+  recordTicket: (brand: string, dateStr: string, finding: Finding, ticket: { key: string; url: string }) => void;
 };
 
 const SECTION_KEYS = [
@@ -178,16 +202,18 @@ const STANDARDS_MAX_CHARS = 60000;
 // THEN bump the version number here (and the date). Never bump it without
 // re-reading — that would just silence the warning.
 //
-// Open on the QA PIC's side (not decided by this code, re-check when these
-// pages change): the Protocol §4.9 default assignee ("Boaz") vs the Bug
-// Ticket Standard's reporter-as-assignee (this file uses the reporter), and
-// Actual-vs-Expected order (the Protocol contradicts itself; this file uses
-// Actual first, as the Bug Ticket Standard does).
+// Settled 2026-10-07 (QA PIC): Boaz by default, and the person is always asked
+// (Protocol §4.9 step 12 and the Bug Ticket Standard agree). Here the ticket is
+// created under the person running the GUI (web release project owner), who
+// hands it to Boaz — confirmed by Reeve 2026-10-08.
+// Still open on the QA PIC's side (not decided by this code, re-check when
+// these pages change): Actual-vs-Expected order (the Protocol contradicts
+// itself; this file uses Actual first, as the Bug Ticket Standard does).
 export const CHECKS_WRITTEN_AGAINST = {
-  asOf: '2026-10-07',
+  asOf: '2026-10-08',
   pages: [
-    { id: BUG_STANDARD_PAGE_ID, title: 'Bug Ticket Standard', version: 3 },
-    { id: PROTOCOL_PAGE_ID, title: 'QA Reporting Protocols & Guidelines 2026', version: 3 },
+    { id: BUG_STANDARD_PAGE_ID, title: 'Bug Ticket Standard', version: 4 },
+    { id: PROTOCOL_PAGE_ID, title: 'QA Reporting Protocols & Guidelines 2026', version: 5 },
     { id: '281870363', title: 'Kinetic Digital — Brands & GEO Mapping', version: 2 }, // basis of the COM-vs-UK rule
   ],
 };
@@ -289,14 +315,15 @@ export function registerJiraTicketRoutes(app: Express, deps: Deps): void {
       (async () => {
         try {
           const jira = new JiraClient();
-          const [me, versions, fields] = await Promise.all([
+          const [me, nameMatches, versions, fields] = await Promise.all([
             jira.getMyself(),
+            Promise.all(ASSIGNEE_LOOKUP.map(a => jira.searchUsers(a.name))),
             jira.getProjectVersions(project.key),
             jira.getIssueTypeFields(project.key, 'Bug'),
           ]);
-          return { me, versions, fields, error: null as string | null };
+          return { me, nameMatches, versions, fields, error: null as string | null };
         } catch (e) {
-          return { me: null, versions: [], fields: null, error: e instanceof Error ? e.message : String(e) };
+          return { me: null, nameMatches: [] as Array<Array<{ accountId: string; displayName: string }>>, versions: [], fields: null, error: e instanceof Error ? e.message : String(e) };
         }
       })(),
       standardsDriftFlags(),
@@ -306,6 +333,25 @@ export function registerJiraTicketRoutes(app: Express, deps: Deps): void {
     if (!bugStandardText) flags.push('Could not read the Bug Ticket Standard from Confluence — the draft was written without it. Check it against the standard before creating.');
     const protocolIssues = protocolText ? protocolIssueSection(protocolText) : null;
     if (!protocolIssues) flags.push('Could not read the issue-reporting section (§4) of QA Reporting Protocols & Guidelines from Confluence — the draft was written without it.');
+    // Assignee choices: me first (the default), then each named person — but only
+    // when the name matches exactly one Jira account; an ambiguous or missing name
+    // is flagged, never guessed.
+    const assigneeOptions: Array<{ accountId: string; displayName: string; role?: 'QA' | 'Dev' }> = [];
+    const addAssignee = (u: { accountId: string; displayName: string }, role?: 'QA' | 'Dev') => {
+      if (!assigneeOptions.some(o => o.accountId === u.accountId)) assigneeOptions.push({ ...u, role });
+    };
+    ASSIGNEE_LOOKUP.forEach(({ name, role }, i) => {
+      const hits = (jiraLookups.nameMatches[i] ?? []).filter(u => u.displayName.toLowerCase().includes(name.toLowerCase()));
+      if (hits.length === 1) addAssignee(hits[0], role);
+      else if (!jiraLookups.error) flags.push(hits.length === 0 ? `Could not find "${name}" in Jira for the assignee list.` : `Found ${hits.length} people matching "${name}" in Jira — use the search box to pick the right one.`);
+    });
+    // The token's owner is the default; make sure it is first even if not matched above.
+    if (jiraLookups.me) {
+      const at = assigneeOptions.findIndex(o => o.accountId === jiraLookups.me!.accountId);
+      const mine = at >= 0 ? assigneeOptions.splice(at, 1)[0] : { ...jiraLookups.me, role: 'QA' as const };
+      assigneeOptions.unshift(mine);
+    }
+    const defaultAssignee = jiraLookups.me;
     if (jiraLookups.error) flags.push(`Could not read Jira (${jiraLookups.error}) — project, priority, versions and assignee below are unconfirmed.`);
     else if (!jiraLookups.fields) flags.push(`Jira space ${project.key} has no "Bug" work type.`);
 
@@ -441,7 +487,8 @@ Rules:
       fields: {
         priority,
         priorityOptions,
-        assignee: jiraLookups.me,
+        assignee: defaultAssignee,
+        assigneeOptions,
         fixVersion: next ? { id: next.id, name: next.name } : null,
         versionOptions: jiraLookups.versions.filter(v => !v.archived).map(v => ({ id: v.id, name: v.name })),
         brandCode: brand,
@@ -452,28 +499,26 @@ Rules:
     });
   });
 
-  // DRY RUN ONLY. Validates the edited draft against the standard and returns
-  // the exact Jira payload it would send. Never contacts Jira's write API.
-  app.post('/jira-create', (req, res) => {
-    const brand = String(req.body?.brand ?? '');
-    const draft = req.body?.draft;
-    if (!deps.isValidBrand(brand) || !draft || typeof draft !== 'object') {
-      res.status(400).json({ error: 'Invalid request.' });
-      return;
+  // Other developers to assign to (the person is always asked — Protocol §4.9
+  // step 12). Read-only lookup by name.
+  app.get('/jira-users', async (req, res) => {
+    const q = String(req.query.q ?? '').trim();
+    if (q.length < 2) { res.json({ users: [] }); return; }
+    try {
+      res.json({ users: await new JiraClient().searchUsers(q) });
+    } catch (e) {
+      res.status(502).json({ error: `Could not search Jira: ${e instanceof Error ? e.message : String(e)}` });
     }
-    if (req.body?.dryRun !== true) {
-      res.status(501).json({ error: 'Real ticket creation is not enabled yet — this is the proof of concept. Nothing was sent to Jira.' });
-      return;
-    }
+  });
+
+  // Validates the edited draft against the written standard and builds the exact
+  // Jira payload. Problems are reported, never silently fixed.
+  function checkDraft(brand: string, draft: any) {
     const project = BRAND_TO_JIRA_PROJECT[brand];
-    if (!project) { res.status(400).json({ error: `No Jira space is mapped for brand ${brand}.` }); return; }
-
     const sections = {} as Record<SectionKey, string>;
-    for (const key of SECTION_KEYS) sections[key] = str(draft.sections?.[key]);
-    const summary = str(draft.summary);
+    for (const key of SECTION_KEYS) sections[key] = str(draft?.sections?.[key]);
+    const summary = str(draft?.summary);
 
-    // Checks against the written standard — problems are reported, not
-    // silently fixed; the person decides.
     const problems: string[] = [];
     if (!summary) problems.push('Summary is empty.');
     else if ((summary.match(/ - /g) ?? []).length < 2) problems.push('Summary should be "[Brand + Geo] - [Page/Feature] - [Issue]" (three parts).');
@@ -481,13 +526,13 @@ Rules:
     for (const key of SECTION_KEYS) if (!sections[key]) problems.push(`"${SECTION_LABELS[key]}" is empty.`);
     if (sections.stepsToReplicate && !/https?:\/\//i.test(sections.stepsToReplicate.split('\n')[0] ?? '')) problems.push('Steps to Replicate must open with a real URL.');
     if (/^com$/i.test(sections.affectedGeo.trim()) && ['GC', 'SC', 'SNG'].includes(brand)) problems.push(`${brand}'s .com site is the UK site — Affected GEO should say UK, not COM.`);
-    const priority = str(draft.priority);
-    const assigneeId = str(draft.assigneeAccountId);
-    if (!assigneeId) problems.push('No assignee.');
+    const priority = str(draft?.priority);
+    const assigneeId = str(draft?.assigneeAccountId);
+    if (!assigneeId) problems.push('No assignee — choose the developer to assign it to.');
 
-    const fixVersionId = str(draft.fixVersionId);
-    const affectsVersionId = str(draft.affectsVersionId);
-    const labels: string[] = (Array.isArray(draft.labels) ? draft.labels : []).map(str).filter(Boolean);
+    const fixVersionId = str(draft?.fixVersionId);
+    const affectsVersionId = str(draft?.affectsVersionId);
+    const labels: string[] = (Array.isArray(draft?.labels) ? draft.labels : []).map(str).filter(Boolean);
 
     const fields: Record<string, unknown> = {
       project: { key: project.key },
@@ -504,19 +549,96 @@ Rules:
     if (!fixVersionId) unset.push('Fix Version');
     if (!affectsVersionId) unset.push('Affects Version');
     if (!labels.length) unset.push('Labels');
+    return { project, problems, fields, unset };
+  }
 
-    const attachments: string[] = (Array.isArray(draft.evidencePlatforms) ? draft.evidencePlatforms : []).map(str).filter(Boolean);
+  app.post('/jira-create', async (req, res) => {
+    const brand = String(req.body?.brand ?? '');
+    const draft = req.body?.draft;
+    if (!deps.isValidBrand(brand) || !draft || typeof draft !== 'object') {
+      res.status(400).json({ error: 'Invalid request.' });
+      return;
+    }
+    if (!BRAND_TO_JIRA_PROJECT[brand]) { res.status(400).json({ error: `No Jira space is mapped for brand ${brand}.` }); return; }
+    const { project, problems, fields, unset } = checkDraft(brand, draft);
+
+    if (req.body?.dryRun === true) {
+      const attachments: string[] = (Array.isArray(draft.evidencePlatforms) ? draft.evidencePlatforms : []).map(str).filter(Boolean);
+      res.json({
+        dryRun: true,
+        sent: false,
+        note: 'DRY RUN — nothing was sent to Jira.',
+        ok: problems.length === 0,
+        problems,
+        unsetFieldsToFlagInRemarks: unset,
+        wouldPostTo: `POST ${(process.env.JIRA_BASE_URL ?? '').replace(/\/$/, '')}/rest/api/3/issue`,
+        payload: { fields },
+        thenAttach: attachments.map(p => `${p} screenshot (uploaded to the new ticket after it is created)`),
+      });
+      return;
+    }
+
+    // ── Real creation: only on an explicit, just-given approval ───────────
+    if (req.body?.confirm !== true) {
+      res.status(400).json({ error: 'Not approved — nothing was sent to Jira.' });
+      return;
+    }
+    const dateStr = String(req.body?.dateStr ?? '');
+    if (!deps.isValidDateStr(dateStr)) { res.status(400).json({ error: 'Invalid date.' }); return; }
+    // The finding (and its screenshots) is re-derived from the run itself —
+    // the client never supplies a file path or decides what already has a ticket.
+    const finding = await deps.findFinding(brand, dateStr, String(req.body?.geo ?? ''), String(req.body?.title ?? ''));
+    if (!finding) { res.status(404).json({ error: 'That finding is not part of this run. Nothing was sent to Jira.' }); return; }
+    const existing = deps.getSavedTicket(brand, dateStr, finding);
+    if (existing) { res.status(409).json({ error: `This finding already has a Jira ticket (${existing.key}). Nothing was sent to Jira.`, ticket: existing }); return; }
+    if (problems.length) { res.status(422).json({ error: 'The draft does not meet the standard yet. Nothing was sent to Jira.', problems }); return; }
+    // Protocol §4.8: an issue found on the QA site (a pre-check) is normally a
+    // comment on the ORIGINAL task, not a new bug. Creating a new bug from a
+    // QA-site finding needs its own explicit acknowledgement.
+    const environment = findingEnvironment(brand, finding);
+    if (environment === 'QA' && req.body?.acknowledgeQaNewBug !== true) {
+      res.status(409).json({ error: 'This was found on the QA site, where the Protocol says to comment on the original task instead of opening a new bug. Nothing was sent to Jira. Confirm you want a new bug anyway to continue.' });
+      return;
+    }
+
+    let jira: JiraClient;
+    let created: { key: string; url: string };
+    try {
+      jira = new JiraClient();
+      created = await jira.createIssue(fields);
+    } catch (e) {
+      const detail = (e as any)?.response?.data ? JSON.stringify((e as any).response.data) : (e instanceof Error ? e.message : String(e));
+      res.status(502).json({ error: `Jira did not create the ticket: ${detail}` });
+      return;
+    }
+
+    // The ticket now exists — record it first so the row shows the link even if
+    // an attachment fails, and a retry can never create a duplicate.
+    let recordError: string | null = null;
+    try { deps.recordTicket(brand, dateStr, finding, created); } catch (e) { recordError = e instanceof Error ? e.message : String(e); }
+
+    const attached: string[] = [];
+    const attachFailed: string[] = [];
+    for (const ev of finding.evidence) {
+      if (!ev.screenshot) continue;
+      const resolved = path.resolve(ev.screenshot);
+      if (!isInside(reportsRoot(), resolved) || !fs.existsSync(resolved)) { attachFailed.push(`${ev.platform} (file missing)`); continue; }
+      try {
+        await jira.uploadAttachment(created.key, resolved);
+        attached.push(ev.platform);
+      } catch (e) {
+        attachFailed.push(`${ev.platform} (${e instanceof Error ? e.message : String(e)})`);
+      }
+    }
 
     res.json({
-      dryRun: true,
-      sent: false,
-      note: 'DRY RUN — nothing was sent to Jira.',
-      ok: problems.length === 0,
-      problems,
+      created: true,
+      ticket: created,
+      project: project.key,
+      attached,
+      attachFailed,
       unsetFieldsToFlagInRemarks: unset,
-      wouldPostTo: `POST ${(process.env.JIRA_BASE_URL ?? '').replace(/\/$/, '')}/rest/api/3/issue`,
-      payload: { fields },
-      thenAttach: attachments.map(p => `${p} screenshot (uploaded to the new ticket after it is created)`),
+      recordError,
     });
   });
 }

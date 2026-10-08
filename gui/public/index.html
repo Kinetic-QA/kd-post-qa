@@ -528,7 +528,7 @@
     </div>
 
   </div>
-  <!-- Create JIRA ticket popup (proof of concept: drafts + validates, dry run only) -->
+  <!-- Create JIRA ticket popup: drafts, validates, and creates only after an explicit confirm step -->
   <div id="jira-modal" class="modal-backdrop" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="jira-modal-title">
       <div class="modal-header">
@@ -557,7 +557,14 @@
 
           <div class="jira-fields">
             <div class="jira-field"><label class="jira-label" for="jira-priority">Priority</label><select id="jira-priority" class="jira-input"></select></div>
-            <div class="jira-field"><span class="jira-label">Assignee</span><div id="jira-assignee" class="jira-static"></div></div>
+            <div class="jira-field">
+              <label class="jira-label" for="jira-assignee">Assignee</label>
+              <select id="jira-assignee" class="jira-input"></select>
+              <div class="jira-assignee-search">
+                <input id="jira-assignee-q" class="jira-input" type="text" placeholder="Another developer &mdash; type a name" />
+                <button id="jira-assignee-find" class="action-btn" type="button">Find</button>
+              </div>
+            </div>
             <div class="jira-field"><label class="jira-label" for="jira-fixversion">Fix version</label><select id="jira-fixversion" class="jira-input"></select></div>
             <div class="jira-field"><label class="jira-label" for="jira-sitever">Site version (footer, e.g. 2.19.0)</label><input id="jira-sitever" class="jira-input" type="text" placeholder="2.19.0" /></div>
             <div class="jira-field"><label class="jira-label" for="jira-affects">Affects version</label><select id="jira-affects" class="jira-input"></select></div>
@@ -565,11 +572,22 @@
           </div>
 
           <div id="jira-dryrun-output" class="jira-dryrun" hidden></div>
+
+          <div id="jira-confirm" class="jira-dryrun" hidden>
+            <p id="jira-confirm-text"></p>
+            <label id="jira-confirm-qa-wrap" hidden><input id="jira-confirm-qa" type="checkbox" /> This was found on the QA site, where the Protocol says to comment on the original task instead. Create a new bug anyway.</label>
+            <div class="jira-confirm-actions">
+              <button id="jira-confirm-yes" class="action-btn action-btn-primary" type="button">Yes, create it</button>
+              <button id="jira-confirm-back" class="action-btn" type="button">Back</button>
+            </div>
+          </div>
+          <div id="jira-result" class="jira-dryrun" hidden></div>
         </form>
       </div>
       <div class="modal-footer">
         <button id="jira-modal-cancel" class="action-btn" type="button">Cancel</button>
-        <button id="jira-create-btn" class="action-btn action-btn-primary" type="button" disabled>Create (dry run &mdash; nothing is sent to Jira)</button>
+        <button id="jira-check-btn" class="action-btn" type="button" disabled>Check draft (nothing is sent)</button>
+        <button id="jira-create-btn" class="action-btn action-btn-primary" type="button" disabled>Create in Jira&hellip;</button>
       </div>
     </div>
   </div>

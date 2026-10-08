@@ -11,6 +11,14 @@
 //   node dashboard/build-data.cjs && node deploy-dashboard.cjs
 //   TEST_BRAND=SC node deploy-dashboard.cjs         (also stage+link SC's latest reports)
 //   TEST_BRAND=SC TEST_DATE=2026-09-09 node deploy-dashboard.cjs
+//
+// Pinning (used by the GUI's "Upload to Netlify" so it publishes the run that
+// was just reviewed instead of whatever is newest on disk):
+//   PINNED_REPORT_FOLDERS='{"UK":"report-9518"}'  exact report-<port> folder per GEO
+//   EXCEL_REPORT_FILE=SC-2026-09-29-14-53-00      the one workbook to backfill links into
+// With PINNED_REPORT_FOLDERS set, a GEO that isn't listed is not staged, and a
+// listed folder that no longer exists on disk stops the deploy (no silent fall
+// back to a different run).
 
 const fs = require('fs');
 const path = require('path');
@@ -23,6 +31,8 @@ const SITE_NAME = 'qa-automated-regression-results';
 const ROOT = __dirname;
 const DASHBOARD_PUBLIC = path.join(ROOT, 'dashboard', 'public');
 const SITE_STATE_FILE = path.join(ROOT, 'dashboard', '.netlify-site.json');
+
+const PINNED_REPORT_FOLDERS = process.env.PINNED_REPORT_FOLDERS ? JSON.parse(process.env.PINNED_REPORT_FOLDERS) : null;
 
 const token = process.env.NETLIFY_AUTH_TOKEN;
 if (!token) {
@@ -122,7 +132,17 @@ async function stageReports(brand, dateStr) {
   fs.rmSync(destRoot, { recursive: true, force: true });
 
   for (const geo of geoDirs) {
-    const reportFolder = latestReportFolder(path.join(brandDir, geo, dateStr));
+    let reportFolder;
+    if (PINNED_REPORT_FOLDERS) {
+      if (!PINNED_REPORT_FOLDERS[geo]) continue;
+      reportFolder = path.join(brandDir, geo, dateStr, PINNED_REPORT_FOLDERS[geo]);
+      if (!fs.existsSync(path.join(reportFolder, 'index.html'))) {
+        console.error(`The report folder for ${brand} ${geo} ${dateStr} (${PINNED_REPORT_FOLDERS[geo]}) is no longer on disk (older runs get pruned). Nothing was deployed.`);
+        process.exit(1);
+      }
+    } else {
+      reportFolder = latestReportFolder(path.join(brandDir, geo, dateStr));
+    }
     if (!reportFolder) continue;
     console.log(`  staging ${geo}  <-  ${reportFolder}`);
     const dest = path.join(destRoot, geo);

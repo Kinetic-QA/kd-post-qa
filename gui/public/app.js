@@ -34,6 +34,9 @@ let geosByBrand = {};
 // place Review/Upload-to-Netlify can still get brand/date from afterward.
 let lastRunBrand = null;
 let lastRunDateStr = null;
+// Which exact run finished (its combined workbook name + each GEO's report folder) — sent with the
+// upload so it publishes THIS run, not whatever is newest on disk.
+let lastRunRef = null;
 
 // ── Desktop alerts (real run finished, or combined run paused for a VPN
 // switch) ─────────────────────────────────────────────────────────────
@@ -858,6 +861,7 @@ runBtn.addEventListener('click', () => {
   uploadOutputEl.hidden = true;
   lastRunBrand = null;
   lastRunDateStr = null;
+  lastRunRef = null;
 
   const params = new URLSearchParams({
     brand,
@@ -961,6 +965,7 @@ runBtn.addEventListener('click', () => {
 
       lastRunBrand = data.brand ?? null;
       lastRunDateStr = data.dateStr ?? null;
+      lastRunRef = data.excelReportFile ? { excelReportFile: data.excelReportFile, reportFolders: data.reportFolders ?? {} } : null;
       // Upload only ever appears after a completed Review (see reviewBtn's
       // own handler) — Review is the only button shown right after a run.
       resetReviewPanel();
@@ -1298,6 +1303,16 @@ const jiraAffectsEl = document.getElementById('jira-affects');
 const jiraLabelsEl = document.getElementById('jira-labels');
 const jiraDryRunEl = document.getElementById('jira-dryrun-output');
 const jiraCreateBtn = document.getElementById('jira-create-btn');
+const jiraCheckBtn = document.getElementById('jira-check-btn');
+const jiraAssigneeQEl = document.getElementById('jira-assignee-q');
+const jiraAssigneeFindEl = document.getElementById('jira-assignee-find');
+const jiraConfirmEl = document.getElementById('jira-confirm');
+const jiraConfirmTextEl = document.getElementById('jira-confirm-text');
+const jiraConfirmQaWrapEl = document.getElementById('jira-confirm-qa-wrap');
+const jiraConfirmQaEl = document.getElementById('jira-confirm-qa');
+const jiraConfirmYesBtn = document.getElementById('jira-confirm-yes');
+const jiraConfirmBackBtn = document.getElementById('jira-confirm-back');
+const jiraResultEl = document.getElementById('jira-result');
 
 // The Bug Ticket Standard's Description order and labels.
 const JIRA_SECTIONS = [
@@ -1314,12 +1329,16 @@ const JIRA_SECTIONS = [
 ];
 
 let jiraDraft = null;
+let jiraRowFinding = null;   // the Triage finding this popup was opened for
+let jiraCreated = null;      // set once a ticket has really been created from this popup
 let jiraLabels = [];
 const jiraSectionInputs = {};
 
 function closeJiraModal() {
   jiraModalEl.hidden = true;
   jiraDraft = null;
+  jiraRowFinding = null;
+  jiraCreated = null;
   document.body.classList.remove('modal-open');
 }
 
@@ -1333,6 +1352,11 @@ function jiraOption(value, label, selected) {
 
 async function openJiraModal(row) {
   jiraDraft = null;
+  jiraRowFinding = row.finding;
+  jiraCreated = null;
+  jiraConfirmEl.hidden = true;
+  jiraResultEl.hidden = true;
+  jiraResultEl.textContent = '';
   jiraLoadingEl.hidden = false;
   jiraErrorEl.hidden = true;
   jiraErrorEl.textContent = '';
@@ -1340,6 +1364,7 @@ async function openJiraModal(row) {
   jiraDryRunEl.hidden = true;
   jiraDryRunEl.textContent = '';
   jiraCreateBtn.disabled = true;
+  jiraCheckBtn.disabled = true;
   jiraModalEl.hidden = false;
   document.body.classList.add('modal-open');
 
@@ -1437,7 +1462,7 @@ function renderJiraDraft(d) {
   if (priorities.length === 0) jiraPriorityEl.appendChild(jiraOption('', '(unknown — set in Jira)', true));
   for (const p of priorities) jiraPriorityEl.appendChild(jiraOption(p, p, p === d.fields.priority));
 
-  jiraAssigneeEl.textContent = d.fields.assignee ? d.fields.assignee.displayName : '— unavailable —';
+  renderJiraAssignee(d);
 
   const versions = d.fields.versionOptions ?? [];
   jiraFixVersionEl.textContent = '';
@@ -1451,7 +1476,7 @@ function renderJiraDraft(d) {
   updateJiraVersionFields();
 
   jiraFormEl.hidden = false;
-  jiraCreateBtn.disabled = !d.fields.assignee;
+  refreshJiraButtons();
 }
 
 // Affects Version + the x.xx-post label come from the version the person reads
@@ -1487,29 +1512,86 @@ function updateJiraVersionFields() {
 
 jiraSiteVerEl.addEventListener('input', updateJiraVersionFields);
 
-jiraCreateBtn.addEventListener('click', async () => {
-  if (!jiraDraft) return;
-  jiraCreateBtn.disabled = true;
+// ── Assignee: the person running the GUI by default, always confirmed in the create step ──
+function renderJiraAssignee(d) {
+  jiraAssigneeEl.textContent = '';
+  const def = d.fields.assignee;
+  jiraAssigneeEl.appendChild(jiraOption('', '— choose an assignee —', !def));
+  for (const u of d.fields.assigneeOptions ?? (def ? [def] : [])) {
+    const isDefault = def && u.accountId === def.accountId;
+    const label = `${u.displayName}${u.role ? ` — ${u.role === 'Dev' ? 'Developer' : 'QA'}` : ''}${isDefault ? ' (default)' : ''}`;
+    jiraAssigneeEl.appendChild(jiraOption(u.accountId, label, isDefault));
+  }
+  jiraAssigneeQEl.value = '';
+}
+
+function selectedJiraAssignee() {
+  const opt = jiraAssigneeEl.selectedOptions[0];
+  return opt && opt.value ? { accountId: opt.value, name: opt.textContent.replace(/ \(default\)$/, '').replace(/ — (QA|Developer)$/, '') } : null;
+}
+
+function refreshJiraButtons() {
+  const ready = Boolean(jiraDraft && selectedJiraAssignee());
+  jiraCheckBtn.disabled = !ready;
+  jiraCreateBtn.disabled = !ready || Boolean(jiraCreated);
+}
+
+jiraAssigneeEl.addEventListener('change', () => { jiraConfirmEl.hidden = true; refreshJiraButtons(); });
+
+jiraAssigneeFindEl.addEventListener('click', async () => {
+  const q = jiraAssigneeQEl.value.trim();
+  if (q.length < 2) return;
+  jiraAssigneeFindEl.disabled = true;
+  try {
+    const res = await fetch(`/jira-users?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'Search failed.');
+    const users = data.users ?? [];
+    if (users.length === 0) {
+      jiraAssigneeQEl.value = '';
+      jiraAssigneeQEl.placeholder = `No one found for "${q}"`;
+      return;
+    }
+    for (const u of users) {
+      if (![...jiraAssigneeEl.options].some(o => o.value === u.accountId)) jiraAssigneeEl.appendChild(jiraOption(u.accountId, u.displayName, false));
+    }
+    jiraAssigneeEl.value = users[0].accountId;
+    jiraConfirmEl.hidden = true;
+    refreshJiraButtons();
+  } catch (e) {
+    jiraAssigneeQEl.value = '';
+    jiraAssigneeQEl.placeholder = e.message;
+  } finally {
+    jiraAssigneeFindEl.disabled = false;
+  }
+});
+
+function currentJiraDraftBody() {
   const sections = {};
   for (const [key] of JIRA_SECTIONS) sections[key] = jiraSectionInputs[key].value;
+  const assignee = selectedJiraAssignee();
+  return {
+    summary: jiraSummaryEl.value,
+    sections,
+    priority: jiraPriorityEl.value,
+    assigneeAccountId: assignee ? assignee.accountId : '',
+    fixVersionId: jiraFixVersionEl.value,
+    affectsVersionId: jiraAffectsEl.value,
+    labels: jiraLabels,
+    evidencePlatforms: (jiraDraft.evidence ?? []).map(e => e.platform),
+  };
+}
+
+// Dry run: validates against the written standard and shows exactly what would
+// be sent. Sends nothing. Returns the server's answer (or null if unreachable).
+async function runJiraDryRun() {
+  jiraCreateBtn.disabled = true;
+  jiraCheckBtn.disabled = true;
   try {
     const res = await fetch('/jira-create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        brand: lastRunBrand,
-        dryRun: true,
-        draft: {
-          summary: jiraSummaryEl.value,
-          sections,
-          priority: jiraPriorityEl.value,
-          assigneeAccountId: jiraDraft.fields.assignee ? jiraDraft.fields.assignee.accountId : '',
-          fixVersionId: jiraFixVersionEl.value,
-          affectsVersionId: jiraAffectsEl.value,
-          labels: jiraLabels,
-          evidencePlatforms: (jiraDraft.evidence ?? []).map(e => e.platform),
-        },
-      }),
+      body: JSON.stringify({ brand: lastRunBrand, dryRun: true, draft: currentJiraDraftBody() }),
     });
     const data = await res.json();
     jiraDryRunEl.textContent = '';
@@ -1520,7 +1602,7 @@ jiraCreateBtn.addEventListener('click', async () => {
     if (res.ok) {
       const verdict = document.createElement('p');
       verdict.className = data.ok ? 'jira-dryrun-ok' : 'jira-dryrun-bad';
-      verdict.textContent = data.ok ? 'The draft meets the written standard.' : 'Fix these before this could be created:';
+      verdict.textContent = data.ok ? 'The draft meets the written standard.' : 'Fix these before this can be created:';
       jiraDryRunEl.appendChild(verdict);
       if (!data.ok) {
         const ul = document.createElement('ul');
@@ -1547,11 +1629,104 @@ jiraCreateBtn.addEventListener('click', async () => {
     }
     jiraDryRunEl.hidden = false;
     jiraDryRunEl.scrollIntoView({ block: 'nearest' });
+    return res.ok ? data : null;
   } catch (e) {
     jiraDryRunEl.textContent = 'Could not reach the QA Test Center. Check that it is still running, then try again.';
     jiraDryRunEl.hidden = false;
+    return null;
   } finally {
-    jiraCreateBtn.disabled = !(jiraDraft && jiraDraft.fields.assignee);
+    refreshJiraButtons();
+  }
+}
+
+jiraCheckBtn.addEventListener('click', () => { jiraConfirmEl.hidden = true; runJiraDryRun(); });
+
+// Step 1 of creating: re-check the draft, then ask. Nothing is sent to Jira
+// until "Yes, create it" below.
+jiraCreateBtn.addEventListener('click', async () => {
+  if (!jiraDraft) return;
+  jiraConfirmEl.hidden = true;
+  const check = await runJiraDryRun();
+  if (!check || !check.ok) return;
+  const assignee = selectedJiraAssignee();
+  const shots = (jiraDraft.evidence ?? []).length;
+  jiraConfirmTextEl.textContent =
+    `Ready to create this as a new ${jiraDraft.issueType} in ${jiraDraft.project.key} (${jiraDraft.project.name}), ` +
+    `assigned to ${assignee.name}, with ${shots} screenshot${shots === 1 ? '' : 's'} attached? ` +
+    `Not the right developer? Go back and change the assignee first.`;
+  const isQa = jiraDraft.environment === 'QA';
+  jiraConfirmQaWrapEl.hidden = !isQa;
+  jiraConfirmQaEl.checked = false;
+  jiraConfirmYesBtn.disabled = isQa;
+  jiraConfirmEl.hidden = false;
+  jiraConfirmEl.scrollIntoView({ block: 'nearest' });
+});
+
+jiraConfirmQaEl.addEventListener('change', () => { jiraConfirmYesBtn.disabled = !jiraConfirmQaEl.checked; });
+jiraConfirmBackBtn.addEventListener('click', () => { jiraConfirmEl.hidden = true; });
+
+// Step 2: the explicit approval. This is the only call that writes to Jira.
+jiraConfirmYesBtn.addEventListener('click', async () => {
+  if (!jiraDraft || jiraCreated) return;
+  jiraConfirmYesBtn.disabled = true;
+  jiraConfirmBackBtn.disabled = true;
+  jiraResultEl.hidden = true;
+  jiraResultEl.className = 'jira-dryrun';
+  try {
+    const res = await fetch('/jira-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brand: lastRunBrand,
+        dateStr: lastRunDateStr,
+        geo: jiraRowFinding.geo,
+        title: jiraRowFinding.title,
+        confirm: true,
+        acknowledgeQaNewBug: jiraConfirmQaEl.checked,
+        draft: currentJiraDraftBody(),
+      }),
+    });
+    const data = await res.json();
+    jiraResultEl.textContent = '';
+    if (!res.ok) {
+      const p = document.createElement('p');
+      p.className = 'jira-dryrun-bad';
+      p.textContent = data.error ?? 'Jira did not create the ticket.';
+      jiraResultEl.appendChild(p);
+      if (Array.isArray(data.problems)) {
+        const ul = document.createElement('ul');
+        for (const t of data.problems) { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }
+        jiraResultEl.appendChild(ul);
+      }
+      jiraConfirmYesBtn.disabled = jiraDraft.environment === 'QA' && !jiraConfirmQaEl.checked;
+    } else {
+      jiraCreated = data.ticket;
+      jiraConfirmEl.hidden = true;
+      const p = document.createElement('p');
+      p.className = 'jira-dryrun-ok';
+      p.append('Created ');
+      const a = document.createElement('a');
+      a.href = data.ticket.url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = data.ticket.key;
+      p.append(a, `. Attached: ${data.attached.length ? data.attached.join(', ') : 'no screenshots'}.`);
+      jiraResultEl.appendChild(p);
+      const notes = [];
+      if (data.attachFailed.length) notes.push(`These screenshots could not be attached — add them by hand: ${data.attachFailed.join('; ')}.`);
+      if (data.unsetFieldsToFlagInRemarks.length) notes.push(`Not set, flag in Remarks / set in Jira: ${data.unsetFieldsToFlagInRemarks.join(', ')}.`);
+      if (data.recordError) notes.push(`The ticket exists, but this page could not save its link to the Triage row (${data.recordError}). Use ${data.ticket.key}.`);
+      for (const n of notes) { const q = document.createElement('p'); q.className = 'jira-dryrun-note'; q.textContent = n; jiraResultEl.appendChild(q); }
+      loadTriage();
+    }
+    jiraResultEl.hidden = false;
+    jiraResultEl.scrollIntoView({ block: 'nearest' });
+  } catch (e) {
+    jiraResultEl.textContent = 'Could not reach the QA Test Center, so it is not known whether the ticket was created. Check Jira before trying again.';
+    jiraResultEl.hidden = false;
+  } finally {
+    jiraConfirmBackBtn.disabled = false;
+    refreshJiraButtons();
   }
 });
 
@@ -1629,7 +1804,7 @@ uploadNetlifyBtn.addEventListener('click', async () => {
     const res = await fetch('/upload-to-netlify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brand: lastRunBrand, dateStr: lastRunDateStr }),
+      body: JSON.stringify({ brand: lastRunBrand, dateStr: lastRunDateStr, ...(lastRunRef ?? {}) }),
     });
     const data = await res.json();
     if (!res.ok) {

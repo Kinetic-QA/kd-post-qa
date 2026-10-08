@@ -191,6 +191,24 @@ export class JiraClient {
     return { accountId: String(res.data.accountId), displayName: String(res.data.displayName ?? '') };
   }
 
+  // Active human accounts matching a name — used to look the default developer
+  // up by name rather than guessing an account id (Bug Ticket Standard).
+  async searchUsers(query: string): Promise<Array<{ accountId: string; displayName: string }>> {
+    const res = await this.http.get('/user/search', { params: { query, maxResults: 10 } });
+    return (res.data as any[])
+      .filter(u => u.accountType === 'atlassian' && u.active !== false)
+      .map(u => ({ accountId: String(u.accountId), displayName: String(u.displayName ?? '') }));
+  }
+
+  // The ONLY method here that creates an issue. Callers must already hold the
+  // user's explicit approval of the exact ticket (see gui/jira-ticket.ts).
+  async createIssue(fields: Record<string, unknown>): Promise<{ key: string; url: string }> {
+    const res = await this.http.post('/issue', { fields });
+    const key = String(res.data.key);
+    console.log(`[JIRA] Created ${key}`);
+    return { key, url: `${this.baseUrl}/browse/${key}` };
+  }
+
   async getProjectVersions(projectKey: string): Promise<Array<{ id: string; name: string; released: boolean; archived: boolean }>> {
     const res = await this.http.get(`/project/${encodeURIComponent(projectKey)}/versions`);
     return (res.data as any[]).map(v => ({ id: String(v.id), name: String(v.name), released: Boolean(v.released), archived: Boolean(v.archived) }));
