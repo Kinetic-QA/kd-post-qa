@@ -6,6 +6,10 @@
 // static site has no access to this machine's local Test Reports/ folder.
 //
 // Usage: node dashboard/build-data.cjs
+//   PINNED_RUN_FILE=SC-2026-09-29-14-53-00 node dashboard/build-data.cjs
+// PINNED_RUN_FILE (set by the GUI's "Upload to Netlify") makes that one combined
+// workbook the ONLY source for its brand+date, so a later, different run of the
+// same day on disk can't replace the run that was just reviewed.
 // Re-run before every deploy-dashboard.cjs to refresh the snapshot.
 
 const fs = require('fs');
@@ -71,6 +75,16 @@ function reportUrlFor(brand, date, geo) {
   return `/reports/${brand}/${date}/${geo}/index.html`;
 }
 
+const PINNED_RUN_FILE = process.env.PINNED_RUN_FILE || null;
+const PINNED_MATCH = PINNED_RUN_FILE ? PINNED_RUN_FILE.match(/^([A-Za-z0-9]+)-(\d{4}-\d{2}-\d{2})-\d{2}-\d{2}-\d{2}$/) : null;
+if (PINNED_RUN_FILE && !PINNED_MATCH) {
+  console.error(`PINNED_RUN_FILE "${PINNED_RUN_FILE}" is not a <BRAND>-<date>-<HH-MM-SS> workbook name.`);
+  process.exit(1);
+}
+// True for any run of the pinned brand+date other than the pinned workbook itself.
+const isOtherRunOfPinnedDay = (brand, date, file) =>
+  Boolean(PINNED_MATCH) && brand === PINNED_MATCH[1] && date === PINNED_MATCH[2] && file !== `${PINNED_RUN_FILE}.xlsx`;
+
 async function scanRunReports() {
   const rootDir = path.join(ROOT, 'Test Reports');
   const reports = [];
@@ -103,6 +117,9 @@ async function scanRunReports() {
       for (const dateEntry of fs.readdirSync(geoDir, { withFileTypes: true })) {
         if (!dateEntry.isDirectory() || !/^\d{4}-\d{2}-\d{2}$/.test(dateEntry.name)) continue;
         if (combinedKeys.has(`${brand.name}|${geo.name}|${dateEntry.name}`)) continue;
+        // Loose per-GEO workbooks have no run token to match against the pin, so
+        // for the pinned brand+date only the pinned combined workbook counts.
+        if (PINNED_MATCH && brand.name === PINNED_MATCH[1] && dateEntry.name === PINNED_MATCH[2]) continue;
         const dateDir = path.join(geoDir, dateEntry.name);
 
         const xlsxFiles = fs.readdirSync(dateDir).filter(f => f.endsWith('.xlsx'));
@@ -202,6 +219,7 @@ async function scanCombinedReports() {
     const match = file.match(/^([A-Za-z0-9]+)-(\d{4}-\d{2}-\d{2})(?:-(\d{2}-\d{2}-\d{2}))?\.xlsx$/);
     if (!match) continue;
     const [, brand, date, token] = match;
+    if (isOtherRunOfPinnedDay(brand, date, file)) continue;
     const runTime = token
       ? `${date}T${token.replace(/-/g, ':')}.000`
       : fs.statSync(path.join(combinedDir, file)).mtime.toISOString();

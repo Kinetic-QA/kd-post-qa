@@ -1949,3 +1949,7 @@ body.modal-open { overflow: hidden; }
 .jira-dryrun pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 320px; overflow: auto; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
 
 .triage-platforms { margin-top: 3px; font-size: 11px; color: var(--text-secondary); }
+.jira-assignee-search { display: flex; gap: 6px; margin-top: 6px; }
+.jira-assignee-search .jira-input { flex: 1; min-width: 0; }
+.jira-confirm-actions { display: flex; gap: 8px; margin-top: 10px; }
+.jira-confirm-actions .action-btn { width: auto; }

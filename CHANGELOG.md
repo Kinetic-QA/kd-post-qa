@@ -9,6 +9,23 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-08
+
+### Added
+
+- **The "Create JIRA ticket" popup now creates the real ticket in Jira.** After you check the draft, "Create in Jira…" asks one last question that names the Jira space, who it will be assigned to and how many screenshots will be attached. Only "Yes, create it" sends anything. The failure screenshots are attached to the new ticket, and the ticket link appears on that problem's row in the Triage table. If a problem already has a ticket, it will not make a second one. The first real ticket made this way was MC-1335.
+- **The assignee box is now a list.** It starts on you (the owner of the web release project, who then passes the ticket on) and also offers the whole QA team (Edward, Kristel, Reeve, Reyn) and the three developers (Boaz, Oleg, Gerline). A search box finds anyone else. The names are looked up in Jira, not typed in by hand.
+- **A problem found on the QA site now needs one extra tick-box before a brand-new bug can be created**, because the Protocol normally says to comment on the original task instead. (The "comment on the original task" button itself is not built yet.)
+
+### Fixed
+
+- **"Upload to Netlify" now uploads the exact run you just reviewed.** Before, it grabbed whichever run was newest on the computer, so a later one-test re-run of the same day could silently replace the real results on the public site. The upload now carries the identity of the reviewed run, refuses to go ahead without it, and stops with a clear message if that run's report was already cleaned up, instead of quietly publishing a different one.
+- **Triage and Review no longer look at a small re-run instead of the full run.** If you ran one test again after a full run, the Triage table could end up showing only that one test. It now uses the fullest run of the day for each market, the same rule the public results overview already used.
+
+### Changed
+
+- **The ticket draft's "standards have changed" warning is up to date again.** The Bug Ticket Standard and QA Reporting Protocol were edited on 7 and 8 October (new bugs go to a developer who is always asked, related failures share one ticket, post-check bugs are filed in Jira only). We re-read both and updated the one check that depended on them, who the ticket is assigned to. Known gap: one bug that shows up in several markets still becomes one ticket per market, not one shared ticket.
+
 ## [Unreleased] - 2026-10-07
 
 ### Changed

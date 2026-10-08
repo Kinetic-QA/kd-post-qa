@@ -1341,6 +1341,10 @@ type MultiSession = {
   spec: string;
   dateStr: string;
   excelReportFile: string;
+  // Exact report-<port> folder each GEO's run produced in THIS session, so
+  // /upload-to-netlify can publish those folders and not whichever report-*
+  // folder happens to be newest on disk (a later one-test re-run would be).
+  reportFolders: Record<string, string>;
   index: number;
   state: MultiState;
   res: express.Response;
@@ -1461,6 +1465,7 @@ function runNextGeo(session: MultiSession): void {
     const reportUrl = folder
       ? `/reports/${session.brand}/${geo}/${session.dateStr}/${folder}/index.html`
       : null;
+    if (folder) session.reportFolders[geo] = folder;
     emit({ type: 'geo-done', geo, exitCode, reportUrl, step: session.index + 1, total: session.geos.length });
 
     // Trims this brand/GEO/date's older run-*/report-* folders down to the
@@ -1535,9 +1540,14 @@ function finishMultiSession(session: MultiSession): void {
     session.state = 'done';
     // brand/dateStr included so the client can still call /review-run and
     // /upload-to-netlify after this — the session itself is deleted right
-    // below, so those two fields won't be recoverable any other way once
+    // below, so those fields (plus excelReportFile/reportFolders, which pin
+    // an upload to this exact run) won't be recoverable any other way once
     // this event has gone out.
-    emit({ type: 'all-done', exitCode, mergedReportUrl, excelUrl, brand: session.brand, dateStr: session.dateStr });
+    emit({
+      type: 'all-done', exitCode, mergedReportUrl, excelUrl,
+      brand: session.brand, dateStr: session.dateStr,
+      excelReportFile: session.excelReportFile, reportFolders: session.reportFolders,
+    });
     notifySlack({
       emoji: '🎉',
       title: `${session.brand} run complete`,
@@ -1572,16 +1582,18 @@ function isValidDateStr(dateStr: string): boolean {
 // folders (Playwright's own JSON reporter output) rather than the merged
 // report-#### folders — see playwright.config.ts's outputDir for why every
 // invocation gets its own timestamped subfolder.
-function findLatestRunFolder(brand: string, geo: string, dateStr: string): string | null {
+//
+// Returns every run folder of the day, newest first. Callers pick the fullest
+// one (see gatherRunReviewData) rather than blindly the newest: a one-test
+// re-run after a full run is newer but is not what was being reviewed.
+function listRunFolders(brand: string, geo: string, dateStr: string): string[] {
   const dir = path.join(process.cwd(), 'Test Reports', brand, geo, dateStr);
-  if (!fs.existsSync(dir)) return null;
-  const candidates = fs.readdirSync(dir, { withFileTypes: true })
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
     .filter(e => e.isDirectory() && e.name.startsWith('run-'))
+    .map(e => ({ name: e.name, mtime: fs.statSync(path.join(dir, e.name)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime)
     .map(e => e.name);
-  if (candidates.length === 0) return null;
-  return candidates
-    .map(name => ({ name, mtime: fs.statSync(path.join(dir, name)).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime)[0].name;
 }
 
 type ReviewTestEntry = {
@@ -1662,17 +1674,23 @@ async function gatherRunReviewData(brand: string, dateStr: string): Promise<Revi
     .map(e => e.name);
   const entries: ReviewTestEntry[] = [];
   for (const geo of geos) {
-    const runFolder = findLatestRunFolder(brand, geo, dateStr);
-    if (!runFolder) continue;
-    const resultsPath = path.join(brandDir, geo, dateStr, runFolder, 'test-results', 'results.json');
-    if (!fs.existsSync(resultsPath)) continue;
-    try {
-      const json = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
-      entries.push(...extractTestEntries(json, geo, path.dirname(resultsPath)));
-    } catch {
-      // Unreadable/partial results.json (e.g. a run still in progress) — skip
-      // this GEO's contribution rather than failing the whole review.
+    // Fullest run of the day wins (most tests; newest breaks a tie) — the same
+    // rule the public overview uses — so a one-test re-run made after the full
+    // run doesn't replace it in Review/Triage.
+    let best: ReviewTestEntry[] = [];
+    for (const runFolder of listRunFolders(brand, geo, dateStr)) {
+      const resultsPath = path.join(brandDir, geo, dateStr, runFolder, 'test-results', 'results.json');
+      if (!fs.existsSync(resultsPath)) continue;
+      try {
+        const json = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+        const runEntries = extractTestEntries(json, geo, path.dirname(resultsPath));
+        if (runEntries.length > best.length) best = runEntries;
+      } catch {
+        // Unreadable/partial results.json (e.g. a run still in progress) — skip
+        // this run rather than failing the whole review.
+      }
     }
+    entries.push(...best);
   }
   return entries;
 }
@@ -1807,7 +1825,30 @@ async function findFinding(brand: string, dateStr: string, geo: string, title: s
   return groupFindings(await gatherRunReviewData(brand, dateStr)).find(f => f.id === findingId(geo, title)) ?? null;
 }
 
-registerJiraTicketRoutes(app, { isValidBrand, isValidDateStr, findFinding });
+registerJiraTicketRoutes(app, {
+  isValidBrand,
+  isValidDateStr,
+  findFinding,
+  getSavedTicket: (brand, dateStr, finding) => {
+    const saved = readTriageStore(brand, dateStr)[finding.id];
+    return saved?.outcome === 'ticket_created' && saved.ticketKey && saved.ticketUrl
+      ? { key: saved.ticketKey, url: saved.ticketUrl }
+      : null;
+  },
+  // The only writer of 'ticket_created' (see StoredOutcome's comment).
+  recordTicket: (brand, dateStr, finding, ticket) => {
+    const saved = readTriageStore(brand, dateStr);
+    saved[finding.id] = {
+      geo: finding.geo,
+      title: finding.title,
+      outcome: 'ticket_created',
+      ticketKey: ticket.key,
+      ticketUrl: ticket.url,
+      updatedAt: new Date().toISOString(),
+    };
+    writeTriageStore(brand, dateStr, saved);
+  },
+});
 
 // Manual outcomes only: "this is a script problem" / "not an issue", or
 // clearing one again. Refuses anything that isn't a real finding in that run
@@ -2000,13 +2041,36 @@ app.post('/upload-to-netlify', async (req, res) => {
     return;
   }
 
-  const build = await runNodeScript(['dashboard/build-data.cjs']);
+  // Pins the upload to the exact run that was reviewed. Without it both
+  // scripts fall back to "newest file on disk", which silently swaps in a
+  // later, smaller re-run of the same brand+date (confirmed 2026-09-29).
+  const excelReportFile = String(req.body?.excelReportFile ?? '');
+  const rawFolders = req.body?.reportFolders;
+  const pinnedFolders: Record<string, string> = {};
+  const pinPrefix = `${brand}-${dateStr}-`;
+  const pinOk =
+    excelReportFile.startsWith(pinPrefix) &&
+    /^\d{2}-\d{2}-\d{2}$/.test(excelReportFile.slice(pinPrefix.length)) &&
+    rawFolders && typeof rawFolders === 'object' && !Array.isArray(rawFolders) &&
+    Object.entries(rawFolders).every(([geo, folder]) => /^[A-Za-z0-9-]+$/.test(geo) && /^report-\d+$/.test(String(folder)));
+  if (!pinOk) {
+    res.status(400).json({ error: 'This upload is not tied to a specific run (the page may be out of date). Reload it and re-run, or use the "Done Today\'s test" command. Nothing was uploaded.' });
+    return;
+  }
+  for (const [geo, folder] of Object.entries(rawFolders as Record<string, string>)) pinnedFolders[geo] = String(folder);
+
+  const build = await runNodeScript(['dashboard/build-data.cjs'], { PINNED_RUN_FILE: excelReportFile });
   if (build.code !== 0) {
     res.status(500).json({ error: 'dashboard/build-data.cjs failed.', output: build.output });
     return;
   }
 
-  const deploy = await runNodeScript(['deploy-dashboard.cjs'], { TEST_BRAND: brand, TEST_DATE: dateStr });
+  const deploy = await runNodeScript(['deploy-dashboard.cjs'], {
+    TEST_BRAND: brand,
+    TEST_DATE: dateStr,
+    EXCEL_REPORT_FILE: excelReportFile,
+    PINNED_REPORT_FOLDERS: JSON.stringify(pinnedFolders),
+  });
   if (deploy.code !== 0) {
     res.status(500).json({ error: 'deploy-dashboard.cjs failed.', output: deploy.output });
     return;
@@ -2075,6 +2139,7 @@ app.get('/run', (req, res) => {
     // Brand+date+runToken — still easy to pair with the merged HTML report
     // by brand/date, just no longer collides across separate same-day runs.
     excelReportFile: `${brand}-${dateStr}-${runToken}`,
+    reportFolders: {},
     index: 0,
     state: 'running',
     res,
