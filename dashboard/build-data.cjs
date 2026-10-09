@@ -265,9 +265,45 @@ async function scanCombinedReports() {
   return { reports, tests };
 }
 
+// What a human decided about each failing/flaky test in the GUI's Triage table
+// ("a Jira ticket was created" / "this is a script problem"), saved per brand +
+// run date under Test Reports/<brand>/_triage/<date>.json (written by
+// gui/server.ts). Keyed `${geo}|${testName}`. A new run date never inherits an
+// old decision, same scoping as known-issues.json. Only these two outcomes are
+// shown publicly; "ignored" stays internal.
+function readTriageOutcomes(brand, date) {
+  const file = path.join(ROOT, 'Test Reports', brand, '_triage', `${date}.json`);
+  try {
+    const found = JSON.parse(fs.readFileSync(file, 'utf8')).findings || {};
+    const out = new Map();
+    for (const [id, f] of Object.entries(found)) {
+      if (f.outcome === 'ticket_created' && f.ticketKey) out.set(id, { outcome: f.outcome, ticketKey: f.ticketKey, ticketUrl: f.ticketUrl || null });
+      else if (f.outcome === 'script_issue') out.set(id, { outcome: 'script_issue' });
+    }
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+
+// Adds `triage` to each failed/flaky test that has a saved outcome.
+function attachTriage(tests) {
+  const cache = new Map();
+  return tests.map(t => {
+    if (t.status !== 'failed' && t.status !== 'flaky') return t;
+    const k = `${t.brand}|${t.date}`;
+    if (!cache.has(k)) cache.set(k, readTriageOutcomes(t.brand, t.date));
+    // The workbook appends " (failed even after retry)" / " (passed after retry)"
+    // to a retried test's name; the Triage store keys on the plain test title.
+    const plainName = String(t.testName).replace(/ \((?:passed after retry|failed even after retry)\)$/, '');
+    const hit = cache.get(k).get(`${t.geo}|${plainName}`);
+    return hit ? { ...t, triage: hit } : t;
+  });
+}
+
 const KNOWN_ISSUES = JSON.parse(fs.readFileSync(path.join(__dirname, 'known-issues.json'), 'utf8')).brands || {};
 
-function buildBrandSummary(runs) {
+function buildBrandSummary(runs, tests = []) {
   const byBrand = new Map();
   for (const r of runs) {
     if (!byBrand.has(r.brand)) {
@@ -282,6 +318,14 @@ function buildBrandSummary(runs) {
     agg.geos.add(r.geo);
     if (!agg.lastRunDate || r.date > agg.lastRunDate) agg.lastRunDate = r.date;
   }
+  // Failing tests of this brand's latest run, and whether each has a saved outcome.
+  const triageOfBrand = b => {
+    const failing = tests.filter(t => t.brand === b.brand && t.date === b.lastRunDate && t.status === 'failed');
+    const tickets = [...new Map(failing.filter(t => t.triage && t.triage.outcome === 'ticket_created')
+      .map(t => [t.triage.ticketKey, { key: t.triage.ticketKey, url: t.triage.ticketUrl }])).values()];
+    return { allTriaged: failing.length > 0 && failing.every(t => t.triage), tickets };
+  };
+
   return [...byBrand.values()]
     .map(b => ({
       brand: b.brand,
@@ -305,17 +349,31 @@ function buildBrandSummary(runs) {
       // AND its appliesToDate matches this brand's actual latest run date —
       // otherwise a stale note could quietly hide a genuinely new failure
       // that happens to land on the same brand later.
+      // Beyond the manual known-issues.json list, a brand's failures also calm
+      // down on their own once EVERY failing test in its latest run has a saved
+      // Triage outcome: all script problems -> 'known-issue'; otherwise (some
+      // have a Jira ticket) -> 'ticketed', which is still a real open bug, so it
+      // is shown as such rather than hidden.
       status: (() => {
         if (b.failed > 0) {
           const known = KNOWN_ISSUES[b.brand];
           if (known && known.appliesToDate === b.lastRunDate) return 'known-issue';
+          const t = triageOfBrand(b);
+          if (t.allTriaged) return t.tickets.length > 0 ? 'ticketed' : 'known-issue';
           return 'issue';
         }
         return b.flaky > 0 ? 'watch' : 'healthy';
       })(),
       knownIssueNote: (() => {
         const known = KNOWN_ISSUES[b.brand];
-        return (b.failed > 0 && known && known.appliesToDate === b.lastRunDate) ? known.note : null;
+        if (b.failed > 0 && known && known.appliesToDate === b.lastRunDate) return known.note;
+        const t = b.failed > 0 ? triageOfBrand(b) : null;
+        if (t && t.allTriaged && t.tickets.length === 0) return 'Marked as a test-script problem, not a real bug.';
+        return null;
+      })(),
+      tickets: (() => {
+        const t = b.failed > 0 ? triageOfBrand(b) : null;
+        return t && t.allTriaged ? t.tickets : [];
       })(),
     }))
     .sort((a, b) => (b.lastRunDate || '').localeCompare(a.lastRunDate || ''));
@@ -367,7 +425,7 @@ async function main() {
 
   const currentRuns = latestRunsPerBrand(allRuns);
   const currentDates = new Set(currentRuns.map(r => r.date));
-  const currentTests = allTests.filter(t => currentDates.has(t.date));
+  const currentTests = attachTriage(allTests.filter(t => currentDates.has(t.date)));
 
   const stats = currentRuns.reduce(
     (acc, r) => {
@@ -402,7 +460,7 @@ async function main() {
   }
   const days = [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
 
-  const brands = buildBrandSummary(currentRuns);
+  const brands = buildBrandSummary(currentRuns, currentTests);
 
   const generatedAt = new Date().toISOString();
   const data = { generatedAt, targetDate: TARGET_DATE, stats, days, tests: currentTests.slice(0, 500), brands };

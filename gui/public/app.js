@@ -1127,8 +1127,8 @@ function renderTriageOutcome(row) {
     a.href = saved.ticketUrl;
     a.target = '_blank';
     a.rel = 'noopener';
-    a.textContent = saved.ticketKey ?? OUTCOME_LABELS.ticket_created;
-    done.append(`${OUTCOME_LABELS.ticket_created}: `, a);
+    a.textContent = saved.ticketKey ?? OUTCOME_LABELS[saved.outcome];
+    done.append(`${OUTCOME_LABELS[saved.outcome]}: `, a);
   } else {
     done.textContent = OUTCOME_LABELS[saved.outcome] ?? saved.outcome;
   }
@@ -1265,6 +1265,8 @@ function fillTriageVerdicts(items) {
     badge.className = `classification-badge classification-${classification}`;
     badge.textContent = classification === 'likely_site_issue' ? 'Likely site issue'
       : classification === 'likely_script_issue' ? 'Likely script issue'
+      : classification === 'blocked' ? 'Blocked'
+      : classification === 'unreviewed' ? 'Not classified'
       : 'Unclear';
     td.appendChild(badge);
     if (f.reasoning) {
@@ -1303,13 +1305,11 @@ const jiraAffectsEl = document.getElementById('jira-affects');
 const jiraLabelsEl = document.getElementById('jira-labels');
 const jiraDryRunEl = document.getElementById('jira-dryrun-output');
 const jiraCreateBtn = document.getElementById('jira-create-btn');
-const jiraCheckBtn = document.getElementById('jira-check-btn');
+const jiraCheckBtn = document.getElementById('jira-draft-check-btn');
 const jiraAssigneeQEl = document.getElementById('jira-assignee-q');
 const jiraAssigneeFindEl = document.getElementById('jira-assignee-find');
 const jiraConfirmEl = document.getElementById('jira-confirm');
 const jiraConfirmTextEl = document.getElementById('jira-confirm-text');
-const jiraConfirmQaWrapEl = document.getElementById('jira-confirm-qa-wrap');
-const jiraConfirmQaEl = document.getElementById('jira-confirm-qa');
 const jiraConfirmYesBtn = document.getElementById('jira-confirm-yes');
 const jiraConfirmBackBtn = document.getElementById('jira-confirm-back');
 const jiraResultEl = document.getElementById('jira-result');
@@ -1336,6 +1336,7 @@ const jiraSectionInputs = {};
 
 function closeJiraModal() {
   jiraModalEl.hidden = true;
+  jiraConfirmEl.hidden = true;
   jiraDraft = null;
   jiraRowFinding = null;
   jiraCreated = null;
@@ -1372,7 +1373,7 @@ async function openJiraModal(row) {
     const res = await fetch('/jira-draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brand: lastRunBrand, dateStr: lastRunDateStr, geo: row.finding.geo, title: row.finding.title }),
+      body: JSON.stringify({ brand: lastRunBrand, dateStr: lastRunDateStr, geo: row.finding.geo, title: row.finding.title, whatHappened: row.plainEl ? row.plainEl.textContent : '' }),
     });
     const data = await res.json();
     jiraLoadingEl.hidden = true;
@@ -1654,23 +1655,24 @@ jiraCreateBtn.addEventListener('click', async () => {
     `Ready to create this as a new ${jiraDraft.issueType} in ${jiraDraft.project.key} (${jiraDraft.project.name}), ` +
     `assigned to ${assignee.name}, with ${shots} screenshot${shots === 1 ? '' : 's'} attached? ` +
     `Not the right developer? Go back and change the assignee first.`;
-  const isQa = jiraDraft.environment === 'QA';
-  jiraConfirmQaWrapEl.hidden = !isQa;
-  jiraConfirmQaEl.checked = false;
-  jiraConfirmYesBtn.disabled = isQa;
+  jiraConfirmYesBtn.disabled = false;
   jiraConfirmEl.hidden = false;
-  jiraConfirmEl.scrollIntoView({ block: 'nearest' });
 });
 
-jiraConfirmQaEl.addEventListener('change', () => { jiraConfirmYesBtn.disabled = !jiraConfirmQaEl.checked; });
 jiraConfirmBackBtn.addEventListener('click', () => { jiraConfirmEl.hidden = true; });
+// Clicking outside the question counts as Back, never as Yes.
+jiraConfirmEl.addEventListener('click', e => { if (e.target === jiraConfirmEl) jiraConfirmEl.hidden = true; });
 
 // Step 2: the explicit approval. This is the only call that writes to Jira.
 jiraConfirmYesBtn.addEventListener('click', async () => {
   if (!jiraDraft || jiraCreated) return;
+  jiraConfirmEl.hidden = true;
   jiraConfirmYesBtn.disabled = true;
   jiraConfirmBackBtn.disabled = true;
   jiraResultEl.hidden = true;
+  jiraResultEl.className = 'jira-dryrun';
+  jiraResultEl.textContent = 'Creating the ticket in Jira…';
+  jiraResultEl.hidden = false;
   jiraResultEl.className = 'jira-dryrun';
   try {
     const res = await fetch('/jira-create', {
@@ -1682,7 +1684,6 @@ jiraConfirmYesBtn.addEventListener('click', async () => {
         geo: jiraRowFinding.geo,
         title: jiraRowFinding.title,
         confirm: true,
-        acknowledgeQaNewBug: jiraConfirmQaEl.checked,
         draft: currentJiraDraftBody(),
       }),
     });
@@ -1698,7 +1699,7 @@ jiraConfirmYesBtn.addEventListener('click', async () => {
         for (const t of data.problems) { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); }
         jiraResultEl.appendChild(ul);
       }
-      jiraConfirmYesBtn.disabled = jiraDraft.environment === 'QA' && !jiraConfirmQaEl.checked;
+      jiraConfirmYesBtn.disabled = false;
     } else {
       jiraCreated = data.ticket;
       jiraConfirmEl.hidden = true;
@@ -1730,10 +1731,15 @@ jiraConfirmYesBtn.addEventListener('click', async () => {
   }
 });
 
+
 document.getElementById('jira-modal-close').addEventListener('click', closeJiraModal);
 document.getElementById('jira-modal-cancel').addEventListener('click', closeJiraModal);
 jiraModalEl.addEventListener('click', e => { if (e.target === jiraModalEl) closeJiraModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !jiraModalEl.hidden) closeJiraModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!jiraConfirmEl.hidden) { jiraConfirmEl.hidden = true; return; } // Esc on the question = Back
+  if (!jiraModalEl.hidden) closeJiraModal();
+});
 
 reviewBtn.addEventListener('click', async () => {
   if (!lastRunBrand || !lastRunDateStr) return;

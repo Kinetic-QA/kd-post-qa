@@ -573,21 +573,29 @@
 
           <div id="jira-dryrun-output" class="jira-dryrun" hidden></div>
 
-          <div id="jira-confirm" class="jira-dryrun" hidden>
-            <p id="jira-confirm-text"></p>
-            <label id="jira-confirm-qa-wrap" hidden><input id="jira-confirm-qa" type="checkbox" /> This was found on the QA site, where the Protocol says to comment on the original task instead. Create a new bug anyway.</label>
-            <div class="jira-confirm-actions">
-              <button id="jira-confirm-yes" class="action-btn action-btn-primary" type="button">Yes, create it</button>
-              <button id="jira-confirm-back" class="action-btn" type="button">Back</button>
-            </div>
-          </div>
           <div id="jira-result" class="jira-dryrun" hidden></div>
         </form>
       </div>
       <div class="modal-footer">
         <button id="jira-modal-cancel" class="action-btn" type="button">Cancel</button>
-        <button id="jira-check-btn" class="action-btn" type="button" disabled>Check draft (nothing is sent)</button>
+        <button id="jira-draft-check-btn" class="action-btn" type="button" disabled>Check draft (nothing is sent)</button>
         <button id="jira-create-btn" class="action-btn action-btn-primary" type="button" disabled>Create in Jira&hellip;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create-in-Jira question: a full-screen message on top of the popup. Back closes it (ticket stays editable); Yes closes it and creates the ticket. -->
+  <div id="jira-confirm" class="modal-backdrop modal-backdrop-confirm" hidden>
+    <div class="modal modal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="jira-confirm-title">
+      <div class="modal-header">
+        <h2 id="jira-confirm-title">Create this ticket in Jira?</h2>
+      </div>
+      <div class="modal-body">
+        <p id="jira-confirm-text"></p>
+      </div>
+      <div class="modal-footer">
+        <button id="jira-confirm-back" class="action-btn" type="button">Back</button>
+        <button id="jira-confirm-yes" class="action-btn action-btn-primary" type="button">Yes, create it</button>
       </div>
     </div>
   </div>

@@ -58,14 +58,60 @@ function collectSpecIds(suite, map) {
 // desktop and "-mobile" project — see playwright.config.ts's geoOutputDir,
 // which doesn't split by mobile — so the file lives under the base geo's
 // folder even when looking up a "<geo>-mobile" sheet.
+//
+// Since commit c61e721 every run writes into its own
+// <date>/run-<HH-mm-ss>/test-results/ folder (older dates used a single
+// <date>/test-results/). This used to look ONLY at the old single path, so for
+// any day run in the newer layout it found nothing, skipped every sheet and
+// left the workbook's links untouched (still the NETLIFY_BASE_URL placeholder
+// or an earlier link — i.e. stale). A test's id is a hash of its file, title
+// and project, so it is the same in every run of the same test; all of the
+// day's results files are therefore read, oldest first, with the run that
+// produced the report being linked (PINNED_REPORT_FOLDERS) applied last so it
+// wins any disagreement.
+function resultsFilesFor(baseGeo) {
+  const dateDir = path.join('Test Reports', brand, baseGeo, dateStr);
+  if (!fs.existsSync(dateDir)) return [];
+  const files = [];
+  const legacy = path.join(dateDir, 'test-results', 'results.json');
+  if (fs.existsSync(legacy)) files.push(legacy);
+  for (const e of fs.readdirSync(dateDir, { withFileTypes: true })) {
+    if (!e.isDirectory() || !e.name.startsWith('run-')) continue;
+    const f = path.join(dateDir, e.name, 'test-results', 'results.json');
+    if (fs.existsSync(f)) files.push(f);
+  }
+  const byAge = files.map(f => ({ f, t: fs.statSync(f).mtimeMs })).sort((a, b) => a.t - b.t);
+
+  // The run that produced a pinned report folder is the one whose results file
+  // was written closest in time to that report's index.html.
+  let pinned = null;
+  try {
+    const pins = process.env.PINNED_REPORT_FOLDERS ? JSON.parse(process.env.PINNED_REPORT_FOLDERS) : null;
+    const reportIndex = pins && pins[baseGeo] ? path.join(dateDir, pins[baseGeo], 'index.html') : null;
+    if (reportIndex && fs.existsSync(reportIndex) && byAge.length > 0) {
+      const rt = fs.statSync(reportIndex).mtimeMs;
+      pinned = byAge.reduce((best, c) => (Math.abs(c.t - rt) < Math.abs(best.t - rt) ? c : best)).f;
+    }
+  } catch { /* a malformed pin just means no preferred run */ }
+
+  const ordered = byAge.map(x => x.f);
+  return pinned ? [...ordered.filter(f => f !== pinned), pinned] : ordered;
+}
+
 function loadResultsMap(geo) {
   const baseGeo = geo.replace(/-mobile$/, '');
-  const resultsPath = path.join('Test Reports', brand, baseGeo, dateStr, 'test-results', 'results.json');
-  if (!fs.existsSync(resultsPath)) return null;
-  const json = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
+  const files = resultsFilesFor(baseGeo);
+  if (files.length === 0) return null;
   const map = new Map();
-  for (const suite of json.suites || []) collectSpecIds(suite, map);
-  return map;
+  for (const f of files) {
+    try {
+      const json = JSON.parse(fs.readFileSync(f, 'utf-8'));
+      for (const suite of json.suites || []) collectSpecIds(suite, map);
+    } catch {
+      // A partial results.json (a run still in progress) — read the others.
+    }
+  }
+  return map.size > 0 ? map : null;
 }
 
 // Test names get a retry suffix appended when written (see excel-reporter.

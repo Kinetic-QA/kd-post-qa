@@ -639,6 +639,7 @@ body {
 .brand-status-healthy { background: #eaf8ef; color: var(--accent-green); }
 .brand-status-watch { background: #fdf3e2; color: var(--accent-flaky); }
 .brand-status-issue { background: #fdecea; color: var(--accent-red); }
+.brand-status-ticketed { background: #fdf3e2; color: var(--accent-flaky); cursor: help; }
 .brand-status-known-issue { background: #eaf0fb; color: var(--accent-blue); cursor: help; }
 
 .health-banner {
@@ -711,3 +712,10 @@ body {
   border-color: #d7e4fb;
   color: #2d4f9e;
 }
+
+/* Note next to a failing test: what has already been done about it */
+.triage-note { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.triage-note a { color: inherit; }
+.triage-open { background: #fdecea; color: var(--accent-red); }
+.triage-ticket { background: #fdf3e2; color: var(--accent-flaky); }
+.triage-script { background: #eaf0fb; color: var(--accent-blue); cursor: help; }
