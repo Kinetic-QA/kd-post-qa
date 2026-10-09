@@ -165,6 +165,42 @@ export function findingEnvironment(brand: string, f: Finding): 'QA' | 'Live' | '
   return resolveEnvironment(brand, f.geo, snapshot).env;
 }
 
+// The start of the page snapshot Playwright saved at the moment of failure —
+// what the test actually landed on, which the error message alone never says.
+export function pageSnapshotExcerpt(f: Finding, maxChars: number): string {
+  const text = f.evidence.map(e => readTextSafe(e.errorContext, 12000)).find(Boolean) ?? '';
+  const open = text.indexOf('```yaml');
+  if (open < 0) return '';
+  const body = text.slice(open + 7);
+  const close = body.indexOf('```');
+  return (close >= 0 ? body.slice(0, close) : body).trim().slice(0, maxChars);
+}
+
+export type BlockedPage = { kind: 'access_login' | 'bot_check' | 'block_page'; plainSummary: string; reasoning: string };
+
+// A test that never reached the real page — it landed on a login wall or bot
+// check in front of it — is neither a site bug nor a script bug. Recognised
+// from the failure-time page snapshot, so the Triage row can say what the page
+// IS instead of describing what is on it (e.g. a "Log in to ... Stage" form).
+// Known gates only; anything else is left to the AI, which sees the same snapshot.
+const BLOCKED_NOTE = 'Nothing on the real page was tested. Get the test computer through the gate (or sign in) and re-run before treating this as a bug.';
+export function detectBlockedPage(f: Finding): BlockedPage | null {
+  const snap = pageSnapshotExcerpt(f, 4000);
+  if (!snap) return null;
+  if (/Attention Required!? \| Cloudflare|Sorry, you have been blocked|you have been blocked/i.test(snap)) {
+    return { kind: 'block_page', plainSummary: 'Cloudflare is blocking the test computer, so the test never reached the site.', reasoning: BLOCKED_NOTE };
+  }
+  if (/Just a moment|Performing security verification|Verify you are human|Checking (if the site connection is secure|your browser)|Enable JavaScript and cookies to continue/i.test(snap)) {
+    return { kind: 'bot_check', plainSummary: 'Cloudflare\'s bot check stopped the test before the page loaded.', reasoning: BLOCKED_NOTE };
+  }
+  // A "Log in to <app>" page with an email box and a send-code button: the
+  // sign-in step of Cloudflare Access (confirmed on the MC AB QA site, 2026-10-09).
+  if (/heading "Log in to [^"]+"/i.test(snap) && /button "Send (me a |login )?(login )?code"/i.test(snap)) {
+    return { kind: 'access_login', plainSummary: 'The site is behind a Cloudflare Access sign-in (it asks for an email and a login code), so the test could not get in.', reasoning: BLOCKED_NOTE };
+  }
+  return null;
+}
+
 function extractJson(raw: string): any {
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
@@ -308,6 +344,14 @@ export function registerJiraTicketRoutes(app: Express, deps: Deps): void {
 
     const flags: string[] = [];
 
+    // What the Triage row already told the QA person (the AI's one-line summary,
+    // or the plain restatement before Review). The ticket must carry it over, not
+    // replace it with a different account of the same failure.
+    const whatHappened = str(req.body?.whatHappened).slice(0, 600);
+    // The test never reached the real page (login wall / bot check), so a
+    // "missing element" is not a product defect. Detected from the evidence.
+    const gate = detectBlockedPage(finding);
+
     // ── Live standards + read-only Jira lookups, in parallel ──────────────
     const [protocolText, bugStandardText, jiraLookups, driftFlags] = await Promise.all([
       getConfluencePageText(PROTOCOL_PAGE_ID, undefined, STANDARDS_MAX_CHARS),
@@ -386,6 +430,9 @@ Test file: ${finding.specFile}
 Error: ${finding.errorMessage ?? '(none captured)'}
 Error location: ${finding.errorLocation ?? '(unknown)'}
 
+=== WHAT THE QA PERSON ALREADY SEES ON THE TRIAGE SCREEN (established fact — carry it over) ===
+${[gate ? `${gate.plainSummary} ${gate.reasoning}` : '', whatHappened].filter(Boolean).join(' ') || '(nothing recorded)'}
+
 --- The test's own code (its steps and assertions show what the page is expected to do) ---
 ${testSnippet || '(unavailable)'}
 
@@ -412,6 +459,8 @@ Rules:
 - impactNotes is for user-facing impact and useful context only. Never mention the test code, skip guards, selectors or how the automation works.
 - Do not add examples, names, numbers or wording that do not appear in the evidence above (for instance, do not list example payment providers or quote page text you were not given). If a detail would help but is not in the evidence, leave it out.
 - Do not mention ISTQB or any testing-theory terminology.
+- The established statement above is what the QA person has already read and agreed with. The summaryOfBug and actualResult MUST carry it over, in plain words, and must not contradict it or swap it for a different explanation of the same failure.
+- If the established statement says the test was stopped by a login, sign-in, bot check or block page (it never reached the real page), the ticket is about THAT access problem, not about a "missing" button or element: "issue" names it (for example "Behind a Cloudflare Access sign-in, test cannot reach the page"), stepsToReplicate are only the steps needed to see the gate, expectedResult says the page should load for the testing computer without the gate, and needsHumanCheck says who should allow the test computer through is still to be confirmed.
 - Plain language a non-developer teammate can follow.`;
 
     let ai: any;
@@ -462,9 +511,9 @@ Rules:
     const priorityOptions = jiraLookups.fields?.fields?.priority?.allowedValues ?? [];
     const priority = priorityOptions.find(p => /^normal$/i.test(p)) ?? priorityOptions.find(p => /^medium$/i.test(p)) ?? priorityOptions[0] ?? null;
 
-    if (env === 'QA') {
-      flags.push('Found on the QA site. Per Protocol §4.8, a pre-check issue is normally reported as a comment on the ORIGINAL task (set to Reopened), not as a new bug. Only create a new bug if that is what you intend.');
-    }
+    // The test never reached the real page, so what the draft describes (e.g. a
+    // "missing" button) is not a product defect. Said first and plainly.
+    if (gate) flags.unshift(`Do not file this as a product bug. ${gate.plainSummary} ${gate.reasoning}`);
     flags.push('Affects Version and the x.xx-post label need the version shown in the site footer (e.g. "V: 2.19.0") — enter it below. They are never guessed.');
 
     res.json({
@@ -478,7 +527,11 @@ Rules:
         affectedPages: safePages.map(p => `${p.name}: ${p.url}`).join('\n'),
         environment: env === 'Unknown' ? '' : env === 'QA' ? 'QA (staging)' : 'Live (production)',
         stepsToReplicate: steps.map((s, i) => `${i + 1}. ${s}`).join('\n'),
-        actualResult: str(ai.actualResult),
+        // For a known gate, never let the draft drop the real cause: if the AI's
+        // wording doesn't mention it, the established statement leads.
+        actualResult: gate && !/cloudflare|sign-?in|log\s?in code|login code|bot check|blocked/i.test(str(ai.actualResult))
+          ? `${gate.plainSummary} ${str(ai.actualResult)}`.trim()
+          : str(ai.actualResult),
         expectedResult: str(ai.expectedResult),
         impactNotes: str(ai.impactNotes) || 'None',
         ccQaTeam: 'QA Team',
@@ -592,14 +645,6 @@ Rules:
     const existing = deps.getSavedTicket(brand, dateStr, finding);
     if (existing) { res.status(409).json({ error: `This finding already has a Jira ticket (${existing.key}). Nothing was sent to Jira.`, ticket: existing }); return; }
     if (problems.length) { res.status(422).json({ error: 'The draft does not meet the standard yet. Nothing was sent to Jira.', problems }); return; }
-    // Protocol §4.8: an issue found on the QA site (a pre-check) is normally a
-    // comment on the ORIGINAL task, not a new bug. Creating a new bug from a
-    // QA-site finding needs its own explicit acknowledgement.
-    const environment = findingEnvironment(brand, finding);
-    if (environment === 'QA' && req.body?.acknowledgeQaNewBug !== true) {
-      res.status(409).json({ error: 'This was found on the QA site, where the Protocol says to comment on the original task instead of opening a new bug. Nothing was sent to Jira. Confirm you want a new bug anyway to continue.' });
-      return;
-    }
 
     let jira: JiraClient;
     let created: { key: string; url: string };

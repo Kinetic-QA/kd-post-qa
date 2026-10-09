@@ -29,6 +29,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { compareVisual, compareText, MODEL, VisualCheckMode, VisualStatus, VisualCompareResult, ImageInput, TextInput } from './visual-compare';
 import { parseFigmaUrl, fetchFigmaFrameImage } from './figma-client';
 import { crawlSite } from './site-crawler';
+import { JiraClient } from '../src/jira-client';
 // require(), not import — TS's module resolution doesn't match an explicit
 // .cjs extension against a .d.ts declaration file of the same base name
 // (same reasoning as playwright.config.ts's portForKey import).
@@ -37,7 +38,7 @@ const { pruneOldRuns } = require('../helpers/prune-old-runs.cjs') as {
 };
 const { localTimeToken, localTimestampToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string; localTimestampToken: (d?: Date) => string };
 import { registerJiraCheckerRoutes } from './jira-checker';
-import { registerJiraTicketRoutes, findingEnvironment, Finding } from './jira-ticket';
+import { registerJiraTicketRoutes, findingEnvironment, pageSnapshotExcerpt, detectBlockedPage, Finding } from './jira-ticket';
 import { plainError } from './plain-error';
 import { saveExportImages, buildPdfExport, buildExcelExport, VisualExportInput } from './visual-export';
 
@@ -1747,8 +1748,7 @@ function groupFindings(entries: ReviewTestEntry[]): Finding[] {
 // run date never inherits an old verdict — same deliberate scoping as
 // dashboard/known-issues.json). Lives under the brand's reserved `_triage`
 // folder: every Test Reports scanner already skips `_`-prefixed folders.
-// 'ticket_created' is written only by the Jira-create step, never by the
-// manual buttons.
+// 'ticket_created' is written only by the Jira step, never by the manual buttons.
 type TriageOutcomeKind = 'script_issue' | 'ignored' | 'ticket_created';
 type StoredOutcome = {
   geo: string;
@@ -1800,6 +1800,29 @@ app.post('/triage-run', async (req, res) => {
 
   const entries = await gatherRunReviewData(brand, dateStr);
   const saved = readTriageStore(brand, dateStr);
+
+  // A ticket that was deleted in Jira must not keep the row marked "created"
+  // (and must not keep blocking a new one). Only a definite "not found" from
+  // Jira releases the row; if Jira can't be reached or asked, nothing changes.
+  const ticketed = Object.entries(saved).filter(([, s]) => s.outcome === 'ticket_created' && s.ticketKey);
+  if (ticketed.length > 0) {
+    const gone = await Promise.all(ticketed.map(async ([, s]) => {
+      try {
+        await new JiraClient().getTicket(s.ticketKey as string);
+        return false;
+      } catch (e) {
+        return (e as any)?.response?.status === 404;
+      }
+    }));
+    let released = false;
+    ticketed.forEach(([id, s], i) => {
+      if (!gone[i]) return;
+      console.warn(`[triage-run] ${s.ticketKey} no longer exists in Jira — releasing "${s.title}" (${s.geo}) so it can be reported again.`);
+      delete saved[id];
+      released = true;
+    });
+    if (released) writeTriageStore(brand, dateStr, saved);
+  }
 
   res.json({
     brand,
@@ -1872,7 +1895,7 @@ app.post('/triage-outcome', async (req, res) => {
 
   const saved = readTriageStore(brand, dateStr);
   if (saved[finding.id]?.outcome === 'ticket_created') {
-    res.status(409).json({ error: 'This finding already has a Jira ticket.', saved: saved[finding.id] });
+    res.status(409).json({ error: 'This finding has already been reported in Jira.', saved: saved[finding.id] });
     return;
   }
 
@@ -1884,6 +1907,35 @@ app.post('/triage-outcome', async (req, res) => {
   writeTriageStore(brand, dateStr, saved);
   res.json({ saved: saved[finding.id] ?? null });
 });
+
+// ── Review: AI verdict per failing/flaky check ───────────────────────────
+// Shared by the main Review call and the one-off retry for any check whose
+// verdict came back missing, so both ask for exactly the same thing.
+const REVIEW_VERDICT_GUIDE = `For EACH of the following failing/flaky checks, decide whether it's more likely a REAL SITE ISSUE (a real problem with the actual website — broken content, missing page, wrong behavior, translation bug, etc.) or a SCRIPT ISSUE (a problem with the test code itself — wrong selector, timing/race condition, environment/VPN flakiness, outdated assumption about the page). Base this on the actual error message and source location given, not just the test name. Use "unclear" only when the error message genuinely gives no useful signal either way — it is not a safe default. An unknown environment is NOT a reason to leave a check out or to answer "unclear": give your best read and say what would settle it.
+
+FIRST look at "Page the test saw when it failed". If that page is not the page the test meant to check — a login or sign-in wall, a bot or security check, an access-denied or "blocked" page, an error or maintenance page — the real site was never tested, so it is neither a site issue nor a script issue: answer "blocked". Say what the page IS and who is stopping the test (for example "The site is behind a sign-in page, so the test could not get in"), and do NOT describe or list what is on that page (its headings, fields or buttons).
+
+How to write your notes (they are read by QA teammates and managers, not developers): plain everyday English only. Describe what a person visiting the page would see wrong. NEVER mention selectors, CSS classes, element names, locators, timeouts, test code, frameworks or file names. Name the environment correctly from the "Environment" line of each check — say "the QA site" for a QA-site result and "the live site" for a live one, and never call a QA-site result live. If you are not sure it is a real site issue, say what would settle it in plain words.`;
+
+function describeChecks(brand: string, list: Finding[]): string {
+  return list.map((f, i) => `${i + 1}. [${f.geo}] ${f.title} (${f.status} on ${f.platforms.join(' + ')})
+   Environment: ${({ QA: 'the QA (pre-release test) site', Live: 'the live site', Unknown: 'not known' } as const)[findingEnvironment(brand, f)]}
+   Error: ${f.errorMessage ?? '(no error message captured)'}
+   Location: ${f.errorLocation ?? '(unknown)'}
+   Page the test saw when it failed (start of its saved snapshot): ${pageSnapshotExcerpt(f, 1200) || '(not available)'}`).join('\n\n');
+}
+
+// Despite the "ONLY JSON" instruction, a stray prose prefix or a ```json fence
+// has been observed, so take the outermost {...} rather than the whole reply.
+function extractJsonObject(raw: string): any | null {
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  try {
+    return JSON.parse(start !== -1 && end > start ? raw.slice(start, end + 1) : raw);
+  } catch {
+    return null;
+  }
+}
 
 app.post('/review-run', async (req, res) => {
   const brand = String(req.body?.brand ?? '');
@@ -1951,71 +2003,111 @@ Total checks: ${entries.length}
 Skipped checks (normal, expected exclusions — no action needed):
 ${skipped.length ? skipped.map(f => `- [${f.geo}] ${f.title}`).join('\n') : '(none)'}
 
-${needsAttention.length === 0 ? 'There are no failing or flaky checks to classify.' : `For EACH of the following failing/flaky checks, decide whether it's more likely a REAL SITE ISSUE (a real problem with the actual website — broken content, missing page, wrong behavior, translation bug, etc.) or a SCRIPT ISSUE (a problem with the test code itself — wrong selector, timing/race condition, environment/VPN flakiness, outdated assumption about the page). Base this on the actual error message and source location given, not just the test name. Use "unclear" only when the error message genuinely gives no useful signal either way — it is not a safe default.
+${needsAttention.length === 0 ? 'There are no failing or flaky checks to classify.' : `${REVIEW_VERDICT_GUIDE}
 
-How to write your notes (they are read by QA teammates and managers, not developers): plain everyday English only. Describe what a person visiting the page would see wrong. NEVER mention selectors, CSS classes, element names, locators, timeouts, test code, frameworks or file names. Name the environment correctly from the "Environment" line of each check — say "the QA site" for a QA-site result and "the live site" for a live one, and never call a QA-site result live. If you are not sure it is a real site issue, say what would settle it in plain words.
-
-${needsAttention.map((f, i) => `${i + 1}. [${f.geo}] ${f.title} (${f.status} on ${f.platforms.join(' + ')})
-   Environment: ${({ QA: 'the QA (pre-release test) site', Live: 'the live site', Unknown: 'not known' } as const)[findingEnvironment(brand, f)]}
-   Error: ${f.errorMessage ?? '(no error message captured)'}
-   Location: ${f.errorLocation ?? '(unknown)'}`).join('\n\n')}`}
+${describeChecks(brand, needsAttention)}`}
 
 Respond with ONLY a JSON object (no prose before or after it), in exactly this shape:
 {
-  "headline": "1-2 sentence plain-English overall health summary for a QA teammate, not a developer. State health plainly, don't manufacture concerns if everything's clean, don't downplay real failures.",
+  "headline": "1-2 sentence plain-English overall health summary for a QA teammate, not a developer. State health plainly, don't manufacture concerns if everything's clean, don't downplay real failures. If checks were stopped by a login wall or bot check, say so — that is not a fault on the site.",
   "verdicts": [
-    { "geo": "...", "title": "...", "classification": "likely_site_issue" | "likely_script_issue" | "unclear", "plainSummary": "ONE short plain-English sentence saying what is wrong on the page from a visitor's point of view, e.g. 'The Help page shows no FAQ questions.' No technical terms.", "reasoning": "ONE short plain-English sentence (about 25 words at most) on why you think it is a site issue or a test problem" }
+    { "geo": "...", "title": "...", "classification": "likely_site_issue" | "likely_script_issue" | "blocked" | "unclear", "plainSummary": "ONE short plain-English sentence saying what is wrong on the page from a visitor's point of view, e.g. 'The Help page shows no FAQ questions.' No technical terms.", "reasoning": "ONE short plain-English sentence (about 25 words at most) on why you think it is a site issue or a test problem" }
   ]
 }
 "verdicts" must have exactly one entry per failing/flaky check listed above, in the same order, matching "geo" and "title" exactly. Omit "verdicts" entirely (or leave it an empty array) only if there were none to classify.`;
 
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 1500,
+      // Room for a headline plus ~250 tokens per check; a fixed 1500 would cut
+      // the reply off (and drop every verdict) on a run with a dozen failures.
+      max_tokens: Math.min(4000, 600 + 250 * needsAttention.length),
       messages: [{ role: 'user', content: prompt }],
     });
-    const raw = response.content
+    const replyText = (r: Anthropic.Message) => r.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
       .map(b => b.text)
       .join('\n')
       .trim();
+    const raw = replyText(response);
 
-    // Same defensive-parse pattern as visual-compare.ts's own Claude calls —
-    // despite the "ONLY JSON" instruction, a stray prose prefix has been
-    // observed there too, so extract the outermost {...} rather than assume
-    // the whole response is bare JSON.
-    const jsonStart = raw.indexOf('{');
-    const jsonEnd = raw.lastIndexOf('}');
-    const jsonSlice = jsonStart !== -1 && jsonEnd > jsonStart ? raw.slice(jsonStart, jsonEnd + 1) : raw;
-    let parsed: any;
-    try {
-      parsed = JSON.parse(jsonSlice);
-    } catch {
-      // Model didn't return parseable JSON — fall back to showing its raw
-      // text as the headline rather than failing the whole review, but with
-      // no per-failure classification.
-      parsed = { headline: raw, verdicts: [] };
-    }
+    // Not parseable at all: show the raw text as the headline rather than
+    // failing the whole review; every check is then picked up by the retry below.
+    const parsed: any = extractJsonObject(raw) ?? { headline: raw, verdicts: [] };
 
     const summary = typeof parsed.headline === 'string' && parsed.headline.trim() ? parsed.headline.trim() : 'Review completed, but no summary text was returned.';
-    const rawVerdicts: any[] = Array.isArray(parsed.verdicts) ? parsed.verdicts : [];
-    const validClassifications = new Set(['likely_site_issue', 'likely_script_issue', 'unclear']);
-    const verdictFor = (geo: string, title: string) => {
-      const v = rawVerdicts.find(x => x?.geo === geo && x?.title === title);
-      if (!v) return { classification: 'unclear' as const, reasoning: 'No classification returned for this check.', plainSummary: '' };
-      return {
-        classification: validClassifications.has(v.classification) ? v.classification : 'unclear',
-        reasoning: typeof v.reasoning === 'string' && v.reasoning.trim() ? v.reasoning.trim() : '',
-        plainSummary: typeof v.plainSummary === 'string' ? v.plainSummary.trim() : '',
-      };
+    const validClassifications = new Set(['likely_site_issue', 'likely_script_issue', 'blocked', 'unclear']);
+    type Verdict = { classification: string; reasoning: string; plainSummary: string };
+    const toVerdict = (v: any): Verdict => ({
+      classification: validClassifications.has(v?.classification) ? v.classification : 'unclear',
+      reasoning: typeof v?.reasoning === 'string' ? v.reasoning.trim() : '',
+      plainSummary: typeof v?.plainSummary === 'string' ? v.plainSummary.trim() : '',
+    });
+    const norm = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+    // Match each check to its verdict: exact GEO + title first, then ignoring
+    // case/spacing, then (only when the AI returned exactly one entry per
+    // check, as asked) by position.
+    const verdicts = new Map<string, Verdict>();
+    const assign = (list: Finding[], rawVerdicts: any[]) => {
+      list.forEach((f, i) => {
+        if (verdicts.has(f.id)) return;
+        const v = rawVerdicts.find(x => x?.geo === f.geo && x?.title === f.title)
+          ?? rawVerdicts.find(x => norm(x?.geo) === norm(f.geo) && norm(x?.title) === norm(f.title))
+          ?? (rawVerdicts.length === list.length ? rawVerdicts[i] : undefined);
+        if (v) verdicts.set(f.id, toVerdict(v));
+      });
     };
+    assign(needsAttention, Array.isArray(parsed.verdicts) ? parsed.verdicts : []);
+
+    // A page we can positively identify as a gate (Cloudflare Access sign-in,
+    // bot check, block page) is stated as fact, not left to the AI's wording —
+    // and needs no retry. These overwrite whatever the AI said for that check.
+    for (const f of needsAttention) {
+      const gate = detectBlockedPage(f);
+      if (gate) verdicts.set(f.id, { classification: 'blocked', reasoning: gate.reasoning, plainSummary: gate.plainSummary });
+    }
+
+    // A check left without a verdict (seen on MC AB 2026-10-09: the headline
+    // came back, the verdict did not, every time) gets ONE focused retry
+    // with just those checks, instead of a badge that looks like a real answer.
+    const missing = needsAttention.filter(f => !verdicts.has(f.id));
+    if (missing.length > 0) {
+      console.warn(`[review-run] ${missing.length} of ${needsAttention.length} check(s) came back without a verdict — retrying once. Start of the first reply: ${raw.slice(0, 500)}`);
+      try {
+        const retry = await client.messages.create({
+          model: MODEL,
+          max_tokens: Math.min(4000, 400 + 250 * missing.length),
+          messages: [{ role: 'user', content: `You are triaging failed QA checks for the brand "${brand}", run on ${dateStr}.
+
+${REVIEW_VERDICT_GUIDE}
+
+${describeChecks(brand, missing)}
+
+Respond with ONLY a JSON object (no prose before or after it), in exactly this shape, with one entry per check above, in the same order, matching "geo" and "title" exactly:
+{ "verdicts": [ { "geo": "...", "title": "...", "classification": "likely_site_issue" | "likely_script_issue" | "blocked" | "unclear", "plainSummary": "ONE short plain-English sentence saying what is wrong on the page from a visitor's point of view. No technical terms.", "reasoning": "ONE short plain-English sentence (about 25 words at most) on why you think it is a site issue or a test problem" } ] }` }],
+        });
+        const retried = extractJsonObject(replyText(retry));
+        assign(missing, Array.isArray(retried?.verdicts) ? retried.verdicts : []);
+      } catch (retryErr) {
+        console.warn(`[review-run] Retry failed: ${(retryErr as Error).message}`);
+      }
+    }
 
     res.json({
       summary,
       counts,
       total: entries.length,
       geoBreakdown,
-      findings: needsAttention.map(f => ({ id: f.id, ...verdictFor(f.geo, f.title) })),
+      // Still no verdict after the retry: say so plainly ('unreviewed') rather
+      // than a made-up "unclear" — the person judges it from the error details.
+      findings: needsAttention.map(f => ({
+        id: f.id,
+        ...(verdicts.get(f.id) ?? {
+          classification: 'unreviewed',
+          reasoning: 'The AI did not return a verdict for this check. Judge it from the technical details.',
+          plainSummary: '',
+        }),
+      })),
     });
   } catch (err) {
     res.status(500).json({ error: `Review failed: ${(err as Error).message}` });

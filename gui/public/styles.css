@@ -1273,6 +1273,19 @@ body {
   color: var(--text-secondary);
 }
 
+/* The test never reached the real page (login wall, bot check) — not a site or script fault. */
+.classification-blocked {
+  background: #e4ecfb;
+  color: #2b4f9e;
+}
+
+/* No AI verdict at all — dashed and empty so it never reads as a real answer. */
+.classification-unreviewed {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px dashed var(--text-secondary);
+}
+
 .review-reasoning {
   margin-top: 4px;
   margin-left: 2px;
@@ -1951,5 +1964,7 @@ body.modal-open { overflow: hidden; }
 .triage-platforms { margin-top: 3px; font-size: 11px; color: var(--text-secondary); }
 .jira-assignee-search { display: flex; gap: 6px; margin-top: 6px; }
 .jira-assignee-search .jira-input { flex: 1; min-width: 0; }
-.jira-confirm-actions { display: flex; gap: 8px; margin-top: 10px; }
-.jira-confirm-actions .action-btn { width: auto; }
+.modal-backdrop-confirm { z-index: 1100; align-items: center; background: rgba(20, 24, 36, 0.7); }
+.modal-confirm { width: min(520px, 100%); }
+.modal-confirm .modal-body p { margin: 0 0 12px; font-size: 15px; line-height: 1.5; }
+.modal-confirm .modal-footer .action-btn { width: auto; }

@@ -364,7 +364,9 @@ function renderBrandsTable(brands) {
     const row = document.createElement('tr');
     const geoPills = b.geos.map(g => `<span class="pill-tag">${escapeHtml(g)}</span>`).join('');
     const statusPill = STATUS_META[b.status] || STATUS_META.healthy;
-    const statusTitle = b.knownIssueNote ? ` title="${escapeHtml(b.knownIssueNote)}"` : '';
+    const ticketKeys = (b.tickets || []).map(t => t.key).join(', ');
+    const statusNote = b.status === 'ticketed' ? `Jira ticket already raised: ${ticketKeys}.` : b.knownIssueNote;
+    const statusTitle = statusNote ? ` title="${escapeHtml(statusNote)}"` : '';
     row.innerHTML = `
       <td class="brand-cell">${escapeHtml(b.brand)}</td>
       <td><span class="brand-status brand-status-${b.status}"${statusTitle}>${statusPill.icon} ${statusPill.label}</span></td>
@@ -387,6 +389,7 @@ const STATUS_META = {
   healthy: { icon: '&#9989;', label: 'Healthy' },
   watch: { icon: '&#128064;', label: 'Worth a look' },
   'known-issue': { icon: '&#128295;', label: 'Known issue (script)' },
+  ticketed: { icon: '&#127915;', label: 'Ticket raised' },
   issue: { icon: '&#10060;', label: 'Needs attention' },
 };
 
@@ -421,6 +424,7 @@ function renderHealthBanner(stats, brands) {
   // alarming" for "nothing happened."
   const issues = (brands || []).filter(b => b.status === 'issue');
   const knownIssues = (brands || []).filter(b => b.status === 'known-issue');
+  const ticketed = (brands || []).filter(b => b.status === 'ticketed');
   const watches = (brands || []).filter(b => b.status === 'watch');
 
   banner.classList.remove('health-good', 'health-watch', 'health-issue', 'health-info');
@@ -444,6 +448,15 @@ function renderHealthBanner(stats, brands) {
     text = issues.length === 1
       ? `${names} has failing tests — see the Brands table below for details.`
       : `${issues.length} brands have failing tests: ${names} — see the Brands table below for details.`;
+    dismissible = false;
+  } else if (ticketed.length > 0) {
+    // A real bug that already has a Jira ticket: still open, so never dismissable.
+    statusKey = 'ticketed';
+    banner.classList.add('health-watch');
+    if (heroCard) heroCard.classList.add('hero-watch');
+    icon = '&#127915;';
+    const parts = ticketed.map(b => `${b.brand} (${(b.tickets || []).map(t => t.key).join(', ')})`).join(', ');
+    text = `Failing tests found — a Jira ticket has already been raised for: ${parts}.`;
     dismissible = false;
   } else if (knownIssues.length > 0) {
     statusKey = 'known-issue';
@@ -497,6 +510,18 @@ let lastDays = [];
 let lastStats = { totalRuns: 0, totalPassed: 0, totalFailed: 0, totalFlaky: 0, totalTests: 0, passRatePct: null, lastRunDate: null };
 let activeFilter = null;
 
+// The plain-language note shown next to a failing/flaky test: what has already
+// been done about it, instead of a bare "needs attention".
+function triageNote(t) {
+  if (t.status !== 'failed' && t.status !== 'flaky') return '';
+  const tr = t.triage;
+  if (!tr) return t.status === 'failed' ? ' <span class="triage-note triage-open">Needs attention</span>' : '';
+  if (tr.outcome === 'script_issue') return ' <span class="triage-note triage-script" title="Marked by QA as a problem in the test script, not a real bug.">Script problem</span>';
+  const key = escapeHtml(tr.ticketKey);
+  const label = tr.ticketUrl ? `<a href="${escapeHtml(tr.ticketUrl)}" target="_blank" rel="noopener">${key}</a>` : key;
+  return ` <span class="triage-note triage-ticket">Ticket created · ${label}</span>`;
+}
+
 function renderDrilldown(filter) {
   const card = document.getElementById('drilldown-card');
   const tbody = document.getElementById('drilldown-tbody');
@@ -523,7 +548,7 @@ function renderDrilldown(filter) {
       <td><span class="pill-tag">${escapeHtml(t.brand)}</span></td>
       <td><span class="pill-tag">${escapeHtml(t.geo)}</span></td>
       <td>${escapeHtml(t.testName || t.spec)}</td>
-      <td><span class="status-tag status-${t.status}">${t.status}</span></td>
+      <td><span class="status-tag status-${t.status}">${t.status}</span>${triageNote(t)}</td>
       <td>${link}</td>
     `;
     tbody.appendChild(row);

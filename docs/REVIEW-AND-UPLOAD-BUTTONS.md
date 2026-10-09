@@ -114,6 +114,24 @@ idle"), which is why the classification is usually a reasonable starting
 point — but it can be wrong, and "unclear" is a real possible answer, not
 just a fallback.
 
+**If a check comes back "Blocked":** the test never reached the real page — it
+landed on a login wall or bot check in front of the site (for example the
+Cloudflare Access sign-in on the Alberta QA sites). That is neither a site bug
+nor a script bug, so nothing on the real page was tested. Review recognises the
+known gates from the page snapshot saved at the moment of failure (Cloudflare
+Access sign-in, Cloudflare bot check, Cloudflare block page) and states them as
+fact; for any other kind of landing page the AI sees the same snapshot and can
+answer "blocked" itself. The Create JIRA ticket popup shows a "Do not file this
+as a product bug" warning for the same checks.
+
+**If a check comes back "Not classified":** the AI's reply had no verdict for
+that check. Review already matches loosely (ignoring case/spacing, then by
+position) and asks the AI once more for just the missing checks, so you only
+see this badge if both attempts failed. It is deliberately dashed and empty —
+it is *not* the same as the AI answering "unclear" — and means: read the
+technical details yourself. The server log line `[review-run] … without a
+verdict` shows what the AI sent back the first time.
+
 **Treat the badge as a first-pass triage, not a final verdict.** Spot-check
 anything before it goes into `dashboard/known-issues.json`, a Jira ticket,
 or any other place a human will trust the "site" vs. "script" call without

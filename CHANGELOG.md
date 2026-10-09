@@ -9,6 +9,26 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-09
+
+### Added
+
+- **Review can now say a check was "Blocked".** When a test could not reach the real page because something stood in front of the site, such as a Cloudflare Access sign-in, a Cloudflare "are you human" check or a Cloudflare block page, the Triage row now says exactly that in plain words (for example "The site is behind a Cloudflare Access sign-in, so the test could not get in") with a blue "Blocked" tag. Before, the row only described what the sign-in page looked like, or guessed that a button was missing. The known Cloudflare pages are recognised for certain, and for any other kind of page in the way the AI now sees what the page looked like when the test failed, and is told to name what it is instead of listing what is on it.
+- **A row now shows "Not classified" when the AI gave no answer for it,** instead of a grey "Unclear" tag that looked like a real answer. Review also asks the AI a second time for any check it left out, and gives the AI more room to answer on runs with many failures.
+- **The question before a ticket is created is now a full-screen message.** "Back" returns to the ticket so it can still be edited, and "Yes, create it" closes the message and creates the ticket.
+- **The public results website now shows what happened to each problem** next to it ("Ticket created · MC-1335", "Script problem") instead of just "Needs attention", and a brand whose problems all have tickets shows as "Ticket raised".
+
+### Changed
+
+- **The ticket draft now keeps the explanation you already saw on the Triage row.** Before, the draft re-read the raw error and wrote its own, different account (for example "the Log In button is missing" when the test was really stopped by a sign-in page). The draft's Summary and Actual Result now carry the Triage explanation over, and for a blocked check the ticket is about the access problem. The draft also opens with a clear "Do not file this as a product bug" warning for blocked checks.
+- **A problem found on the QA site now goes straight to a new bug, like any other.** The automated checks run after a release, and a problem found after a release is always a new ticket, so the extra tick-box ("comment on the original task instead") has been removed. Commenting on the original task belongs to the JIRA Checker, not to this table.
+- **A ticket that was deleted in Jira no longer shows as "created".** Each time the table loads, the tool asks Jira whether the saved tickets still exist. If Jira says a ticket is gone, that row becomes open again and a new ticket can be made. If Jira cannot be reached, nothing changes.
+
+### Fixed
+
+- **Old Excel reports can have their report links filled in again.** The tool that fills in the links only looked in the old folder layout, so since runs moved into their own folders it silently skipped every sheet. It now reads all of the day's results (a full Slingo 2026-09-28 workbook went from 0 to 54 of 54 links filled).
+- **The "Check draft" button in the ticket pop-up now works.** It shared a name with the JIRA Checker tab's "Check" button, so it never did anything and the JIRA Checker's button was wired to the pop-up by mistake. The pop-up's button now has its own name.
+
 ## [Unreleased] - 2026-10-08
 
 ### Added
