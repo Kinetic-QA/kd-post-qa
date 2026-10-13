@@ -1428,8 +1428,7 @@ function runNextGeo(session: MultiSession): void {
     ? [...TEST_TIERS, ...VISUAL_TIERS].map(tier => `tests/${tier}`)
     : [session.spec];
 
-  // Markets with no live site yet (brand-urls.ts's liveUrl: null, e.g. SNG/AB,
-  // MC/AB) only have a QA environment to test against — playwright.config.ts
+  // Markets with no live site yet (brand-urls.ts's liveUrl: null) only have a QA environment to test against — playwright.config.ts
   // defaults TEST_ENV to 'live', so without this the run fails instantly with
   // "No live URL found" before a single test even opens a page.
   const testEnv = getLiveUrl(session.brand, geo) === null ? 'qa' : undefined;

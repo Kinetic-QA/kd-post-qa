@@ -9,6 +9,17 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-13
+
+### Changed
+
+- **Alberta (SpinGenie and Mega Casino) now tests the real, live websites.** Alberta has gone live, so the checks run against `https://ab.spingenie.ca/` and `https://www.megacasino.ca/ab/` instead of the old test sites. The old test sites are retired and are no longer used anywhere in the tool. The old test sites needed a Cyprus VPN; the live sites are meant to be visited from an Alberta or Canadian connection.
+- **The results website shows a brand as "Healthy" when every failed check was marked "Not an issue" in Review.** Before, "Not an issue" stayed private and the brand kept showing "Issue". Mixed answers behave as before: a Jira ticket still shows "Ticket raised", and "Script problem" still shows "Known issue (script)". The failed count is not changed, only the status label.
+
+### Fixed
+
+- **SpinGenie Alberta no longer fails its payment-method checks.** The SEO team has removed payment methods from SpinGenie Alberta for now, so the checks kept failing because there was nothing to find. The payment-method check, the "Payment Options" link in the footer check, and the "Payment Options" page in the banner check now skip for SpinGenie Alberta. The two that were not skipping before (footer and banner) also skip for any other market that has no payment page.
+
 ## [Unreleased] - 2026-10-09
 
 ### Added

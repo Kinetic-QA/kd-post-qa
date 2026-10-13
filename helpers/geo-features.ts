@@ -91,8 +91,10 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
 
   // ── SpinGenie (SNG) ─────────────────────────────────────────────────────
   SNG: {
-    // AB (Alberta) — pre-live QA market, confirmed live 2026-07-16 (IL/CY VPN
-    // required to reach qa-ab.spingenie.ca). Same brand-agnostic suite reused
+    // AB (Alberta) — went live 2026-10-13 (https://ab.spingenie.ca/). Before
+    // that it was a pre-live QA market, confirmed 2026-07-16 (IL/CY VPN
+    // required to reach the old qa-ab.spingenie.ca, now retired; live is
+    // meant for a Canada/Alberta IP, not yet verified). Same brand-agnostic suite reused
     // with ZERO spec-file changes; only this config block plus the
     // hasTestAccount split (see GeoFeatureConfig) were added.
     AB: {
@@ -113,7 +115,7 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
       hasLoginRegistration: true, // widget exists and is safe to inspect: registration.spec.ts never submits, login-widget.spec.ts only ever uses a deliberately wrong username/password
       hasTestAccount: false, // confirmed per Reeve 2026-07-16: no working test account exists yet (dev-side registration/submit issues) — skips only login.spec.ts's real successful-login test
       hasAccountModal: true, // confirmed live: header LOG IN/JOIN buttons are currently unreliable (passed in one spec run, no-opped in an isolated check — matches "still some issues from dev"), but clicking a game tile's "Play It" reliably opens #account with a real popup, so the modal itself does work
-      hasPaymentMethodsPage: true, // confirmed live 200
+      hasPaymentMethodsPage: false, // 2026-10-13: removed from SNG AB for now per SEO team (was 200 pre-launch) — PM-01, the footer "Payment Options" step and the banner page list all skip. Flip back to true if it returns.
       hasBlogDesktopSearch: false, // no blog for AB anyway (hasBlog: false) — set false for consistency with the rest of the brand
       hasBlogSearch: false, // no blog for AB anyway — set false for consistency with the rest of the brand
     },
@@ -692,8 +694,9 @@ export const GEO_FEATURES: Record<string, Record<string, GeoFeatureConfig>> = {
 
     // AB (Alberta) — onboarding started 2026-07-27 against QA only
     // (qa.megacasino.ca/ab — plain http redirects to https) — this market
-    // has NOT gone live yet (liveUrl: null in brand-urls.ts), so TEST_ENV
-    // must stay 'qa' for this GEO; there is no live site to fall back to.
+    // went live 2026-10-13 (https://www.megacasino.ca/ab/, liveUrl in
+    // brand-urls.ts), and the old QA site is retired — both qaUrl and
+    // liveUrl now point at the live site.
     // Same underlying platform/taxonomy as UK/COM/CA (online-slots/
     // casino-games/live-casino), same family as SNG's own already-onboarded
     // AB market — used as the reference for this one per explicit

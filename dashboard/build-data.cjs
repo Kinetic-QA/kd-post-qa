@@ -269,8 +269,9 @@ async function scanCombinedReports() {
 // ("a Jira ticket was created" / "this is a script problem"), saved per brand +
 // run date under Test Reports/<brand>/_triage/<date>.json (written by
 // gui/server.ts). Keyed `${geo}|${testName}`. A new run date never inherits an
-// old decision, same scoping as known-issues.json. Only these two outcomes are
-// shown publicly; "ignored" stays internal.
+// old decision, same scoping as known-issues.json. "ignored" ("Not an issue",
+// e.g. a page removed on purpose) is also read since 2026-10-13: a brand whose
+// failures are ALL marked that way shows as Healthy (see triageOfBrand).
 function readTriageOutcomes(brand, date) {
   const file = path.join(ROOT, 'Test Reports', brand, '_triage', `${date}.json`);
   try {
@@ -279,6 +280,7 @@ function readTriageOutcomes(brand, date) {
     for (const [id, f] of Object.entries(found)) {
       if (f.outcome === 'ticket_created' && f.ticketKey) out.set(id, { outcome: f.outcome, ticketKey: f.ticketKey, ticketUrl: f.ticketUrl || null });
       else if (f.outcome === 'script_issue') out.set(id, { outcome: 'script_issue' });
+      else if (f.outcome === 'ignored') out.set(id, { outcome: 'ignored' });
     }
     return out;
   } catch {
@@ -323,7 +325,11 @@ function buildBrandSummary(runs, tests = []) {
     const failing = tests.filter(t => t.brand === b.brand && t.date === b.lastRunDate && t.status === 'failed');
     const tickets = [...new Map(failing.filter(t => t.triage && t.triage.outcome === 'ticket_created')
       .map(t => [t.triage.ticketKey, { key: t.triage.ticketKey, url: t.triage.ticketUrl }])).values()];
-    return { allTriaged: failing.length > 0 && failing.every(t => t.triage), tickets };
+    return {
+      allTriaged: failing.length > 0 && failing.every(t => t.triage),
+      allIgnored: failing.length > 0 && failing.every(t => t.triage && t.triage.outcome === 'ignored'),
+      tickets,
+    };
   };
 
   return [...byBrand.values()]
@@ -359,7 +365,10 @@ function buildBrandSummary(runs, tests = []) {
           const known = KNOWN_ISSUES[b.brand];
           if (known && known.appliesToDate === b.lastRunDate) return 'known-issue';
           const t = triageOfBrand(b);
-          if (t.allTriaged) return t.tickets.length > 0 ? 'ticketed' : 'known-issue';
+          if (t.allTriaged) {
+            if (t.tickets.length > 0) return 'ticketed';
+            return t.allIgnored ? 'healthy' : 'known-issue';
+          }
           return 'issue';
         }
         return b.flaky > 0 ? 'watch' : 'healthy';
@@ -368,6 +377,7 @@ function buildBrandSummary(runs, tests = []) {
         const known = KNOWN_ISSUES[b.brand];
         if (b.failed > 0 && known && known.appliesToDate === b.lastRunDate) return known.note;
         const t = b.failed > 0 ? triageOfBrand(b) : null;
+        if (t && t.allIgnored && t.tickets.length === 0) return 'Failing checks reviewed and marked "Not an issue" (expected change on the site).';
         if (t && t.allTriaged && t.tickets.length === 0) return 'Marked as a test-script problem, not a real bug.';
         return null;
       })(),

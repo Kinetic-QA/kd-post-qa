@@ -189,8 +189,12 @@ test.describe('P3 - Footer Navigation', () => {
     }
 
     // ── Steps 22-23: Payment Options ──────────────────────────────────────
-    const paymentMethodsPath = geoFeatures.paymentMethodsPath ?? 'payment-methods/';
-    await footerStep(`Payment Options -> /${paymentMethodsPath}`, strings.footerPaymentOptionsText, `/${paymentMethodsPath}`);
+    if (geoFeatures.hasPaymentMethodsPage) {
+      const paymentMethodsPath = geoFeatures.paymentMethodsPath ?? 'payment-methods/';
+      await footerStep(`Payment Options -> /${paymentMethodsPath}`, strings.footerPaymentOptionsText, `/${paymentMethodsPath}`);
+    } else {
+      record('Payment Options footer link (skipped — no Payment Methods page for this GEO)', true);
+    }
 
     // ── Steps 24-25: Affiliates ───────────────────────────────────────────
     await footerStep(`Affiliates -> /${affiliatesPath}`, strings.footerAffiliatesText, `/${affiliatesPath}`);
