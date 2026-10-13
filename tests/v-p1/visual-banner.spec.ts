@@ -135,7 +135,7 @@ function pagesToCheck(): { label: string; path: string | null }[] {
     { label: 'Bonus Policy', path: 'bonus-policy/' },
     { label: 'Terms and Conditions', path: gf.termsPath ?? 'terms/' },
     { label: 'Mobile App', path: gf.mobileAppPath },
-    { label: 'Payment Options', path: gf.paymentMethodsPath ?? 'payment-methods/' },
+    { label: 'Payment Options', path: gf.hasPaymentMethodsPage ? (gf.paymentMethodsPath ?? 'payment-methods/') : null },
     { label: 'Promotions', path: gf.promotionsPath },
     { label: 'Features', path: gf.featuresPath },
     { label: 'Affiliates', path: gf.affiliatesPath ?? 'affiliates/' },

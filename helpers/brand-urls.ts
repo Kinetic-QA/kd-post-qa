@@ -41,7 +41,7 @@ export const BRAND_URLS: BrandEnvironment[] = [
   { brand: 'MC',  geo: 'DK',    qaUrl: 'https://qa.megacasino.dk/',       liveUrl: 'https://www.megacasino.dk/' },
   { brand: 'MC',  geo: 'SE',    qaUrl: 'https://qa-se.megacasino.com/',   liveUrl: 'https://se.megacasino.com/' },
   { brand: 'MC',  geo: 'ES',    qaUrl: 'https://qa.megacasinos.es/',      liveUrl: 'https://www.megacasinos.es/' },
-  { brand: 'MC',  geo: 'AB',    qaUrl: 'https://qa.megacasino.ca/ab/',    liveUrl: null }, // AB market not live yet. Two real fixes vs. the original 'http://qa.megacasino.ca/ab' this session: (1) added the trailing slash — without it, relative-path navigation (new URL('promotions/', baseURL)) drops the '/ab' segment entirely and resolves to the wrong domain path (confirmed via node -e), same class of bug SNG AB's own qaUrl already avoids by having a trailing slash; (2) switched http -> https — confirmed live the site force-redirects http to https, so every URL assertion built from the raw baseURL (still 'http://') mismatched real post-redirect URLs on scheme alone across nearly every navigation-based spec. https works directly with no redirect needed.
+  { brand: 'MC',  geo: 'AB',    qaUrl: 'https://www.megacasino.ca/ab/',   liveUrl: 'https://www.megacasino.ca/ab/' }, // AB went live 2026-10-13; per Reeve the old QA site (qa.megacasino.ca/ab, Cloudflare Access gate) is retired, so qaUrl deliberately points at live too. Trailing slash matters: without it, relative-path navigation (new URL('promotions/', baseURL)) drops the '/ab' segment. History of the old QA URL: two real fixes vs. the original 'http://qa.megacasino.ca/ab' this session: (1) added the trailing slash — without it, relative-path navigation (new URL('promotions/', baseURL)) drops the '/ab' segment entirely and resolves to the wrong domain path (confirmed via node -e), same class of bug SNG AB's own qaUrl already avoids by having a trailing slash; (2) switched http -> https — confirmed live the site force-redirects http to https, so every URL assertion built from the raw baseURL (still 'http://') mismatched real post-redirect URLs on scheme alone across nearly every navigation-based spec. https works directly with no redirect needed.
 
   // ── Slingo (SC) ───────────────────────────────────────────────────────
   { brand: 'SC',  geo: 'UK',    qaUrl: 'https://qa.slingo.com/',          liveUrl: 'https://www.slingo.com/' },
@@ -67,7 +67,7 @@ export const BRAND_URLS: BrandEnvironment[] = [
   { brand: 'SNG', geo: 'SE',    qaUrl: 'https://qa-se.spingenie.com/',     liveUrl: 'https://se.spingenie.com/' },
   { brand: 'SNG', geo: 'ON',    qaUrl: 'https://qa-on.spingenie.ca/',      liveUrl: 'https://on.spingenie.ca/' },
   { brand: 'SNG', geo: 'ES',    qaUrl: 'https://qa.spingenie.es/',         liveUrl: 'https://www.spingenie.es/' },
-  { brand: 'SNG', geo: 'AB',    qaUrl: 'https://qa-ab.spingenie.ca/',      liveUrl: null }, // AB market not live yet
+  { brand: 'SNG', geo: 'AB',    qaUrl: 'https://ab.spingenie.ca/',         liveUrl: 'https://ab.spingenie.ca/' }, // AB went live 2026-10-13; per Reeve the old QA site (qa-ab.spingenie.ca, IL/CY VPN) is retired, so qaUrl deliberately points at live too. Use an Alberta/Canada IP.
 
   // ── Prime Slots (PSL) ─────────────────────────────────────────────────
   { brand: 'PSL', geo: 'UK',    qaUrl: 'https://qa.primeslots.co.uk/',     liveUrl: 'https://www.primeslots.co.uk/' },
@@ -180,11 +180,11 @@ export function getAllQAUrlsForBrand(brand: string): BrandEnvironment[] {
 /**
  * Returns the live/production base URL for a given brand + GEO combination.
  * Matching is case-insensitive. Returns null if no entry exists, or if the
- * market hasn't gone live yet (e.g. SNG/AB, MC/AB).
+ * market hasn't gone live yet (liveUrl: null).
  *
  * Example:
  *   getLiveUrl('SNG', 'ON') → 'https://on.spingenie.ca/'
- *   getLiveUrl('SNG', 'AB') → null (not live yet)
+ *   getLiveUrl('SNG', 'AB') → 'https://ab.spingenie.ca/'
  */
 export function getLiveUrl(brand: string, geo: string): string | null {
   const b = brand.trim().toUpperCase();
