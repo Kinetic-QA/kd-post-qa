@@ -1637,7 +1637,13 @@ type ReviewTestEntry = {
   // error-context.md (page snapshot at the moment of failure). Server-side
   // only — never sent to the browser; evidence is served by finding id.
   evidence: { screenshot: string | null; errorContext: string | null };
+  // Things the test NOTICED on the page without failing — currently raw
+  // content keys such as "content.alberta_comment" (helpers/common.ts's
+  // noteRawContentKeys). Present on passing tests too, which is the point.
+  observations: RawKeyObservation[];
 };
+
+type RawKeyObservation = { text: string; where: string; url: string; screenshot: string | null; context: string | null };
 
 // eslint-disable-next-line no-control-regex
 const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
@@ -1678,8 +1684,30 @@ function extractTestEntries(resultsJson: any, geo: string, resultsDir: string): 
             }
           }
         }
+        // Raw-content-key notes: the annotation says what was seen; the
+        // matching screenshot/context attachments (same number) are the evidence.
+        const observations: RawKeyObservation[] = [];
+        const allAttachments: any[] = (Array.isArray(test.results) ? test.results : []).flatMap((r: any) => Array.isArray(r?.attachments) ? r.attachments : []);
+        for (const a of Array.isArray(test.annotations) ? test.annotations : []) {
+          if (a?.type !== 'raw-content-key') continue;
+          try {
+            const o = JSON.parse(String(a.description ?? '{}'));
+            if (!o?.text) continue;
+            // One note can carry several texts joined with " | " (one scan, one
+            // screenshot) — each becomes its own item, so each can be its own ticket.
+            for (const text of String(o.text).split(' | ').map(t => t.trim()).filter(Boolean)) {
+              observations.push({
+                text,
+                where: String(o.where ?? ''),
+                url: String(o.url ?? ''),
+                screenshot: abs(allAttachments.find(x => x?.name === `raw-key-screenshot-${o.n}`)?.path),
+                context: abs(allAttachments.find(x => x?.name === `raw-key-context-${o.n}`)?.path),
+              });
+            }
+          } catch { /* a malformed note is skipped, never fatal */ }
+        }
         const platform = /mobile/i.test(String(test.projectName ?? '')) ? 'Mobile' : 'Desktop';
-        out.push({ geo, platform, specFile: String(spec.file ?? ''), title: spec.title, status, errorMessage, errorLocation, evidence });
+        out.push({ geo, platform, specFile: String(spec.file ?? ''), title: spec.title, status, errorMessage, errorLocation, evidence, observations });
       }
     }
     for (const s of suite.suites ?? []) walk(s);
@@ -1762,6 +1790,36 @@ function groupFindings(entries: ReviewTestEntry[]): Finding[] {
   for (const f of findings) f.platforms.sort((a, b) => (a === b ? 0 : a === 'Desktop' ? -1 : 1));
   // Failures before flakes; Array.sort is stable so GEO/test order is kept.
   return findings.sort((a, b) => Number(b.status === 'failed') - Number(a.status === 'failed'));
+}
+
+// "Also noticed": things a test saw on the page while still passing (see
+// RawKeyObservation). One per GEO + text, however many platforms/tests saw it,
+// shaped like a Finding so the existing Jira draft/create and saved-outcome
+// code works on it unchanged. Never mixed into groupFindings — these are not
+// failures and must not change the Triage table or its counts.
+function groupObservations(entries: ReviewTestEntry[]): Finding[] {
+  const byId = new Map<string, Finding>();
+  for (const e of entries) {
+    for (const o of e.observations) {
+      const title = `Raw placeholder text "${o.text}" shown on the page`;
+      const id = findingId(e.geo, title);
+      const ev = { platform: e.platform, screenshot: o.screenshot, errorContext: o.context };
+      const cur = byId.get(id);
+      if (!cur) {
+        byId.set(id, {
+          id, geo: e.geo, title, specFile: e.specFile, platforms: [e.platform], status: 'noticed',
+          errorMessage: `The text "${o.text}" was visible to the visitor (${o.where}, ${o.url}). It looks like a content key that was never replaced with real wording. The functional check itself passed.`,
+          errorLocation: null, evidence: [ev], noticedDuring: o.where,
+        });
+      } else if (!cur.platforms.includes(e.platform)) {
+        cur.platforms.push(e.platform);
+        cur.evidence.push(ev);
+      }
+    }
+  }
+  const out = [...byId.values()];
+  for (const f of out) f.platforms.sort((a, b) => (a === b ? 0 : a === 'Desktop' ? -1 : 1));
+  return out;
 }
 
 // ── Saved triage outcomes ────────────────────────────────────────────────
@@ -1866,7 +1924,8 @@ app.post('/triage-run', async (req, res) => {
 // Re-derived from the run's own results on every call, so a caller can only
 // ever reach a finding that really exists in that run.
 async function findFinding(brand: string, dateStr: string, geo: string, title: string): Promise<Finding | null> {
-  return groupFindings(await gatherRunReviewData(brand, dateStr)).find(f => f.id === findingId(geo, title)) ?? null;
+  const entries = await gatherRunReviewData(brand, dateStr);
+  return [...groupFindings(entries), ...groupObservations(entries)].find(f => f.id === findingId(geo, title)) ?? null;
 }
 
 registerJiraTicketRoutes(app, {
@@ -1908,7 +1967,7 @@ app.post('/triage-outcome', async (req, res) => {
     return;
   }
 
-  const finding = groupFindings(await gatherRunReviewData(brand, dateStr)).find(f => f.id === findingId(geo, title));
+  const finding = await findFinding(brand, dateStr, geo, title);
   if (!finding) {
     res.status(404).json({ error: 'That finding is not part of this run.' });
     return;
@@ -2013,6 +2072,13 @@ app.post('/review-run', async (req, res) => {
   // collapse into one) — half the prompt for a typical run, and exactly one
   // verdict per Triage row.
   const needsAttention = groupFindings(entries);
+  // Deterministic (no AI): what the tests noticed without failing. Attached to
+  // every reply from here on, so it shows even when the AI call is skipped or fails.
+  const savedOutcomes = readTriageStore(brand, dateStr);
+  const observations = groupObservations(entries).map(f => {
+    const { evidence: _evidence, ...rest } = f;
+    return { ...rest, environment: findingEnvironment(brand, f), saved: savedOutcomes[f.id] ?? null };
+  });
 
   try {
     const client = new Anthropic({ apiKey });
@@ -2119,6 +2185,7 @@ Respond with ONLY a JSON object (no prose before or after it), in exactly this s
       counts,
       total: entries.length,
       geoBreakdown,
+      observations,
       // Still no verdict after the retry: say so plainly ('unreviewed') rather
       // than a made-up "unclear" — the person judges it from the error details.
       findings: needsAttention.map(f => ({
