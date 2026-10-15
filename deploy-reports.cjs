@@ -17,6 +17,15 @@
 //   npx netlify init      (or: npx netlify link, to use an existing site)
 
 const fs = require('fs');
+
+// Staging never uploads to Netlify (see helpers/staging.cjs).
+{
+  const { isStaging, stagingBlockMessage } = require('./helpers/staging.cjs');
+  if (isStaging()) {
+    console.error(stagingBlockMessage('upload to Netlify'));
+    process.exit(1);
+  }
+}
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');

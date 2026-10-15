@@ -16,6 +16,7 @@ Visual Check Exports/
 
 ### Local environment ###
 .env
+.staging
 .env.local
 .env.*.local
 env.qa-shared.download

@@ -13,7 +13,7 @@
 // as-is.
 import express from 'express';
 import multer from 'multer';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -43,6 +43,16 @@ import { plainError } from './plain-error';
 import { saveExportImages, buildPdfExport, buildExcelExport, VisualExportInput } from './visual-export';
 
 dotenv.config();
+
+// STAGING copy (see helpers/staging.cjs, docs/GUI-STAGING.md): never posts to
+// Slack, never uploads to Netlify, never writes to Jira (the Jira client itself
+// refuses). The GUI shows a banner so nobody mistakes it for the live one.
+const { isStaging, jiraWritesAllowedInStaging, stagingBlockMessage } = require('../helpers/staging.cjs') as {
+  isStaging: () => boolean;
+  jiraWritesAllowedInStaging: () => boolean;
+  stagingBlockMessage: (action: string, hint?: string) => string;
+};
+const IS_STAGING = isStaging();
 
 const app = express();
 const PORT = Number(process.env.GUI_PORT) || 4848;
@@ -89,6 +99,7 @@ interface SlackCard {
 // a small context line naming who ran it — same idea as [[RUNNER_NAME]]
 // but visually separated instead of just prefixed in plain text.
 async function notifySlack(card: SlackCard): Promise<void> {
+  if (IS_STAGING) return; // staging never posts to the team channel
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   if (!webhookUrl) return;
 
@@ -269,10 +280,21 @@ app.use('/reports', express.static(path.join(process.cwd(), 'Test Reports')));
 // second static mount to actually be reachable in the browser.
 app.use('/combined-reports', express.static(path.join(process.cwd(), 'combined-reports')));
 
+// Which git branch this copy is running — shown on the staging banner so it is
+// obvious what is being tried out. Never throws (not a git checkout = unknown).
+function currentBranchName(): string {
+  try {
+    return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
 app.get('/meta', (_req, res) => {
   res.json({
     geosByBrand: geosByBrand(),
     specs: discoverSpecs(),
+    staging: IS_STAGING ? { branch: currentBranchName(), jiraWrites: jiraWritesAllowedInStaging(), simulate: process.env.RAW_KEY_SIMULATE || null } : null,
   });
 });
 
@@ -2125,6 +2147,10 @@ function runNodeScript(scriptArgs: string[], extraEnv: Record<string, string> = 
 }
 
 app.post('/upload-to-netlify', async (req, res) => {
+  if (IS_STAGING) {
+    res.status(403).json({ error: stagingBlockMessage('Upload to Netlify') });
+    return;
+  }
   const brand = String(req.body?.brand ?? '');
   const dateStr = String(req.body?.dateStr ?? '');
   if (!isValidBrand(brand) || !isValidDateStr(dateStr)) {

@@ -1968,3 +1968,8 @@ body.modal-open { overflow: hidden; }
 .modal-confirm { width: min(520px, 100%); }
 .modal-confirm .modal-body p { margin: 0 0 12px; font-size: 15px; line-height: 1.5; }
 .modal-confirm .modal-footer .action-btn { width: auto; }
+
+/* STAGING copy banner (helpers/staging.cjs) — hidden on the live GUI. */
+.staging-banner { position: sticky; top: 0; z-index: 1000; padding: 8px 16px; background: #6b21a8; color: #fff; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+.staging-banner[hidden] { display: none; }
+.staging-banner-jira { background: #b91c1c; }

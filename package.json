@@ -18,6 +18,10 @@
     "agent": "ts-node src/agent.ts",
     "check-transitions": "ts-node src/check-transitions.ts",
     "gui": "ts-node gui/server.ts",
+    "gui:staging": "node scripts/staging.cjs start",
+    "staging:setup": "node scripts/staging.cjs setup",
+    "staging:status": "node scripts/staging.cjs status",
+    "staging:branch": "node scripts/staging.cjs branch",
     "upload-results": "node upload-todays-results.cjs"
   },
   "dependencies": {

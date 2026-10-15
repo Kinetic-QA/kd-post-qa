@@ -12,6 +12,15 @@
 //   TEST_DATE=2026-09-10 node upload-todays-results.cjs   (a specific date)
 
 const fs = require('fs');
+
+// Staging never uploads to Netlify (see helpers/staging.cjs).
+{
+  const { isStaging, stagingBlockMessage } = require('./helpers/staging.cjs');
+  if (isStaging()) {
+    console.error(stagingBlockMessage('upload to Netlify'));
+    process.exit(1);
+  }
+}
 const path = require('path');
 const { spawnSync } = require('child_process');
 
