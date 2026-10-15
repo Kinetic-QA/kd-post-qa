@@ -9,6 +9,7 @@ When the user says **"Let's begin"** (or a clear variant of it), get fully up to
 - Only fast-forward (`git pull --ff-only`) when it is clearly safe: working tree clean **and** no local-only commits. If the tree is dirty, the branch has diverged, or it's a feature branch with unpushed work, do **not** pull, merge, rebase, stash or switch branches on your own — say what you found and ask.
 - Check whether the current branch's PR was already merged (`gh pr list --state all --head <branch>`). If it was, say so — new work goes on a new branch (see Branch Rules).
 - Mention leftover uncommitted files or stashes from the last session so nothing gets forgotten.
+- Run `npm run staging:status` and report it too: the **live folder must be a clean `main`** (flag it if not), and say which branch the staging folder is on and whether that branch's PR was already merged (see Staging GUI below).
 
 **2. Read the latest Confluence updates (QA Knowledge Base, space `QKB`)**
 - Confluence is the source of truth for QA standards. Where it disagrees with a local doc or an older memory, **Confluence wins** — re-read the page, never rely on a remembered copy.
@@ -31,6 +32,22 @@ When the user says **"Let's begin"** (or a clear variant of it), get fully up to
 - Then ask what we're working on.
 
 Ground rules: this is **read-only** — never write to Jira or Confluence, never push, never discard local changes. If Confluence or `git fetch` can't be reached, say so plainly instead of silently skipping that half.
+
+---
+
+## Staging GUI — build and prove new ideas there first
+
+The QA Test Center has a live copy and a staging copy (full guide: `docs/GUI-STAGING.md`):
+
+- **Live** = this folder (`QA-Test-Center`), GUI on port 4848. It stays on a **clean `main`** — never switch it to a feature branch, never leave half-finished work in it, never edit it for a new idea.
+- **Staging** = the sibling folder `QA-Test-Center-Staging` (a git worktree of the same repo), GUI on port 4949 (`npm run gui:staging`). Every new idea is built and proven here first.
+
+Rules:
+- Claude Code's working directory is normally the live folder. For any new feature or change, **edit and test in the staging folder** (use its absolute paths, or have the session started from it). Start a new idea with `npm run staging:branch -- <type>/<name> --new`.
+- Test on the staging GUI (4949), never by restarting or driving the live GUI (4848). Staging never posts to Slack, Netlify or Jira, so tests there are safe; do not work around those blocks. Reading from Jira/Confluence is fine.
+- Never kill a process by port: staging and live use different ports, and the live GUI may be running a real session. Only stop a process whose PID you started yourself.
+- "Done Today's test" (Netlify upload) and any real Jira write are done from the **live** folder/GUI, after the change has been merged to `main` and pulled there.
+- The Push Trigger below runs from whichever folder holds the branch being pushed — normally staging. After the PR is merged, `git pull --ff-only` in the live folder and restart the live GUI to promote it.
 
 ---
 

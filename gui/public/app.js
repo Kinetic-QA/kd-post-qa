@@ -175,6 +175,19 @@ fetch('/meta')
   .then(meta => {
     geosByBrand = meta.geosByBrand;
 
+    // STAGING copy: an unmistakable banner + tab title, so it is never confused
+    // with the live GUI. Staging posts nothing to Slack, Netlify or Jira.
+    if (meta.staging) {
+      const banner = document.getElementById('staging-banner');
+      banner.hidden = false;
+      banner.classList.toggle('staging-banner-jira', Boolean(meta.staging.jiraWrites));
+      banner.textContent = meta.staging.jiraWrites
+        ? `STAGING — branch ${meta.staging.branch} — JIRA WRITES ARE ON. Slack and Netlify are off.`
+        : `STAGING — branch ${meta.staging.branch} — nothing here posts to Slack, Netlify or Jira.`;
+      if (meta.staging.simulate) banner.textContent += ` SIMULATING raw key "${meta.staging.simulate}" on AB registration runs.`;
+      document.title = `STAGING · ${document.title}`;
+    }
+
     for (const brand of Object.keys(geosByBrand).sort()) {
       const option = document.createElement('option');
       option.value = brand;

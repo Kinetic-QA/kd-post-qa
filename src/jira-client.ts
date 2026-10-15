@@ -5,6 +5,19 @@ import FormData from 'form-data';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+// Staging never writes to Jira (see helpers/staging.cjs and docs/GUI-STAGING.md).
+// Reads (tickets, versions, users, fields) are untouched.
+const { isStaging, jiraWritesAllowedInStaging, stagingBlockMessage } = require('../helpers/staging.cjs') as {
+  isStaging: () => boolean;
+  jiraWritesAllowedInStaging: () => boolean;
+  stagingBlockMessage: (action: string, hint?: string) => string;
+};
+function assertJiraWritable(action: string): void {
+  if (isStaging() && !jiraWritesAllowedInStaging()) {
+    throw new Error(stagingBlockMessage(`${action} in Jira`, 'To test a Jira write on purpose, restart staging with --allow-jira-writes and use a throwaway ticket.'));
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface JiraTicket {
@@ -110,6 +123,7 @@ export class JiraClient {
 
   // ── Move ticket to a new status ─────────────────────────────────────────────
   async transitionTicket(issueKey: string, transitionId: string): Promise<void> {
+    assertJiraWritable('change a ticket status');
     await this.http.post(`/issue/${issueKey}/transitions`, {
       transition: { id: transitionId },
     });
@@ -118,6 +132,7 @@ export class JiraClient {
 
   // ── Post a comment ──────────────────────────────────────────────────────────
   async addComment(issueKey: string, bodyText: string): Promise<void> {
+    assertJiraWritable('post a comment');
     await this.http.post(`/issue/${issueKey}/comment`, {
       body: {
         type: 'doc',
@@ -135,12 +150,14 @@ export class JiraClient {
 
   // ── Reassign ticket ─────────────────────────────────────────────────────────
   async assignTicket(issueKey: string, accountId: string): Promise<void> {
+    assertJiraWritable('change the assignee');
     await this.http.put(`/issue/${issueKey}/assignee`, { accountId });
     console.log(`[JIRA] ${issueKey} assigned to ${accountId}`);
   }
 
   // ── Upload a file as an attachment ─────────────────────────────────────────
   async uploadAttachment(issueKey: string, filePath: string): Promise<{ filename: string; contentUrl: string; thumbnailUrl: string; id: string }> {
+    assertJiraWritable('attach a file');
     const form = new FormData();
     form.append('file', fs.createReadStream(filePath), { filename: path.basename(filePath) });
 
@@ -180,6 +197,7 @@ export class JiraClient {
 
   // ── Post a rich ADF comment ─────────────────────────────────────────────────
   async addCommentAdf(issueKey: string, adfBody: object): Promise<void> {
+    assertJiraWritable('post a comment');
     await this.http.post(`/issue/${issueKey}/comment`, { body: adfBody });
     console.log(`[JIRA] Comment posted on ${issueKey}`);
   }
@@ -203,6 +221,7 @@ export class JiraClient {
   // The ONLY method here that creates an issue. Callers must already hold the
   // user's explicit approval of the exact ticket (see gui/jira-ticket.ts).
   async createIssue(fields: Record<string, unknown>): Promise<{ key: string; url: string }> {
+    assertJiraWritable('create a ticket');
     const res = await this.http.post('/issue', { fields });
     const key = String(res.data.key);
     console.log(`[JIRA] Created ${key}`);

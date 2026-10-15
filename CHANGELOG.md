@@ -9,6 +9,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-15
+
+### Added
+
+- **There is now a separate "staging" copy of the QA Test Center for trying new ideas before they reach the live one.** It lives in its own folder next to the live folder, opens on its own address (`http://localhost:4949`, while the live one stays on `4848`) and shows a purple "STAGING" bar at the top, so it can never be mistaken for the live tool. New ideas are built and tried there first; once they work they are merged and the live copy is updated. `npm run gui:staging` starts it, `npm run staging:status` shows where both copies are (and warns if the live folder is not on a clean `main`), and `npm run staging:branch -- <name> --new` starts a new idea. The full plain-language guide is in `docs/GUI-STAGING.md`.
+- **Staging can never post to Slack, upload to Netlify or change anything in Jira.** Slack alerts, "Upload to Netlify", and every Jira change (creating a ticket, posting a comment, moving a ticket, changing the assignee, attaching a file) are switched off there, even for a script started by hand from the staging folder. Reading from Jira and Confluence still works. To test a feature that itself writes to Jira, start staging with `--allow-jira-writes` (the bar turns red) and use a throwaway ticket.
+- **Staging keeps its own test results.** Runs made in staging never show up in the live dashboard, the live reports or the results website.
+
+### Changed
+
+- **The project instructions now describe the staging workflow** (build and prove new ideas in staging, keep the live folder on a clean `main`), and the start-of-day check also reports the state of both folders.
+
 ## [Unreleased] - 2026-10-13
 
 ### Changed
