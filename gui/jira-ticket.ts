@@ -68,10 +68,13 @@ export type Finding = {
   title: string;
   specFile: string;
   platforms: Array<'Desktop' | 'Mobile'>;
-  status: 'failed' | 'flaky';
+  // 'noticed' = the test passed but saw something wrong on the page (e.g. a raw
+  // content key); built by groupObservations in server.ts, never a failure.
+  status: 'failed' | 'flaky' | 'noticed';
   errorMessage: string | null;
   errorLocation: string | null;
   evidence: FindingEvidence[];
+  noticedDuring?: string;
 };
 
 type Deps = {
@@ -401,7 +404,7 @@ export function registerJiraTicketRoutes(app: Express, deps: Deps): void {
 
     // ── Evidence the AI is allowed to reason from ────────────────────────
     const errorContext = finding.evidence.map(e => readTextSafe(e.errorContext, 3500)).find(Boolean) ?? '';
-    const testSnippet = readTestSnippet(finding.specFile, finding.title);
+    const testSnippet = finding.status === 'noticed' ? '' : readTestSnippet(finding.specFile, finding.title);
     const { env, baseUrl } = resolveEnvironment(brand, geo, errorContext);
     if (env === 'Unknown') flags.push('Could not tell from the evidence whether this was the QA or the live site — set Environment yourself.');
 
@@ -414,7 +417,16 @@ export function registerJiraTicketRoutes(app: Express, deps: Deps): void {
     if (evidence.length === 0) flags.push('No screenshot was captured for this failure — attach evidence by hand (Protocol §4.6: state why if none).');
 
     const platformText = finding.platforms.join(', ');
-    const prompt = `You are drafting ONE Jira bug ticket for a QA engineer, from an automated regression test failure. Follow the team's official standards below exactly.
+    // A "noticed" item is not a failed test: the functional check passed, but the
+    // page showed text that was never filled in (e.g. a raw content key). The
+    // draft is about that text, not about any test or any broken flow.
+    const noticed = finding.status === 'noticed';
+    const noticedRules = noticed ? `
+- THIS IS NOT A TEST FAILURE. The automated check passed and the flow works. The ticket is about ONE thing only: the page shows wording that was never filled in (a content key / placeholder). Do not say anything is broken, blocked or missing beyond that.
+- "issue" names it, for example 'Placeholder text "<the exact text>" shown at the top of the registration form'. Quote the exact text from the evidence, character for character.
+- stepsToReplicate: only the steps needed to open the place where it appears (for example opening the registration form), as seen in the evidence and the test's own steps.
+- actualResult: the exact text the visitor sees and where. expectedResult: the real wording for that spot (or nothing if it is not meant to show) — the real wording is not known to QA, so say so in needsHumanCheck and name the content owner as the person to confirm it.` : '';
+    const prompt = `You are drafting ONE Jira bug ticket for a QA engineer, from ${noticed ? 'something an automated regression test noticed on the page (the test itself passed)' : 'an automated regression test failure'}. Follow the team's official standards below exactly.
 
 === BUG TICKET STANDARD (Confluence, live) ===
 ${bugStandardText ?? '(unavailable)'}
@@ -422,8 +434,8 @@ ${bugStandardText ?? '(unavailable)'}
 === QA REPORTING PROTOCOL §4.3-4.7 (Confluence, live) ===
 ${protocolIssues ?? '(unavailable)'}
 
-=== THE FAILURE ===
-Brand: ${brand}   GEO: ${geo}   Platform(s) that failed: ${platformText}   Environment: ${env}
+=== ${noticed ? 'WHAT WAS NOTICED' : 'THE FAILURE'} ===
+Brand: ${brand}   GEO: ${geo}   Platform(s) ${noticed ? 'it was seen on' : 'that failed'}: ${platformText}   Environment: ${env}
 Base URL for this brand/GEO/environment: ${baseUrl ?? '(unknown)'}
 Test: ${finding.title}
 Test file: ${finding.specFile}
@@ -461,7 +473,7 @@ Rules:
 - Do not mention ISTQB or any testing-theory terminology.
 - The established statement above is what the QA person has already read and agreed with. The summaryOfBug and actualResult MUST carry it over, in plain words, and must not contradict it or swap it for a different explanation of the same failure.
 - If the established statement says the test was stopped by a login, sign-in, bot check or block page (it never reached the real page), the ticket is about THAT access problem, not about a "missing" button or element: "issue" names it (for example "Behind a Cloudflare Access sign-in, test cannot reach the page"), stepsToReplicate are only the steps needed to see the gate, expectedResult says the page should load for the testing computer without the gate, and needsHumanCheck says who should allow the test computer through is still to be confirmed.
-- Plain language a non-developer teammate can follow.`;
+- Plain language a non-developer teammate can follow.${noticedRules}`;
 
     let ai: any;
     try {

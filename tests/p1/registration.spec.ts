@@ -1,6 +1,6 @@
 import { test, expect } from '../../helpers/stealth-fixtures';
 import type { Page, FrameLocator, Locator } from '@playwright/test';
-import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle, resolveMobileAccountButton } from '../../helpers/common';
+import { waitForPageReady, dismissCampaignPopup, dismissCookieConsent, setupCampaignPopupWatcher, waitForExtraPageSettle, resolveMobileAccountButton, noteRawContentKeys } from '../../helpers/common';
 import { generateRegistrationData, generateUKMobile, generateEsRegistrationData, generateIERegistrationData, generateIrishMobile, generateROWRegistrationData, generateCyprusMobile, generateCanadianMobile, generateDOBParts, formatDOBForPlaceholder, generateCanadianAddress, generateMcFrCaAddress, generateOntarioAddress, generateAbRegistrationData, generateMalteseMobile, generateUaeMobile, getAutoDetectedMobileGenerator, RegistrationData, EsRegistrationData } from '../../helpers/testData';
 import { currentLocaleStrings } from '../../helpers/locale-strings';
 import { currentGeoFeatures } from '../../helpers/geo-features';
@@ -77,6 +77,9 @@ test.describe('Registration Flow', () => {
         console.log(`  → ${label}`);
         try {
           await fn();
+          // Side note only (AB for now): flags a raw content key such as
+          // "content.alberta_comment" shown on the widget. Never fails the step.
+          await noteRawContentKeys(page, `after step: ${label}`);
           record(label, true);
         } catch (e) {
           record(label, false);

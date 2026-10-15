@@ -21,6 +21,8 @@ const reviewCancelBtn = document.getElementById('review-cancel-btn');
 const reviewOutputEl = document.getElementById('review-output');
 const reviewSummaryEl = document.getElementById('review-summary');
 const reviewTableEl = document.getElementById('review-table');
+const reviewNoticedEl = document.getElementById('review-noticed');
+const reviewNoticedListEl = document.getElementById('review-noticed-list');
 const reviewTableBodyEl = document.getElementById('review-table-body');
 const uploadOutputEl = document.getElementById('upload-output');
 const triageCardEl = document.getElementById('triage-card');
@@ -1070,6 +1072,7 @@ function resetReviewPanel() {
   reviewSummaryEl.textContent = '';
   reviewTableEl.hidden = true;
   reviewTableBodyEl.innerHTML = '';
+  resetNoticed();
 }
 
 // ── Triage table ─────────────────────────────────────────────────────────
@@ -1174,12 +1177,130 @@ async function saveTriageOutcome(row, outcome) {
     // On a 409 the server sends back what is really saved (a ticket already
     // exists) — show that, not what was clicked.
     if (res.ok || data.saved) row.finding.saved = data.saved;
-    renderTriageOutcome(row);
+    (row.render ?? renderTriageOutcome)(row);
     if (!res.ok) showError(data.error ?? 'Could not save. Please try again.');
   } catch (e) {
     buttons.forEach(b => { b.disabled = false; });
     showError('Could not reach the QA Test Center. Check that it is still running, then try again.');
   }
+}
+
+// ── "Also noticed" (inside the Review output) ───────────────────────────
+// Things a test saw on the page without failing — for now, raw content keys
+// like "content.alberta_comment" (helpers/common.ts noteRawContentKeys). Not in
+// the Triage table: it is a side note to the functional result, but it can
+// still become a Jira ticket through the same popup. Rows reuse the Triage
+// outcome plumbing (saveTriageOutcome) via row.render.
+const noticedRows = new Map();
+
+function resetNoticed() {
+  noticedRows.clear();
+  reviewNoticedListEl.textContent = '';
+  reviewNoticedEl.hidden = true;
+}
+
+function renderNoticedOutcome(row) {
+  const { finding, outcomeTd } = row;
+  outcomeTd.textContent = '';
+  const saved = finding.saved;
+  if (!saved) {
+    const create = document.createElement('button');
+    create.type = 'button';
+    create.className = 'action-btn action-btn-primary';
+    create.textContent = 'Create JIRA ticket';
+    create.addEventListener('click', () => openJiraModal(row));
+    const quiet = document.createElement('span');
+    quiet.className = 'triage-quiet';
+    quiet.appendChild(triageLinkButton('Not an issue', () => saveTriageOutcome(row, 'ignored')));
+    outcomeTd.append(create, quiet);
+    return;
+  }
+  const done = document.createElement('span');
+  done.className = `triage-outcome-done triage-outcome-${saved.outcome}`;
+  if (saved.outcome === 'ticket_created' && saved.ticketUrl) {
+    const a = document.createElement('a');
+    a.href = saved.ticketUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = saved.ticketKey ?? OUTCOME_LABELS[saved.outcome];
+    done.append(`${OUTCOME_LABELS[saved.outcome]}: `, a);
+  } else {
+    done.textContent = OUTCOME_LABELS[saved.outcome] ?? saved.outcome;
+  }
+  outcomeTd.appendChild(done);
+  if (saved.outcome !== 'ticket_created') {
+    const quiet = document.createElement('span');
+    quiet.className = 'triage-quiet';
+    quiet.appendChild(triageLinkButton('Undo', () => saveTriageOutcome(row, 'clear')));
+    outcomeTd.appendChild(quiet);
+  }
+}
+
+// The Jira popup creates the ticket; this puts its link on the matching row.
+function markNoticedTicket(finding, ticket) {
+  const row = finding && noticedRows.get(finding.id);
+  if (!row) return;
+  row.finding.saved = { outcome: 'ticket_created', ticketKey: ticket.key, ticketUrl: ticket.url };
+  renderNoticedOutcome(row);
+}
+
+function renderNoticed(items) {
+  resetNoticed();
+  if (!items.length) return;
+  for (const finding of items) {
+    const text = (finding.title.match(/"([^"]+)"/) ?? [])[1] ?? finding.title;
+    const item = document.createElement('div');
+    item.className = 'noticed-item';
+
+    const head = document.createElement('div');
+    head.className = 'noticed-head';
+    const where = document.createElement('strong');
+    where.textContent = finding.geo;
+    head.appendChild(where);
+    if (finding.environment === 'QA' || finding.environment === 'Live') {
+      const chip = document.createElement('span');
+      chip.className = `env-chip env-${finding.environment.toLowerCase()}`;
+      chip.textContent = finding.environment;
+      head.append(' ', chip);
+    }
+    head.append(` · ${finding.platforms.join(', ')}`);
+
+    const plainEl = document.createElement('p');
+    plainEl.className = 'noticed-plain';
+    const code = document.createElement('code');
+    code.textContent = text;
+    plainEl.append('The page showed ', code, ' where real wording should be. The check itself passed — this is a content gap, not a broken flow.');
+
+    const seen = document.createElement('p');
+    seen.className = 'noticed-seen';
+    seen.textContent = finding.noticedDuring ? `Seen ${finding.noticedDuring}.` : '';
+
+    const shots = document.createElement('div');
+    shots.className = 'noticed-shots';
+    for (const platform of finding.platforms) {
+      const src = `/triage-evidence?${new URLSearchParams({ brand: lastRunBrand, dateStr: lastRunDateStr, geo: finding.geo, title: finding.title, platform }).toString()}`;
+      const a = document.createElement('a');
+      a.href = src;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = `${platform} screenshot with the text outlined in red`;
+      img.loading = 'lazy';
+      a.appendChild(img);
+      shots.appendChild(a);
+    }
+
+    const outcomeTd = document.createElement('div');
+    outcomeTd.className = 'noticed-actions';
+    item.append(head, plainEl, seen, shots, outcomeTd);
+    reviewNoticedListEl.appendChild(item);
+
+    const row = { finding, plainEl, outcomeTd, reviewed: true, render: renderNoticedOutcome };
+    noticedRows.set(finding.id, row);
+    renderNoticedOutcome(row);
+  }
+  reviewNoticedEl.hidden = false;
 }
 
 async function loadTriage() {
@@ -1732,6 +1853,7 @@ jiraConfirmYesBtn.addEventListener('click', async () => {
       if (data.recordError) notes.push(`The ticket exists, but this page could not save its link to the Triage row (${data.recordError}). Use ${data.ticket.key}.`);
       for (const n of notes) { const q = document.createElement('p'); q.className = 'jira-dryrun-note'; q.textContent = n; jiraResultEl.appendChild(q); }
       loadTriage();
+      markNoticedTicket(jiraRowFinding, data.ticket);
     }
     jiraResultEl.hidden = false;
     jiraResultEl.scrollIntoView({ block: 'nearest' });
@@ -1795,6 +1917,8 @@ reviewBtn.addEventListener('click', async () => {
       }
       reviewTableEl.hidden = false;
     }
+
+    renderNoticed(Array.isArray(data.observations) ? data.observations : []);
 
     const findings = Array.isArray(data.findings) ? data.findings : [];
     if (findings.length > 0) {

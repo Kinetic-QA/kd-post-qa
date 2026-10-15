@@ -1,4 +1,5 @@
 import { Page, Locator, expect, test } from '@playwright/test';
+import { existsSync, writeFileSync } from 'fs';
 import { currentGeoFeatures } from './geo-features';
 
 /**
@@ -542,4 +543,182 @@ export async function openRegisterWidget(page: Page): Promise<void> {
   await expect(joinBtn).toBeVisible({ timeout: 8_000 });
   await joinBtn.click();
   await expect(page).toHaveURL(/#account/, { timeout: 10_000 });
+}
+
+/**
+ * Markets where the raw-content-key check runs. Added for Alberta first
+ * (2026-10-15): real testers saw the CMS key "content.alberta_comment" at the
+ * top of the registration widget on MC AB, while the automated registration
+ * test passed (it only proves the form works, not that every line of text on
+ * it is real copy). Add a market's code here to turn the check on for it.
+ */
+const RAW_KEY_CHECK_GEOS = new Set(['AB']);
+
+const { isStaging: isStagingCopy } = require('./staging.cjs') as { isStaging: () => boolean };
+
+/**
+ * STAGING ONLY. The real defect is fixed on the live site, so to watch the
+ * check fire during a REAL run, the staging GUI's `--simulate-raw-key` switch
+ * plants a raw key into the real registration widget — same spot testers saw
+ * it, right under the "Welcome to ..." / "Step N of M" header. Honoured only
+ * when RAW_KEY_SIMULATE is set AND this is the staging copy (never on live).
+ */
+async function plantSimulatedRawKey(page: Page, text: string): Promise<void> {
+  for (const frame of page.frames()) {
+    if (frame.isDetached()) continue;
+    await frame.evaluate((t: string) => {
+      const findDeep = (root: Document | ShadowRoot, sel: string): Element | null => {
+        const direct = root.querySelector(sel);
+        if (direct) return direct;
+        for (const el of Array.from(root.querySelectorAll('*'))) {
+          if (el.shadowRoot) {
+            const hit = findDeep(el.shadowRoot, sel);
+            if (hit) return hit;
+          }
+        }
+        return null;
+      };
+      const step = findDeep(document, '[part="current-step"]');
+      const header = step ? (step.closest('.grid') ?? step.parentElement) : null;
+      const host = header?.parentElement;
+      if (!header || !host || host.querySelector('[data-raw-key-simulated]')) return;
+      const row = document.createElement('div');
+      row.className = 'flex flex-wrap';
+      const col = document.createElement('div');
+      col.className = 'flex-[0_0_100%]';
+      const p = document.createElement('p');
+      p.className = 'mb-5';
+      p.setAttribute('data-raw-key-simulated', 'true');
+      p.textContent = t;
+      col.appendChild(p);
+      row.appendChild(col);
+      header.after(row);
+    }, text).catch(() => {});
+  }
+}
+
+/**
+ * Looks at the text a visitor can actually see (including inside iframes and
+ * open shadow roots) for content that was never filled in: a CMS translation
+ * key such as "content.alberta_comment", a leftover "{{template}}" slot,
+ * "[object Object]" or a bare "undefined"/"NaN".
+ *
+ * A hit is NOT a test failure — the functional check is the test's job. It is
+ * recorded as a `raw-content-key` annotation plus an outlined screenshot and a
+ * short context file, so the GUI's Review step can list it under "Also
+ * noticed" (and offer a Jira ticket). Never throws: a scan problem must not
+ * turn a working flow red.
+ *
+ * `where` says what the test had just done ("after step: ..."), so the note
+ * can say where the text was seen.
+ */
+export async function noteRawContentKeys(page: Page, where: string): Promise<void> {
+  try {
+    const info = test.info();
+    const geo = info.project.name.replace(/-mobile$/, '');
+    if (!RAW_KEY_CHECK_GEOS.has(geo)) return;
+
+    // Staging-only simulation (see plantSimulatedRawKey). The note says so, so a
+    // simulated hit is never mistaken for a real finding.
+    const simulate = process.env.RAW_KEY_SIMULATE;
+    if (simulate && isStagingCopy()) {
+      await plantSimulatedRawKey(page, simulate);
+      where = `${where} [simulated by staging]`;
+    }
+
+    // One note can hold several texts joined with " | " — remember each one.
+    const alreadyNoted = new Set(
+      info.annotations
+        .filter(a => a.type === 'raw-content-key')
+        .flatMap(a => { try { return String(JSON.parse(a.description ?? '{}').text).split(' | '); } catch { return []; } }),
+    );
+
+    for (const frame of page.frames()) {
+      if (frame.isDetached()) continue;
+      const texts: string[] = await frame.evaluate(() => {
+        const TLDS = new Set(['com', 'ca', 'org', 'net', 'co', 'uk', 'ie', 'es', 'se', 'dk', 'io', 'gov', 'info', 'tv', 'app', 'eu', 'de', 'fr', 'biz']);
+        const NAMESPACES = new Set(['content', 'common', 'label', 'labels', 'button', 'buttons', 'error', 'errors', 'message', 'messages', 'text', 'title', 'page', 'form', 'forms', 'registration', 'register', 'account', 'cms', 'i18n', 'translation', 'translations', 'validation', 'placeholder', 'tooltip', 'modal', 'widget', 'footer', 'header', 'menu', 'nav']);
+        const DOTTED = /^[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:[_-][a-z0-9]+)*)+$/;
+        const isRaw = (t: string): boolean => {
+          if (/^(undefined|NaN|\[object Object\])$/.test(t)) return true;
+          if (/\{\{\s*[\w.$-]+\s*\}\}/.test(t)) return true;
+          if (t.length > 80 || /\s/.test(t) || !DOTTED.test(t)) return false;
+          const parts = t.split('.');
+          if (parts[0] === 'www' || TLDS.has(parts[parts.length - 1])) return false;
+          return t.includes('_') || parts.length >= 3 || NAMESPACES.has(parts[0]);
+        };
+        const visible = (el: Element): boolean => {
+          if (!el.getClientRects().length) return false;
+          const cs = getComputedStyle(el);
+          return cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0';
+        };
+        const found: string[] = [];
+        const visit = (node: Node): void => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            const t = (node.textContent ?? '').trim();
+            const p = node.parentElement;
+            if (!t || !p || !isRaw(t)) return;
+            if (p.closest('a, code, pre, textarea, script, style, noscript, template') || !visible(p)) return;
+            if (!found.includes(t)) found.push(t);
+            // Outline the element so the screenshot shows exactly what was found.
+            if (!p.hasAttribute('data-raw-key-hit')) {
+              p.setAttribute('data-raw-key-hit', 'true');
+              p.setAttribute('data-raw-key-prev-outline', p.style.outline);
+              p.style.outline = '3px solid #e11d48';
+            }
+            return;
+          }
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as Element;
+            if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(el.tagName)) return;
+            if (el.shadowRoot) visit(el.shadowRoot);
+          }
+          node.childNodes.forEach(visit);
+        };
+        if (document.body) visit(document.body);
+        return found;
+      }).catch(() => [] as string[]);
+
+      const fresh = texts.filter(t => !alreadyNoted.has(t));
+      if (fresh.length > 0) {
+        const n = info.annotations.filter(a => a.type === 'raw-content-key').length + 1;
+        const shotPath = info.outputPath(`raw-key-${n}.png`);
+        const ctxPath = info.outputPath(`raw-key-${n}.txt`);
+        await page.screenshot({ path: shotPath }).catch(() => {});
+        writeFileSync(ctxPath, [
+          `Page: ${page.url()}`,
+          `Seen: ${where}`,
+          `Text shown to the visitor: ${fresh.join(' | ')}`,
+          'This looks like a content key or template slot that was never replaced with real wording.',
+        ].join('\n'));
+        if (existsSync(shotPath)) await info.attach(`raw-key-screenshot-${n}`, { path: shotPath, contentType: 'image/png' });
+        await info.attach(`raw-key-context-${n}`, { path: ctxPath, contentType: 'text/plain' });
+        info.annotations.push({
+          type: 'raw-content-key',
+          description: JSON.stringify({ n, text: fresh.join(' | '), where, url: page.url() }),
+        });
+        fresh.forEach(t => alreadyNoted.add(t));
+      }
+
+      // Take the red outlines off again so later screenshots are unaffected.
+      if (texts.length > 0) {
+        await frame.evaluate(() => {
+          // querySelectorAll does not look inside shadow roots, so walk them too.
+          const clean = (root: Document | ShadowRoot): void => {
+            root.querySelectorAll('*').forEach(el => {
+              if (el.hasAttribute('data-raw-key-hit')) {
+                (el as HTMLElement).style.outline = el.getAttribute('data-raw-key-prev-outline') ?? '';
+                el.removeAttribute('data-raw-key-hit');
+                el.removeAttribute('data-raw-key-prev-outline');
+              }
+              if (el.shadowRoot) clean(el.shadowRoot);
+            });
+          };
+          clean(document);
+        }).catch(() => {});
+      }
+    }
+  } catch {
+    // A scan problem must never fail the test.
+  }
 }
