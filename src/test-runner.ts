@@ -2,6 +2,9 @@ import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { localTimeToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string };
+
 export interface TestRunResult {
   success: boolean;
   testType: string;
@@ -102,7 +105,13 @@ export function runPlaywrightTest(testType: string, testFile: string): TestRunRe
   const reportRoot = geos.length === 1
     ? path.join('Test Reports', brand, geos[0], dateStr)
     : path.join('Test Reports', brand, `_combined-${geos.join('-')}`, dateStr);
-  const runDir = path.join(process.cwd(), reportRoot, 'test-results');
+  // playwright.config.ts writes results.json (and every screenshot/video) under
+  // `run-<PW_RUN_TOKEN>/test-results`, so this run's own token is chosen here
+  // and handed to the spawned process — otherwise the config picks one this
+  // side can never know, results.json is never found, and the comment goes out
+  // with no screenshots, videos or error details.
+  const runToken = localTimeToken();
+  const runDir = path.join(process.cwd(), reportRoot, `run-${runToken}`, 'test-results');
   const resultsPath = path.join(runDir, 'results.json');
 
   if (fs.existsSync(resultsPath)) fs.unlinkSync(resultsPath);
@@ -114,6 +123,7 @@ export function runPlaywrightTest(testType: string, testFile: string): TestRunRe
     cwd: process.cwd(),
     env: {
       ...process.env,
+      PW_RUN_TOKEN: runToken,
       CI: 'true', // suppresses HTML report auto-open on failure
     },
     timeout: 300_000,

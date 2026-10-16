@@ -40,6 +40,14 @@ export interface JiraAttachment {
   mimeType: string;
 }
 
+export interface JiraComment {
+  id: string;
+  authorAccountId: string | null;
+  authorName: string;
+  created: string;   // ISO timestamp
+  bodyText: string;  // Plain text extracted from Atlassian Document Format
+}
+
 export interface JiraTransition {
   id: string;
   name: string;
@@ -202,6 +210,28 @@ export class JiraClient {
     console.log(`[JIRA] Comment posted on ${issueKey}`);
   }
 
+  // ── Read every comment on a ticket (oldest first) ───────────────────────────
+  // Used by the JIRA Checker to read prior QA comments in full before a pass
+  // (Post-Check Standard hard rule #1) and to spot an existing comment for the
+  // same pass.
+  async getComments(issueKey: string): Promise<JiraComment[]> {
+    const res = await this.http.get(`/issue/${issueKey}/comment`, { params: { maxResults: 100, orderBy: 'created' } });
+    return ((res.data?.comments ?? []) as any[]).map(c => ({
+      id: String(c.id),
+      authorAccountId: c.author?.accountId ?? null,
+      authorName: String(c.author?.displayName ?? ''),
+      created: String(c.created ?? ''),
+      bodyText: adfToText(c.body),
+    }));
+  }
+
+  // ── Revise an existing comment in place (never post a second one) ───────────
+  async updateCommentAdf(issueKey: string, commentId: string, adfBody: object): Promise<void> {
+    assertJiraWritable('revise a comment');
+    await this.http.put(`/issue/${issueKey}/comment/${commentId}`, { body: adfBody });
+    console.log(`[JIRA] Comment ${commentId} revised on ${issueKey}`);
+  }
+
   // ── Read-only lookups used to build/validate a new bug ticket ───────────────
   // The account the API token belongs to (the default assignee for new bugs).
   async getMyself(): Promise<{ accountId: string; displayName: string }> {
@@ -226,6 +256,18 @@ export class JiraClient {
     const key = String(res.data.key);
     console.log(`[JIRA] Created ${key}`);
     return { key, url: `${this.baseUrl}/browse/${key}` };
+  }
+
+  // Relate two issues (default type "Relates"), e.g. a bug filed at post-check
+  // to the implementation ticket it was found on (Protocol §4.8/§5.4).
+  async linkIssues(newIssueKey: string, originalIssueKey: string, typeName = 'Relates'): Promise<void> {
+    assertJiraWritable('link two tickets');
+    await this.http.post('/issueLink', {
+      type: { name: typeName },
+      inwardIssue: { key: newIssueKey },
+      outwardIssue: { key: originalIssueKey },
+    });
+    console.log(`[JIRA] Linked ${newIssueKey} ↔ ${originalIssueKey}`);
   }
 
   async getProjectVersions(projectKey: string): Promise<Array<{ id: string; name: string; released: boolean; archived: boolean }>> {

@@ -2704,6 +2704,159 @@ investigateExportBtn.addEventListener('click', () => {
   const outcomeCard = document.getElementById('jira-commit-outcome');
   const outcomeText = document.getElementById('jira-commit-outcome-text');
 
+  const retestBanner = document.getElementById('jira-retest-banner');
+  const retestText = document.getElementById('jira-retest-text');
+  const readinessBox = document.getElementById('jira-readiness-box');
+  const readinessList = document.getElementById('jira-readiness-list');
+  const priorsBox = document.getElementById('jira-priors-box');
+  const priorsWarning = document.getElementById('jira-priors-warning');
+  const priorsList = document.getElementById('jira-priors-list');
+  const retestBox = document.getElementById('jira-retest-box');
+  const retestList = document.getElementById('jira-retest-list');
+  const bugBox = document.getElementById('jira-bug-box');
+  const bugDraftBtn = document.getElementById('jira-bug-draft-btn');
+  const bugSplitBtn = document.getElementById('jira-bug-split-btn');
+  const bugSkip = document.getElementById('jira-bug-skip');
+  const bugFlags = document.getElementById('jira-bug-flags');
+  const bugForms = document.getElementById('jira-bug-forms');
+
+  // Post-check FAIL files new linked bug ticket(s) as part of Commit. The
+  // forms below hold the editable drafts; collectBugTickets() reads them back.
+  const BUG_SECTIONS = [
+    ['summaryOfBug', 'Summary of Bug'], ['affectedGeo', 'Affected GEO'], ['affectedPlatform', 'Affected Platform'],
+    ['affectedPages', 'Affected Pages'], ['environment', 'Environment'], ['stepsToReplicate', 'Steps to Replicate'],
+    ['actualResult', 'Actual Result'], ['expectedResult', 'Expected Result'], ['impactNotes', 'Impact/Notes'], ['ccQaTeam', 'CC'],
+  ];
+  let bugDrafted = false;
+
+  function showBugBox(phase, success) {
+    const show = phase === 'post-check' && !success;
+    bugBox.hidden = !show;
+    if (!show) { bugForms.innerHTML = ''; bugDrafted = false; bugSkip.checked = false; bugFlags.textContent = ''; }
+  }
+
+  function optionEl(value, label, selected) {
+    const o = document.createElement('option');
+    o.value = value; o.textContent = label; o.selected = !!selected;
+    return o;
+  }
+
+  function renderBugForms(data) {
+    bugForms.innerHTML = '';
+    bugFlags.textContent = (data.flags ?? []).map(f => `⚠️ ${f}`).join('\n');
+    bugFlags.style.whiteSpace = 'pre-wrap';
+    for (const d of data.drafts) {
+      const card = document.createElement('div');
+      card.className = 'test-case-block';
+      card.dataset.draftId = d.id;
+      const head = document.createElement('p');
+      head.innerHTML = `<strong>${d.id}</strong> — covers: `;
+      head.append(document.createTextNode(d.failingItems.join(' | ')));
+      card.appendChild(head);
+      if (d.needsHumanCheck?.length) {
+        const n = document.createElement('p');
+        n.className = 'video-note';
+        n.style.whiteSpace = 'pre-wrap';
+        n.textContent = d.needsHumanCheck.map(x => `⚠️ ${x}`).join('\n');
+        card.appendChild(n);
+      }
+      const addField = (labelText, el) => {
+        const l = document.createElement('label');
+        l.style.display = 'block';
+        l.append(`${labelText} `, el);
+        card.appendChild(l);
+        return el;
+      };
+      const summary = document.createElement('input');
+      summary.type = 'text'; summary.value = d.summary; summary.style.width = '100%'; summary.dataset.field = 'summary';
+      addField('Summary', summary);
+      for (const [k, label] of BUG_SECTIONS) {
+        const ta = document.createElement('textarea');
+        ta.value = d.sections[k]; ta.dataset.section = k; ta.style.width = '100%';
+        ta.rows = k === 'stepsToReplicate' || k === 'summaryOfBug' ? 4 : 2;
+        addField(label, ta);
+      }
+      const priority = document.createElement('select');
+      priority.dataset.field = 'priority';
+      for (const p of data.options.priorityOptions) priority.appendChild(optionEl(p, p, p === data.options.defaultPriority));
+      addField('Priority', priority);
+      const assignee = document.createElement('select');
+      assignee.dataset.field = 'assigneeAccountId';
+      assignee.appendChild(optionEl('', '— choose the developer (Boaz by default; always asked) —', true));
+      for (const u of data.options.assigneeOptions) assignee.appendChild(optionEl(u.accountId, u.displayName, false));
+      addField('Assignee', assignee);
+      const search = document.createElement('input');
+      search.type = 'text'; search.placeholder = 'Other developer — type a name, press Enter';
+      search.addEventListener('keydown', async ev => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        try {
+          const r = await fetch(`/jira/users?q=${encodeURIComponent(search.value)}`);
+          const j = await r.json();
+          for (const u of j.users ?? []) assignee.appendChild(optionEl(u.accountId, u.displayName, false));
+          if (!(j.users ?? []).length) alert('No Jira user found for that name.');
+        } catch (e) { alert(`Could not search Jira: ${e}`); }
+      });
+      card.appendChild(search);
+      const fix = document.createElement('select');
+      fix.dataset.field = 'fixVersionId';
+      fix.appendChild(optionEl('', '(none)', !data.options.fixVersionId));
+      for (const v of data.options.versionOptions) fix.appendChild(optionEl(v.id, v.name, v.id === data.options.fixVersionId));
+      addField('Fix Version', fix);
+      const affects = document.createElement('select');
+      affects.dataset.field = 'affectsVersionId';
+      affects.appendChild(optionEl('', '(none — set after creating)', true));
+      for (const v of data.options.versionOptions) affects.appendChild(optionEl(v.id, v.name, false));
+      addField('Affects Version', affects);
+      const labels = document.createElement('input');
+      labels.type = 'text'; labels.placeholder = 'e.g. 2.31-post'; labels.dataset.field = 'labels';
+      addField('Label', labels);
+      bugForms.appendChild(card);
+    }
+    bugDrafted = true;
+  }
+
+  function collectBugTickets() {
+    return [...bugForms.querySelectorAll('[data-draft-id]')].map(card => {
+      const sections = {};
+      for (const ta of card.querySelectorAll('[data-section]')) sections[ta.dataset.section] = ta.value;
+      const val = f => card.querySelector(`[data-field="${f}"]`).value;
+      return {
+        id: card.dataset.draftId,
+        summary: val('summary'),
+        sections,
+        priority: val('priority'),
+        assigneeAccountId: val('assigneeAccountId'),
+        fixVersionId: val('fixVersionId'),
+        affectsVersionId: val('affectsVersionId'),
+        labels: val('labels').split(',').map(x => x.trim()).filter(Boolean),
+      };
+    });
+  }
+
+  async function draftBugs(split, btn, idle) {
+    if (!current?.key) return;
+    btn.disabled = true;
+    btn.textContent = 'Drafting...';
+    try {
+      const res = await fetch('/jira/bug-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: current.key, split }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error ?? 'Could not draft the ticket'); return; }
+      renderBugForms(data);
+    } catch (e) {
+      alert(`Could not reach the server: ${e}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = idle;
+    }
+  }
+  bugDraftBtn.addEventListener('click', () => draftBugs(false, bugDraftBtn, 'Draft bug ticket'));
+  bugSplitBtn.addEventListener('click', () => draftBugs(true, bugSplitBtn, 'Draft one ticket per failure'));
+
   let current = null; // { key, testType, testFile, checkItems, params }
 
   // Always drawn from Load Ticket regardless of ready/not-ready/holdable —
@@ -2811,7 +2964,96 @@ investigateExportBtn.addEventListener('click', () => {
     }
   }
 
+  // Protocol §2.2 checklist — what can be read straight off the ticket.
+  function renderReadiness(items) {
+    readinessList.innerHTML = '';
+    if (!items || items.length === 0) { readinessBox.hidden = true; return; }
+    readinessBox.hidden = false;
+    const icon = { ok: '✅', warn: '⚠️', fail: '❌' };
+    for (const it of items) {
+      const li = document.createElement('li');
+      li.textContent = `${icon[it.level] ?? ''} ${it.label} — ${it.detail}`;
+      readinessList.appendChild(li);
+    }
+  }
+
+  // Every comment, in full, collapsed — the QA engineer reads the priors
+  // before checking (Post-Check Standard hard rule #1).
+  function renderPriors(comments, warning) {
+    priorsList.innerHTML = '';
+    priorsWarning.hidden = !warning;
+    priorsWarning.textContent = warning ? `⚠️ ${warning}` : '';
+    if ((!comments || comments.length === 0) && !warning) { priorsBox.hidden = true; return; }
+    priorsBox.hidden = false;
+    if (!comments || comments.length === 0) return;
+    for (const c of comments) {
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      const firstLine = (c.text || '').split('\n').find(l => l.trim()) ?? '(empty comment)';
+      summary.textContent = `${new Date(c.created).toLocaleString()} — ${c.author}: ${firstLine.slice(0, 80)}`;
+      const body = document.createElement('pre');
+      body.className = 'comment-preview';
+      body.textContent = c.text;
+      details.append(summary, body);
+      priorsList.appendChild(details);
+    }
+  }
+
+  function renderRetestBanner(retest, samePass) {
+    const lines = [];
+    if (retest) {
+      lines.push(`🔁 This is a ${retest.variant}: ${retest.flaggedIssues.length} issue(s) were flagged in "${retest.priorHeader}". Only those issues are re-checked.`);
+    }
+    if (samePass) {
+      lines.push(`⚠️ This ticket already has a "${samePass.header}" comment from you for this pass — Commit will offer to revise it in place instead of posting a second one.`);
+    }
+    retestBanner.hidden = lines.length === 0;
+    retestText.textContent = lines.join('\n');
+  }
+
+  // Re-test: one checkbox per flagged issue. Changing one rebuilds the draft
+  // comment and verdict server-side.
+  function renderRetestChecklist(retest) {
+    retestList.innerHTML = '';
+    if (!retest) { retestBox.hidden = true; return; }
+    retestBox.hidden = false;
+    const boxes = [];
+    const sync = async () => {
+      try {
+        const res = await fetch('/jira/retest/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: current.key, fixed: boxes.map(b => b.checked) }),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error ?? 'Could not update the re-test'); return; }
+        commentPreview.textContent = data.preview;
+        resultStatusPill.textContent = data.success ? 'PASS' : 'FAIL';
+        resultStatusPill.className = `status-pill ${data.success ? 'passed' : 'failed'}`;
+        showBugBox(current.phase, data.success);
+      } catch (e) {
+        alert(`Could not reach the server: ${e}`);
+      }
+    };
+    retest.flagged.forEach((issue, i) => {
+      const label = document.createElement('label');
+      label.style.display = 'block';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = retest.fixed[i] === true;
+      box.addEventListener('change', sync);
+      boxes.push(box);
+      label.append(box, ` Fixed — ${issue}`);
+      retestList.appendChild(label);
+    });
+  }
+
   function hideAll() {
+    bugBox.hidden = true;
+    retestBanner.hidden = true;
+    readinessBox.hidden = true;
+    priorsBox.hidden = true;
+    retestBox.hidden = true;
     ticketCard.hidden = true;
     testCasesBox.hidden = true;
     notReadyBox.hidden = true;
@@ -2832,6 +3074,8 @@ investigateExportBtn.addEventListener('click', () => {
     resultStatusPill.textContent = data.success ? 'PASS' : 'FAIL';
     resultStatusPill.className = `status-pill ${data.success ? 'passed' : 'failed'}`;
     commentPreview.textContent = data.preview;
+    renderRetestChecklist(data.retest);
+    showBugBox(phase, data.success);
 
     evidenceGallery.innerHTML = '';
     for (const shot of data.screenshots ?? []) {
@@ -2883,6 +3127,9 @@ investigateExportBtn.addEventListener('click', () => {
       ticketStatusPill.textContent = data.status;
       ticketStatusPill.className = 'status-pill';
       renderTestCases(data.testCases, data.testCasesWarning);
+      renderPriors(data.priorComments, data.priorWarning);
+      renderReadiness(data.readiness);
+      renderRetestBanner(data.retest, data.samePass);
 
       if (!data.ready) {
         notReadyBox.hidden = false;
@@ -2913,6 +3160,7 @@ investigateExportBtn.addEventListener('click', () => {
           checkItems: data.checkItems,
           visualCheck: data.visualCheck,
           geo: data.params?.GEO,
+          retest: data.retest ? { flagged: data.retest.flaggedIssues } : undefined,
         };
         return;
       }
@@ -2937,6 +3185,7 @@ investigateExportBtn.addEventListener('click', () => {
         testFile: data.testFile,
         checkItems: data.checkItems,
         params: data.params,
+        retest: data.retest ? { flagged: data.retest.flaggedIssues } : undefined,
       };
 
       if (data.visualCheckRecommended && data.visualCheck) {
@@ -3046,6 +3295,7 @@ investigateExportBtn.addEventListener('click', () => {
       checkItems: current.checkItems,
       visualCheck: JSON.parse(contentMismatchNote.dataset.visualCheck),
       geo: current.params?.GEO,
+      retest: current.retest,
     }, compareAltBtn, '▶ Compare instead');
   });
 
@@ -3066,18 +3316,40 @@ investigateExportBtn.addEventListener('click', () => {
     commitBtn.disabled = true;
     commitBtn.textContent = 'Posting...';
     try {
-      const res = await fetch('/jira/commit', {
+      // Post-check FAIL: the new bug ticket(s) go in the same approval as the
+      // comment and the closure — or the person says they will file by hand.
+      const needTickets = !bugBox.hidden;
+      if (needTickets && !bugSkip.checked && !bugDrafted) {
+        alert('This post-check found issues. Draft the new bug ticket(s) first, or tick "I\'ll file the new ticket(s) by hand".');
+        return;
+      }
+      const post = reviseExisting => fetch('/jira/commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: current.key }),
+        body: JSON.stringify({
+          key: current.key,
+          reviseExisting,
+          ...(needTickets ? (bugSkip.checked ? { skipTickets: true } : { tickets: collectBugTickets() }) : {}),
+        }),
       });
-      const data = await res.json();
+      let res = await post(false);
+      let data = await res.json();
+      // One QA comment per pass: offer to revise the existing one in place
+      // rather than posting a second (Post-Check Standard hard rule #4).
+      if (res.status === 409 && data.duplicate) {
+        if (!confirm(`${data.error}\n\nOK = revise the existing comment (ticket status is left unchanged).\nCancel = post nothing.`)) return;
+        res = await post(true);
+        data = await res.json();
+      }
       if (!res.ok) {
-        alert(data.error ?? 'Commit failed');
+        alert((data.error ?? 'Commit failed') + (data.problems?.length ? `\n\n${data.problems.join('\n')}` : ''));
         return;
       }
       outcomeCard.hidden = false;
-      let msg = `${current.key} — comment posted, ticket transitioned to ${data.status}.`;
+      let msg = data.revised
+        ? `${current.key} — existing comment revised in place.`
+        : `${current.key} — comment posted, ticket transitioned to ${data.status}.`;
+      if (data.tickets?.length) msg += `\n\nNew bug ticket(s): ${data.tickets.map(t => t.key).join(', ')}`;
       if (data.warnings?.length) msg += `\n\nWarnings:\n${data.warnings.join('\n')}`;
       outcomeText.textContent = msg;
     } catch (e) {
