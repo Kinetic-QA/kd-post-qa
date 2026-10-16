@@ -9,6 +9,31 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-16
+
+### Added
+
+- **The JIRA Checker now reads every comment already on a ticket and shows them before you check.** Each earlier comment is listed in full (collapsed, click to open), so the earlier verdict and the reasoning under it are read before anything is marked as failed. If the comments cannot be read, a warning says so instead of staying silent.
+- **The JIRA Checker shows a readiness checklist for the ticket.** It lists what can be read straight off the ticket: whether there is a description, any "To Follow" or "TBC" wording, the brand, the GEO, the QA or live address, a reference, and the status. "To Follow" is a warning only, so the decision to pause or put the ticket on hold stays with you.
+- **The JIRA Checker now recognises a re-test.** A ticket back in Ready For QA after a failed pre-check is a pre-check re-test, and a ticket in Production QA after that failure went live is a live re-test. A banner says so and lists the issues the earlier comment flagged, with a "Fixed" tick box for each. The result is PASS only when every flagged issue is ticked as fixed, and the drafted comment follows the re-test format (each flagged line copied with "← ✅ FIXED"). A ticket whose last QA comment was a post-check is not treated as a re-test.
+- **When a post-check finds problems, the JIRA Checker can now file the new bug ticket.** The result card drafts one ticket for the related failures (or one per failure) following the Bug Ticket Standard: the ten Description sections in order, the page address as the first step, Fix Version, Affects Version and the x.xx-post label. Nothing is pre-filled for the assignee, so you always choose the developer (Boaz by default) or search for another name. Pressing Commit then creates the ticket(s), links them to the original, attaches the screenshots, posts the comment and closes the original, all from one approval. If anything fails the standard, nothing is sent; if a ticket cannot be created, the comment is not posted and the original is not closed. There is also a tick box to file the ticket by hand instead.
+- **The JIRA Checker no longer posts a second comment for the same pass.** If there is already a comment from you for that check on the same day, Commit offers to revise it in place and leaves the ticket status alone, instead of adding a duplicate. A re-test never revises the comment it is re-testing.
+
+### Changed
+
+- **JIRA Checker comments now follow the house format from the QA standards.**
+  - The failed post-check comment ends with the fixed sentence "There are still issues found in the post-check. We will file a ticket for this." The made-up "Action required…" line on a failed pre-check is gone.
+  - A "Documentation" section (after a divider) appears on every comment that has something that passed, on pre-check and post-check alike.
+  - Screenshots now sit inside the comment under the item they show, with no separate "Evidence:" block and no file-name line under each one.
+  - A "Remarks" section appears at the bottom when there is something to note, and is left out when there is not.
+  - The header is now just "Pre-Checked (date)" or "Post-Checked (date)", and the odd test-count lines and stray quote marks are gone.
+- **A failed pre-check in the JIRA Checker is now labelled "Reopened".** The ticket was already moving to Reopened; only the wording said "QA Rejected". After a failed pre-check the Checker also reminds you to assign the ticket to the developer.
+- **A post-check in the JIRA Checker now tests the live website, not the QA site.** Before, a post-check quietly ran against the QA site. It now uses the live address, and the comment notes "The page was checked on the live site, logged out." If no live address is set up for that brand and market, the check stops with a clear message instead of falling back to QA.
+
+### Fixed
+
+- **JIRA Checker comments now include the screenshots and video from the test.** The Checker was looking for the test results in the wrong folder, because the tests now save into a folder for each run. It never found them, so comments went out with no screenshots, no video and no error details. It now looks in the right place, which also fixes the same gap for post-check, re-test and the screenshots attached to a new bug ticket.
+
 ## [Unreleased] - 2026-10-15
 
 ### Added

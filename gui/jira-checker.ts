@@ -13,16 +13,24 @@ import type { Express, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { JiraClient } from '../src/jira-client';
+import { JiraClient, JiraComment } from '../src/jira-client';
 import { parseTestType } from '../src/requirements-parser';
 import { interpretTicket, VisualCheckKind, DraftedTestCase } from '../src/ticket-interpreter';
 import { resolveTestFile, runPlaywrightTest, SUPPORTED_TEST_TYPES, TestRunResult } from '../src/test-runner';
-import { getQAUrl, getBrandEntry, resolveBrandFromProjectKey } from '../helpers/brand-urls';
+import { getQAUrl, getLiveUrl, getBrandEntry, resolveBrandFromProjectKey } from '../helpers/brand-urls';
 import {
   buildCommentAdf, commentPreviewText, adfDocToPreviewText,
-  adfDoc, adfPara, adfBold, adfText, adfBulletList, adfImage,
-  CheckPhase, VideoAttachment, CommentContext,
+  adfDoc, adfPara, adfBold, adfText, adfBulletList,
+  adfRule, evidenceImages, remarksNodes, retestNodes, retestAllFixed, POST_CHECK_FAIL_SENTENCE,
+  CheckPhase, VideoAttachment, CommentContext, RetestContext,
 } from '../src/jira-comment';
+import {
+  parseQaComments, findSamePassComment, detectRetest, buildReadiness,
+  RetestInfo, ReadinessItem,
+} from './jira-checker-support';
+import {
+  draftBugTickets, normaliseBugEdit, checkBugEdit, buildBugFields,
+} from './jira-checker-bug';
 import { captureFullPageScreenshot, captureMultipleFrames } from './screenshot-capture';
 import { compareVisual, VisualCompareResult } from './visual-compare';
 
@@ -40,7 +48,9 @@ const MIME_BY_EXT: Record<string, string> = { '.png': 'image/png', '.jpg': 'imag
 
 const TRANSITION_IN_REVIEW  = process.env.JIRA_TRANSITION_IN_REVIEW  ?? '71';
 const TRANSITION_APPROVED   = process.env.JIRA_TRANSITION_APPROVED   ?? '101';
-const TRANSITION_QA_REJECTED = process.env.JIRA_TRANSITION_QA_REJECTED ?? '81';
+// Transition 81 is In Review → Reopened (see .env.example); the env var name is
+// a legacy label.
+const TRANSITION_REOPENED = process.env.JIRA_TRANSITION_QA_REJECTED ?? '81';
 const TRANSITION_ON_HOLD    = process.env.JIRA_TRANSITION_ON_HOLD    ?? '11';
 const TRANSITION_POST_RELEASE_CLOSED = process.env.JIRA_TRANSITION_POST_RELEASE_CLOSED ?? '191';
 
@@ -60,18 +70,12 @@ const POST_CHECK_STATUSES = ['production qa', 'approved'];
 // 'asset-vs-site', a brand-new image rollout — neither is "the" fallback,
 // each is the right tool for a different kind of ticket). Both reuse the
 // existing Visual Check tab's own compareVisual() modes/prompts as-is.
-const VISUAL_LABELS: Record<'site-vs-site' | 'asset-vs-site', { title: string; scopeFallback: string; evidenceLabel: string; comparisonLabel: string }> = {
+const VISUAL_LABELS: Record<'site-vs-site' | 'asset-vs-site', { scopeFallback: string }> = {
   'site-vs-site': {
-    title: 'QA vs Production Content Compare',
     scopeFallback: 'QA vs Production content/visual comparison',
-    evidenceLabel: 'Evidence (QA, then Production):',
-    comparisonLabel: 'Field-by-field comparison (QA vs Production):',
   },
   'asset-vs-site': {
-    title: 'New Asset vs Live Site Check',
     scopeFallback: 'New/changed asset renders correctly on the live site',
-    evidenceLabel: 'Evidence (live site frame(s) checked):',
-    comparisonLabel: 'Field-by-field comparison (reference asset vs site):',
   },
 };
 
@@ -94,7 +98,7 @@ function buildVisualCommentAdf(
   // Platform and GEOs Checked (GEO/Platform bullets), then "Overall Result"
   // as its own heading with the verdict as a separate line.
   const nodes: object[] = [
-    adfPara(adfBold(`${headerLabel} (${today}) — ${labels.title}`)),
+    adfPara(adfBold(`${headerLabel} (${today})`)),
     adfPara(adfBold('Scope Checked')),
     adfBulletList(...scopeItems),
     adfPara(adfBold('Platform and GEOs Checked')),
@@ -103,47 +107,49 @@ function buildVisualCommentAdf(
       `Platform: ${ctx.platform || 'Desktop'} — AI-assisted visual check (${visualKind})`,
     ),
     adfPara(adfBold('Overall Result')),
-    adfPara(adfText(success ? '✅ ' : '❌ '), adfBold(success ? 'PASS' : 'FAIL')),
   ];
 
-  if (success) {
-    nodes.push(adfPara(adfText(
-      visualKind === 'site-vs-site'
-        ? 'No meaningful visual/content differences found between QA and Production.'
-        : 'The asset is present and matches on the live site.'
-    )));
+  // A re-test's verdict also needs every flagged issue marked fixed.
+  const passed = ctx.retest ? success && retestAllFixed(ctx.retest) : success;
+  nodes.push(adfPara(adfText(passed ? '✅ ' : '❌ '), adfBold(passed ? 'PASS' : 'FAIL')));
+
+  // Documentation is the record of what passed (Standing Rules #6/#12), with
+  // its screenshots inline underneath (#13) — present on every comment that
+  // has at least one passing item, after a divider.
+  const passedRows = result.breakdown.filter(r => r.match);
+  const rowLine = (r: { field: string; assetValue: string; siteValue: string }) =>
+    `${r.field}: ${r.assetValue} | ${r.siteValue} ✅`;
+
+  if (ctx.retest) {
+    nodes.push(...retestNodes(passed, phase, ctx.retest, attachments, result.findings[0]?.title ?? 'see evidence'));
+  } else if (success) {
+    nodes.push(
+      adfPara(adfText(`No issues were identified during ${phase === 'post-check' ? 'post-checking' : 'pre-checking'}.`)),
+      adfRule(),
+      adfPara(adfBold('Documentation')),
+      adfBulletList(
+        visualKind === 'site-vs-site'
+          ? 'No meaningful visual/content differences found between QA and Production.'
+          : 'The asset is present and matches on the live site.',
+        ...passedRows.map(rowLine),
+      ),
+      ...evidenceImages(attachments),
+    );
   } else {
-    // Findings stated as bullets, per the format reference's "one bullet
-    // per defect, stated as a factual mismatch" rule — no separate
-    // "Findings:" header duplicating what the bullets already say.
+    // One bullet per defect, stated as a factual mismatch, evidence directly
+    // underneath. The post-check FAIL sentence is fixed wording; a pre-check
+    // FAIL has no closing line (Standing Rules #7/#12).
     const findingLines = result.findings.length
       ? result.findings.map(f => `[${f.severity.toUpperCase()}] ${f.title} — ${f.description}${f.location ? ` (${f.location})` : ''}`)
       : ['Visual mismatch detected — see evidence.'];
-    nodes.push(adfBulletList(...findingLines));
-  }
-
-  if (result.breakdown.length > 0) {
-    nodes.push(adfPara(adfBold(labels.comparisonLabel)));
-    nodes.push(adfBulletList(...result.breakdown.map(r =>
-      `${r.field}: ${r.assetValue}"  |  ${r.siteValue}"  ${r.match ? '✅' : '❌'}`
-    )));
-  }
-
-  if (!success) {
-    nodes.push(adfPara(adfText(
-      phase === 'post-check'
-        ? 'We will file a new ticket for the issues found.'
-        : 'Action required: Please investigate the discrepancy and re-run after fix.'
-    )));
-  }
-
-  if (attachments.length > 0) {
-    nodes.push(adfPara(adfBold(labels.evidenceLabel)));
-    for (const att of attachments) {
-      nodes.push(adfPara(adfText(att.filename)));
-      nodes.push(adfImage(att.thumbnailUrl));
+    if (phase === 'post-check') nodes.push(adfPara(adfText(POST_CHECK_FAIL_SENTENCE)));
+    nodes.push(adfBulletList(...findingLines), ...evidenceImages(attachments));
+    if (passedRows.length > 0) {
+      nodes.push(adfRule(), adfPara(adfBold('Documentation')), adfBulletList(...passedRows.map(rowLine)));
     }
   }
+
+  nodes.push(...remarksNodes(ctx));
 
   return adfDoc(...nodes);
 }
@@ -184,7 +190,17 @@ function getErrorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-interface PlaywrightCheckSession {
+// Carried by every session kind: Remarks lines for the comment, and — when this
+// pass is a re-test — which of the flagged issues are now fixed.
+interface SessionExtras {
+  remarks?: string[];
+  retest?: RetestContext;
+  // New bug tickets already created for this pass, by draft id — a retry after
+  // a partial failure never files a duplicate.
+  createdTickets?: Record<string, { key: string; url: string }>;
+}
+
+interface PlaywrightCheckSession extends SessionExtras {
   kind: 'playwright';
   testType: string;
   testFile: string;
@@ -194,7 +210,7 @@ interface PlaywrightCheckSession {
   geo?: string;
 }
 
-interface SiteVsSiteSession {
+interface SiteVsSiteSession extends SessionExtras {
   kind: 'visual';
   visualKind: 'site-vs-site';
   checkItems: string[];
@@ -205,7 +221,7 @@ interface SiteVsSiteSession {
   geo?: string;
 }
 
-interface AssetVsSiteSession {
+interface AssetVsSiteSession extends SessionExtras {
   kind: 'visual';
   visualKind: 'asset-vs-site';
   checkItems: string[];
@@ -216,6 +232,78 @@ interface AssetVsSiteSession {
 }
 
 type CheckSession = PlaywrightCheckSession | SiteVsSiteSession | AssetVsSiteSession;
+
+function visualSuccess(r: VisualCompareResult): boolean {
+  return r.status === 'matched' || r.status === 'no_issues_found';
+}
+
+// The check's own outcome, before any re-test judgement.
+function automatedSuccess(s: CheckSession): boolean {
+  return s.kind === 'playwright' ? s.testResult.success : visualSuccess(s.result);
+}
+
+// The verdict that gets posted: a re-test only passes when every flagged issue
+// is fixed (Standing Rules #8 — unverified counts as not fixed).
+function sessionSuccess(s: CheckSession): boolean {
+  return s.retest ? automatedSuccess(s) && retestAllFixed(s.retest) : automatedSuccess(s);
+}
+
+// What failed, one entry per item, for the new bug ticket(s) a post-check FAIL
+// files. A re-test files only what is still failing; if every flagged issue is
+// fixed but the automated check itself failed, that failure is what's filed.
+function failingItems(s: CheckSession): string[] {
+  const stillFailing = s.retest ? s.retest.flagged.filter((_, i) => !s.retest!.fixed[i]) : [];
+  if (stillFailing.length > 0) return stillFailing;
+  if (s.kind === 'playwright') {
+    return s.testResult.errors.length ? s.testResult.errors : ['Test failed — no error details captured'];
+  }
+  return s.result.findings.length
+    ? s.result.findings.map(f => `${f.title} — ${f.description}${f.location ? ` (${f.location})` : ''}`)
+    : ['Visual mismatch detected — see evidence'];
+}
+
+// The evidence a new ticket carries: the same screenshots the comment shows.
+async function attachSessionEvidence(jira: JiraClient, ticketKey: string, s: CheckSession): Promise<string[]> {
+  const failed: string[] = [];
+  const tryOne = async (label: string, fn: () => Promise<unknown>) => {
+    try { await fn(); } catch (e) { failed.push(`${label} (${getErrorMessage(e)})`); }
+  };
+  if (s.kind === 'playwright') {
+    for (const p of s.testResult.screenshotPaths) await tryOne(path.basename(p), () => jira.uploadAttachment(ticketKey, p));
+  } else if (s.visualKind === 'site-vs-site') {
+    await tryOne('qa-site.png', () => uploadBufferAsAttachment(jira, ticketKey, s.qaBuffer, 'qa-site.png'));
+    await tryOne('production-site.png', () => uploadBufferAsAttachment(jira, ticketKey, s.prodBuffer, 'production-site.png'));
+  } else {
+    for (let i = 0; i < s.siteBuffers.length; i++) {
+      await tryOne(`site-frame-${i}.png`, () => uploadBufferAsAttachment(jira, ticketKey, s.siteBuffers[i], `site-frame-${i}.png`));
+    }
+  }
+  return failed;
+}
+
+function sessionCtx(s: CheckSession): CommentContext {
+  return { geo: s.geo, remarks: s.remarks, retest: s.retest };
+}
+
+function sessionPreview(s: CheckSession): string {
+  if (s.kind === 'playwright') return commentPreviewText(s.testResult, s.checkItems, s.phase, sessionCtx(s));
+  return visualCommentPreviewText(s.visualKind, s.result, s.checkItems, s.phase, sessionCtx(s));
+}
+
+// Default re-test state: every flagged issue fixed only if the automated check
+// passed; the QA engineer can adjust each one before committing.
+function retestFromBody(body: unknown, automated: boolean): RetestContext | undefined {
+  const flagged = (body as { flagged?: unknown } | undefined)?.flagged;
+  if (!Array.isArray(flagged) || flagged.length === 0) return undefined;
+  const lines = flagged.map(String);
+  return { flagged: lines, fixed: lines.map(() => automated) };
+}
+
+// Post-check runs against the live site, logged out (Post-Check Standard,
+// Protocol §5.5) — say so in Remarks (Standing Rules #12 default line).
+function postCheckRemarks(phase: CheckPhase, geo: string | undefined): string[] | undefined {
+  return phase === 'post-check' ? [`The page was checked on the live ${geo ? `${geo} ` : ''}site, logged out.`] : undefined;
+}
 
 // In-memory only — a POC-scale hold between "Check" and "Commit" on the same
 // running GUI process. Screenshot paths/buffers are server-local, so they
@@ -285,6 +373,26 @@ export function registerJiraCheckerRoutes(app: Express): void {
       priority: ticket.priority,
     };
 
+    // Every comment on the ticket, read in full before the pass (Post-Check
+    // Standard hard rule #1: a prior comment's verdict line is not its
+    // disposition). A failure to read them is surfaced, never silent.
+    let comments: JiraComment[] = [];
+    let myAccountId = '';
+    let priorWarning: string | undefined;
+    try {
+      [comments, myAccountId] = await Promise.all([
+        jira.getComments(key),
+        jira.getMyself().then(m => m.accountId),
+      ]);
+    } catch (e) {
+      priorWarning = `Could not read the ticket's prior comments: ${getErrorMessage(e)} — read them in Jira before checking.`;
+    }
+    const qaComments = parseQaComments(comments);
+    const priorComments = comments.map(c => ({
+      id: c.id, author: c.authorName, created: c.created, text: c.bodyText,
+    }));
+    const priors = { priorComments, priorWarning };
+
     // Set whenever interpretTicket() returns null (missing API key, API
     // failure, or malformed AI response — see ticket-interpreter.ts) so an
     // empty testCases array reads as "AI interpretation failed" rather than
@@ -300,6 +408,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
       const earlyInterpreted = await interpretTicket(ticket.summary, ticket.description, false, key);
       res.json({
         ...base,
+        ...priors,
         ready: false,
         holdable: false,
         reason: `Ticket status is "${ticket.status}" — JIRA Checker only runs against "Ready For QA" (pre-check), `
@@ -342,6 +451,29 @@ export function registerJiraCheckerRoutes(app: Express): void {
     const testCasesWarning = interpreted ? undefined : TEST_CASE_FAILURE_WARNING;
     if (resolvedBrand) params.BRAND = resolvedBrand;
 
+    // Post-check runs on the live site, pre-check on QA (Protocol §5.1–§5.5).
+    const envUrl = resolvedBrand && params.GEO
+      ? (phase === 'post-check' ? getLiveUrl(resolvedBrand, params.GEO) : getQAUrl(resolvedBrand, params.GEO))
+      : null;
+    const retest: RetestInfo | null = detectRetest(ticket.status, phase, qaComments);
+    const samePass = myAccountId ? findSamePassComment(comments, myAccountId, phase) : null;
+    const readiness: ReadinessItem[] = buildReadiness({
+      description: ticket.description,
+      attachmentCount: ticket.attachments.length,
+      phase,
+      status: ticket.status,
+      brand: resolvedBrand,
+      geo: params.GEO,
+      envUrl,
+    });
+    // Everything the Checker adds on top of the basic ticket facts.
+    const extra = () => ({
+      ...priors,
+      readiness,
+      retest,
+      samePass: samePass ? { id: samePass.id, created: samePass.created, header: samePass.header } : null,
+    });
+
     // Computed independent of whether testType matched — a ticket can BOTH
     // name a page that resolves to a functional spec AND actually need an
     // AI-vision check instead (confirmed live both ways: LP1-445 matches
@@ -369,6 +501,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
       if (visualCheckOption) {
         res.json({
           ...base,
+          ...extra(),
           ready: true,
           mode: 'visual',
           phase,
@@ -392,6 +525,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
         `Once clarified, this ticket can be re-checked (or checked visually, if this is about a content mismatch or a new asset).`;
       res.json({
         ...base,
+        ...extra(),
         ready: false,
         holdable: true,
         reason: 'Could not determine a supported test type from this ticket\'s description, and no visual check (content compare or asset check) is available yet either.',
@@ -406,6 +540,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
     if (!testFile) {
       res.json({
         ...base,
+        ...extra(),
         ready: false,
         holdable: false,
         reason: `AI matched test type "${testType}", but no spec file is mapped for it yet.`,
@@ -418,6 +553,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
     if (!resolvedBrand) {
       res.json({
         ...base,
+        ...extra(),
         ready: false,
         holdable: true,
         reason: `Ticket's project "${ticket.projectKey}" doesn't map to a known brand.`,
@@ -433,6 +569,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
     if (!params.GEO) {
       res.json({
         ...base,
+        ...extra(),
         ready: false,
         holdable: true,
         reason: `Matched "${testType}" for brand ${resolvedBrand}, but no GEO could be determined from the ticket.`,
@@ -445,14 +582,16 @@ export function registerJiraCheckerRoutes(app: Express): void {
       return;
     }
 
-    if (!getQAUrl(params.BRAND, params.GEO)) {
+    if (!envUrl) {
+      const envWord = phase === 'post-check' ? 'live' : 'QA';
       res.json({
         ...base,
+        ...extra(),
         ready: false,
         holdable: true,
-        reason: `No QA URL is configured for brand "${params.BRAND}" GEO "${params.GEO}".`,
+        reason: `No ${envWord} URL is configured for brand "${params.BRAND}" GEO "${params.GEO}".`,
         clarificationComment:
-          `Hi team, JIRA Checker matched ${key} to the "${testType}" test, but there's no QA URL configured for `
+          `Hi team, JIRA Checker matched ${key} to the "${testType}" test, but there's no ${envWord} URL configured for `
           + `${params.BRAND} ${params.GEO} yet. Could you confirm the correct brand/GEO, or flag this so it can be added?`,
         testCases,
         testCasesWarning,
@@ -462,6 +601,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
 
     res.json({
       ...base,
+      ...extra(),
       ready: true,
       mode: 'functional',
       phase,
@@ -505,14 +645,21 @@ export function registerJiraCheckerRoutes(app: Express): void {
       return;
     }
 
-    // Same param -> env wiring agent.ts does before spawning the test.
+    // Same param -> env wiring agent.ts does before spawning the test — except
+    // a post-check runs against the LIVE site, logged out, not QA (Post-Check
+    // Standard; Protocol §5.3–§5.5).
     if (params?.BRAND && params?.GEO) {
-      const qaUrl = getQAUrl(params.BRAND, params.GEO);
-      if (qaUrl) {
-        params.QA_BASE_URL = qaUrl;
+      const isLive = phase === 'post-check';
+      const envUrl = isLive ? getLiveUrl(params.BRAND, params.GEO) : getQAUrl(params.BRAND, params.GEO);
+      if (isLive && !envUrl) {
+        res.status(400).json({ error: `No live URL is configured for ${params.BRAND} ${params.GEO} — a post-check can't run against QA.` });
+        return;
+      }
+      if (envUrl) {
+        params.QA_BASE_URL = envUrl;
         process.env.TEST_BRAND = params.BRAND;
         process.env.TEST_GEO = params.GEO;
-        process.env.TEST_ENV = 'qa';
+        process.env.TEST_ENV = isLive ? 'live' : 'qa';
       }
     }
     for (const [k, v] of Object.entries(params ?? {})) {
@@ -527,7 +674,12 @@ export function registerJiraCheckerRoutes(app: Express): void {
       return;
     }
 
-    checkSessions.set(key, { kind: 'playwright', testType, testFile, checkItems: checkItems ?? [], testResult, phase, geo: params?.GEO });
+    const session: PlaywrightCheckSession = {
+      kind: 'playwright', testType, testFile, checkItems: checkItems ?? [], testResult, phase, geo: params?.GEO,
+      remarks: postCheckRemarks(phase, params?.GEO),
+      retest: retestFromBody(req.body?.retest, testResult.success),
+    };
+    checkSessions.set(key, session);
 
     // Real inline images, not just a count — this is what actually posts to
     // Jira on Commit, so the preview should show it, not describe it.
@@ -543,7 +695,9 @@ export function registerJiraCheckerRoutes(app: Express): void {
     const videoFilenames = testResult.videoPaths.map(p => path.basename(p));
 
     res.json({
-      success: testResult.success,
+      success: sessionSuccess(session),
+      automatedSuccess: testResult.success,
+      retest: session.retest ?? null,
       passed: testResult.passed,
       failed: testResult.failed,
       skipped: testResult.skipped,
@@ -551,7 +705,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
       errors: testResult.errors,
       screenshots,
       videoFilenames,
-      preview: commentPreviewText(testResult, checkItems ?? [], phase, { geo: params?.GEO }),
+      preview: sessionPreview(session),
     });
   }));
 
@@ -591,10 +745,16 @@ export function registerJiraCheckerRoutes(app: Express): void {
         return;
       }
 
-      checkSessions.set(key, { kind: 'visual', visualKind: 'site-vs-site', checkItems, phase, result, qaBuffer, prodBuffer, geo });
+      const session: SiteVsSiteSession = {
+        kind: 'visual', visualKind: 'site-vs-site', checkItems, phase, result, qaBuffer, prodBuffer, geo,
+        retest: retestFromBody(req.body?.retest, visualSuccess(result)),
+      };
+      checkSessions.set(key, session);
 
       res.json({
-        success: result.status === 'matched' || result.status === 'no_issues_found',
+        success: sessionSuccess(session),
+        automatedSuccess: visualSuccess(result),
+        retest: session.retest ?? null,
         status: result.status,
         findings: result.findings,
         breakdown: result.breakdown,
@@ -602,7 +762,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
           { filename: 'qa-site.png', dataUri: `data:image/png;base64,${qaBuffer.toString('base64')}` },
           { filename: 'production-site.png', dataUri: `data:image/png;base64,${prodBuffer.toString('base64')}` },
         ],
-        preview: visualCommentPreviewText('site-vs-site', result, checkItems, phase, { geo }),
+        preview: sessionPreview(session),
       });
       return;
     }
@@ -642,10 +802,17 @@ export function registerJiraCheckerRoutes(app: Express): void {
       return;
     }
 
-    checkSessions.set(key, { kind: 'visual', visualKind: 'asset-vs-site', checkItems, phase, result, siteBuffers, geo });
+    const session: AssetVsSiteSession = {
+      kind: 'visual', visualKind: 'asset-vs-site', checkItems, phase, result, siteBuffers, geo,
+      remarks: postCheckRemarks(phase, geo),
+      retest: retestFromBody(req.body?.retest, visualSuccess(result)),
+    };
+    checkSessions.set(key, session);
 
     res.json({
-      success: result.status === 'matched' || result.status === 'no_issues_found',
+      success: sessionSuccess(session),
+      automatedSuccess: visualSuccess(result),
+      retest: session.retest ?? null,
       status: result.status,
       findings: result.findings,
       breakdown: result.breakdown,
@@ -653,8 +820,114 @@ export function registerJiraCheckerRoutes(app: Express): void {
         { filename: visualCheck.attachmentFilename, dataUri: `data:${assetMimeType};base64,${assetBuffer.toString('base64')}` },
         ...siteBuffers.map((buf, i) => ({ filename: `site-frame-${i}.png`, dataUri: `data:image/png;base64,${buf.toString('base64')}` })),
       ],
-      preview: visualCommentPreviewText('asset-vs-site', result, checkItems, phase, { geo }),
+      preview: sessionPreview(session),
     });
+  }));
+
+  // ── Re-test: mark each flagged issue fixed / still failing ───────────────
+  // Rebuilds the draft comment so the preview and the verdict follow the
+  // QA engineer's per-issue judgement (Standing Rules #8: Overall Result is
+  // PASS only when every flagged issue is fixed).
+  app.post('/jira/retest/state', (req, res) => {
+    const key = extractIssueKey(String(req.body?.key ?? ''));
+    const session = checkSessions.get(key);
+    const fixed = req.body?.fixed;
+    if (!session?.retest) {
+      res.status(400).json({ error: 'No pending re-test for this ticket — run Check first.' });
+      return;
+    }
+    if (!Array.isArray(fixed) || fixed.length !== session.retest.flagged.length) {
+      res.status(400).json({ error: 'fixed must list one true/false per flagged issue' });
+      return;
+    }
+    session.retest.fixed = fixed.map(v => v === true);
+    res.json({ success: sessionSuccess(session), preview: sessionPreview(session), retest: session.retest });
+  });
+
+  // Developers to assign a new bug to — looked up by name, never a guessed
+  // account id (Bug Ticket Standard). Read-only.
+  app.get('/jira/users', wrapAsync(async (req, res) => {
+    const q = String(req.query.q ?? '').trim();
+    if (q.length < 2) { res.json({ users: [] }); return; }
+    try {
+      res.json({ users: await new JiraClient().searchUsers(q) });
+    } catch (e) {
+      res.status(502).json({ error: `Could not search Jira: ${getErrorMessage(e)}` });
+    }
+  }));
+
+  // ── Post-check FAIL: draft the new bug ticket(s) (read-only) ──────────────
+  // Related failures are grouped into one ticket; "split" drafts one per
+  // failure (Protocol §5.4). Nothing is written here — creation happens only
+  // inside the single approval on /jira/commit.
+  app.post('/jira/bug-draft', wrapAsync(async (req, res) => {
+    const key = extractIssueKey(String(req.body?.key ?? ''));
+    const session = checkSessions.get(key);
+    if (!session || session.phase !== 'post-check' || sessionSuccess(session)) {
+      res.status(400).json({ error: 'A bug ticket is only drafted for a post-check that found issues — run Check first.' });
+      return;
+    }
+
+    let jira: JiraClient;
+    let ticket;
+    try {
+      jira = new JiraClient();
+      ticket = await jira.getTicket(key);
+    } catch (e) {
+      res.status(500).json({ error: `Could not read ${key}: ${getErrorMessage(e)}` });
+      return;
+    }
+
+    const brand = resolveBrandFromProjectKey(ticket.projectKey) ?? ticket.projectKey;
+    const geo = session.geo ?? '';
+    const liveUrl = geo ? getLiveUrl(brand, geo) : null;
+    const drafts = draftBugTickets({
+      originalKey: key,
+      originalSummary: ticket.summary,
+      brand,
+      geo: geo || '(GEO not resolved)',
+      platform: 'Desktop',
+      liveUrl,
+      scopeItems: session.checkItems,
+      failingItems: failingItems(session),
+      split: req.body?.split === true,
+    });
+
+    const flags: string[] = [];
+    const ASSIGNEES = ['Boaz', 'Oleg', 'Gerline'];
+    try {
+      const [versions, fields, nameMatches] = await Promise.all([
+        jira.getProjectVersions(ticket.projectKey),
+        jira.getIssueTypeFields(ticket.projectKey, 'Bug'),
+        Promise.all(ASSIGNEES.map(n => jira.searchUsers(n))),
+      ]);
+      if (!fields) flags.push(`Jira space ${ticket.projectKey} has no "Bug" work type.`);
+      const next = versions.find(v => /next/i.test(v.name) && !v.archived) ?? null;
+      if (!next) flags.push(`No "Next" Fix Version found in ${ticket.projectKey} — set it after creating.`);
+      const priorityOptions = fields?.fields?.priority?.allowedValues ?? [];
+      const assigneeOptions: Array<{ accountId: string; displayName: string }> = [];
+      ASSIGNEES.forEach((name, i) => {
+        const hits = (nameMatches[i] ?? []).filter(u => u.displayName.toLowerCase().includes(name.toLowerCase()));
+        if (hits.length === 1) assigneeOptions.push(hits[0]);
+        else flags.push(hits.length === 0 ? `Could not find "${name}" in Jira — use the search box.` : `Found ${hits.length} people matching "${name}" — use the search box to pick the right one.`);
+      });
+      flags.push('Affects Version and the x.xx-post label come from the version shown in the site footer (e.g. "V: 2.19.0") — choose the matching version and enter the label. They are never guessed.');
+      if (!liveUrl) flags.push(`No live URL is configured for ${brand} ${geo || '(GEO unknown)'} — enter the page URL in Steps to Replicate.`);
+      res.json({
+        project: { key: ticket.projectKey },
+        drafts,
+        options: {
+          priorityOptions,
+          defaultPriority: priorityOptions.find(p => /^normal$/i.test(p)) ?? priorityOptions.find(p => /^medium$/i.test(p)) ?? priorityOptions[0] ?? '',
+          versionOptions: versions.filter(v => !v.archived).map(v => ({ id: v.id, name: v.name })),
+          fixVersionId: next?.id ?? '',
+          assigneeOptions,
+        },
+        flags,
+      });
+    } catch (e) {
+      res.status(502).json({ error: `Could not read Jira for the ticket options: ${getErrorMessage(e)}` });
+    }
   }));
 
   // ── Cancel a pending Check result without committing it ────────────────────
@@ -683,10 +956,94 @@ export function registerJiraCheckerRoutes(app: Express): void {
 
     const warnings: string[] = [];
 
+    // One QA comment per pass: a comment from this account for this phase and
+    // date already on the ticket is revised in place, never duplicated
+    // (Post-Check Standard hard rule #4). Posting needs an explicit
+    // "revise existing" from the caller; a read failure is warned, not fatal.
+    let existing: { id: string; header: string; created: string } | null = null;
+    try {
+      const [comments, me] = await Promise.all([jira.getComments(key), jira.getMyself()]);
+      // A re-test is its own pass — it never revises the comment it is re-testing.
+      existing = session.retest ? null : findSamePassComment(comments, me.accountId, session.phase);
+    } catch (e) {
+      warnings.push(`Could not check for an existing comment for this pass: ${getErrorMessage(e)} — check the ticket for a duplicate.`);
+    }
+    const reviseExisting = existing !== null && req.body?.reviseExisting === true;
+    if (existing && !reviseExisting) {
+      res.status(409).json({
+        duplicate: true,
+        commentId: existing.id,
+        error: `This ticket already has a "${existing.header}" comment from this pass. One QA comment per pass — revise it in place instead of posting a second.`,
+      });
+      return;
+    }
+
+    // A post-check that found issues files new linked bug ticket(s) as part of
+    // this same approval (Post-Check Standard, procedure step 5): validated up
+    // front so nothing is written if any draft fails the standard, created
+    // BEFORE the comment so a failed creation leaves the original untouched.
+    const filesTickets = session.phase === 'post-check' && !sessionSuccess(session) && !reviseExisting;
+    const skipTickets = req.body?.skipTickets === true;
+    const ticketEdits = (Array.isArray(req.body?.tickets) ? req.body.tickets : []).map((t: any) => ({
+      id: String(t?.id ?? ''), edit: normaliseBugEdit(t),
+    }));
+    let originalProject = '';
+    let originalBrand = '';
+    if (filesTickets) {
+      if (ticketEdits.length === 0 && !skipTickets) {
+        res.status(422).json({
+          needsTickets: true,
+          error: 'This post-check found issues. Draft the new bug ticket(s) and approve them with the comment, or choose to file them by hand.',
+        });
+        return;
+      }
+      try {
+        originalProject = (await jira.getTicket(key)).projectKey;
+        originalBrand = resolveBrandFromProjectKey(originalProject) ?? originalProject;
+      } catch (e) {
+        res.status(500).json({ error: `Could not read ${key}: ${getErrorMessage(e)}. Nothing was changed.` });
+        return;
+      }
+      const problems = ticketEdits.flatMap((t: { id: string; edit: ReturnType<typeof normaliseBugEdit> }) =>
+        checkBugEdit(originalBrand, t.edit).problems.map(p => `${t.id}: ${p}`));
+      if (problems.length) {
+        res.status(422).json({ error: 'A bug ticket draft does not meet the standard yet. Nothing was sent to Jira.', problems });
+        return;
+      }
+    }
+
+    const createdNow: Array<{ id: string; key: string; url: string; attachFailed: string[]; linkError?: string }> = [];
+    if (filesTickets && !skipTickets) {
+      session.createdTickets = session.createdTickets ?? {};
+      for (const t of ticketEdits as Array<{ id: string; edit: ReturnType<typeof normaliseBugEdit> }>) {
+        if (session.createdTickets[t.id]) continue; // already filed on an earlier attempt
+        try {
+          const created = await jira.createIssue(buildBugFields(originalProject, t.edit));
+          session.createdTickets[t.id] = created;
+          const entry: typeof createdNow[number] = { id: t.id, ...created, attachFailed: [] };
+          try { await jira.linkIssues(created.key, key); } catch (e) { entry.linkError = getErrorMessage(e); }
+          entry.attachFailed = await attachSessionEvidence(jira, created.key, session);
+          createdNow.push(entry);
+        } catch (e) {
+          const detail = (e as any)?.response?.data ? JSON.stringify((e as any).response.data) : getErrorMessage(e);
+          res.status(502).json({
+            error: `Jira did not create bug ticket "${t.id}": ${detail}. The comment was not posted and ${key} was not closed — ${Object.keys(session.createdTickets).length} ticket(s) already created are kept and will not be duplicated on retry.`,
+            created: Object.values(session.createdTickets),
+          });
+          return;
+        }
+      }
+      for (const c of createdNow) {
+        if (c.linkError) warnings.push(`${c.key} was created but could not be linked to ${key}: ${c.linkError} — link it by hand.`);
+        if (c.attachFailed.length) warnings.push(`${c.key}: could not attach ${c.attachFailed.join(', ')}.`);
+      }
+    }
+
     // Only the pre-check flow passes through an "In Review" holding state —
     // post-check goes straight from Production QA/Approved to Closed either
-    // way, per the Reporting Protocol (§5.3/§5.4).
-    if (session.phase === 'pre-check') {
+    // way, per the Reporting Protocol (§5.3/§5.4). A revision leaves the
+    // ticket's status alone: it already moved when the comment was first posted.
+    if (session.phase === 'pre-check' && !reviseExisting) {
       try {
         await jira.transitionTicket(key, TRANSITION_IN_REVIEW);
       } catch (e) {
@@ -718,8 +1075,8 @@ export function registerJiraCheckerRoutes(app: Express): void {
         }
       }
 
-      success = session.testResult.success;
-      commentAdf = buildCommentAdf(session.testResult, attachments, session.checkItems, session.phase, videos, { geo: session.geo });
+      success = sessionSuccess(session);
+      commentAdf = buildCommentAdf(session.testResult, attachments, session.checkItems, session.phase, videos, sessionCtx(session));
     } else if (session.visualKind === 'site-vs-site') {
       const attachments: { thumbnailUrl: string; filename: string }[] = [];
       try {
@@ -735,8 +1092,8 @@ export function registerJiraCheckerRoutes(app: Express): void {
         warnings.push(`Could not upload Production screenshot: ${getErrorMessage(e)}`);
       }
 
-      success = session.result.status === 'matched' || session.result.status === 'no_issues_found';
-      commentAdf = buildVisualCommentAdf('site-vs-site', session.result, attachments, session.checkItems, session.phase, { geo: session.geo });
+      success = sessionSuccess(session);
+      commentAdf = buildVisualCommentAdf('site-vs-site', session.result, attachments, session.checkItems, session.phase, sessionCtx(session));
     } else {
       const attachments: { thumbnailUrl: string; filename: string }[] = [];
       for (let i = 0; i < session.siteBuffers.length; i++) {
@@ -748,14 +1105,27 @@ export function registerJiraCheckerRoutes(app: Express): void {
         }
       }
 
-      success = session.result.status === 'matched' || session.result.status === 'no_issues_found';
-      commentAdf = buildVisualCommentAdf('asset-vs-site', session.result, attachments, session.checkItems, session.phase, { geo: session.geo });
+      success = sessionSuccess(session);
+      commentAdf = buildVisualCommentAdf('asset-vs-site', session.result, attachments, session.checkItems, session.phase, sessionCtx(session));
     }
 
     try {
-      await jira.addCommentAdf(key, commentAdf);
+      if (reviseExisting && existing) {
+        await jira.updateCommentAdf(key, existing.id, commentAdf);
+      } else {
+        await jira.addCommentAdf(key, commentAdf);
+      }
     } catch (e) {
       res.status(500).json({ error: `Comment failed, ticket left as-is: ${getErrorMessage(e)}`, warnings });
+      return;
+    }
+
+    if (reviseExisting) {
+      // Revised in place — status already moved on the first post, so it is
+      // not transitioned again.
+      checkSessions.delete(key);
+      warnings.push('The existing comment was revised in place; the ticket status was left unchanged.');
+      res.json({ committed: true, revised: true, status: 'unchanged', warnings });
       return;
     }
 
@@ -768,11 +1138,16 @@ export function registerJiraCheckerRoutes(app: Express): void {
       finalTransition = TRANSITION_POST_RELEASE_CLOSED;
       finalStatusLabel = 'Closed';
       if (!success) {
-        warnings.push('Post-check FAILED — file a new defect ticket for the issues found (not yet automated); this ticket is being closed per protocol, not reopened.');
+        warnings.push(skipTickets
+          ? 'Post-check FAILED and no bug ticket was drafted — file the new ticket(s) by hand and link them to this one; this ticket is being closed per protocol, not reopened.'
+          : 'Post-check FAILED — this ticket is being closed per protocol, not reopened; the new bug ticket(s) track the issues.');
       }
     } else {
-      finalTransition = success ? TRANSITION_APPROVED : TRANSITION_QA_REJECTED;
-      finalStatusLabel = success ? 'Approved' : 'QA Rejected';
+      finalTransition = success ? TRANSITION_APPROVED : TRANSITION_REOPENED;
+      finalStatusLabel = success ? 'Approved' : 'Reopened';
+      if (!success) {
+        warnings.push('Pre-check FAILED — ticket is now Reopened. Assign it to the developer (Boaz by default; confirm with the QA PIC first) — not yet automated.');
+      }
     }
 
     try {
@@ -785,8 +1160,9 @@ export function registerJiraCheckerRoutes(app: Express): void {
       return;
     }
 
+    const filed = Object.values(session.createdTickets ?? {});
     checkSessions.delete(key);
-    res.json({ committed: true, status: finalStatusLabel, warnings });
+    res.json({ committed: true, status: finalStatusLabel, warnings, tickets: filed });
   }));
 
   // ── Human-gated: post a clarification comment and place the ticket On Hold ─

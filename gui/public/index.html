@@ -465,6 +465,18 @@
           <h2 id="jira-ticket-title">Ticket</h2>
           <span id="jira-ticket-status" class="status-pill"></span>
         </div>
+        <div id="jira-retest-banner" hidden>
+          <p id="jira-retest-text"></p>
+        </div>
+        <div id="jira-readiness-box" hidden>
+          <p><strong>Readiness checklist</strong> <span class="video-note">(Protocol &sect;2.2 &mdash; what can be read off the ticket; the judgement calls stay with QA)</span></p>
+          <ul id="jira-readiness-list"></ul>
+        </div>
+        <div id="jira-priors-box" hidden>
+          <p><strong>Prior comments on this ticket</strong> <span class="video-note">(read each one in full before checking &mdash; a verdict line is not its disposition)</span></p>
+          <p id="jira-priors-warning" class="video-note" hidden></p>
+          <div id="jira-priors-list"></div>
+        </div>
         <div id="jira-test-cases-box" hidden>
           <p><strong>Drafted Test Case(s)</strong> <span class="video-note">(ISTQB CTFL v4.0 / IEEE 829 house standard &mdash; always drafted, whether or not this ticket can be automated)</span></p>
           <div id="jira-test-cases-list"></div>
@@ -514,7 +526,21 @@
           <span id="jira-result-status" class="status-pill"></span>
         </div>
         <p><strong>Draft comment (Official Reporting format):</strong></p>
+        <div id="jira-retest-box" hidden>
+          <p><strong>Re-test &mdash; mark each flagged issue:</strong> <span class="video-note">(Overall Result is PASS only when every flagged issue is fixed)</span></p>
+          <div id="jira-retest-list"></div>
+        </div>
         <pre id="jira-comment-preview" class="comment-preview"></pre>
+        <div id="jira-bug-box" hidden>
+          <p><strong>New bug ticket(s) for this post-check FAIL</strong> <span class="video-note">(Protocol &sect;5.4 &mdash; related failures grouped into one ticket, unrelated ones separate; the original ticket is closed, never reopened. Created together with the comment when you Commit.)</span></p>
+          <div class="run-actions">
+            <button id="jira-bug-draft-btn" class="run-btn">Draft bug ticket</button>
+            <button id="jira-bug-split-btn" class="stop-btn">Draft one ticket per failure</button>
+          </div>
+          <label style="display:block"><input type="checkbox" id="jira-bug-skip"> I'll file the new ticket(s) by hand &mdash; just post the comment and close this one</label>
+          <p id="jira-bug-flags" class="video-note"></p>
+          <div id="jira-bug-forms"></div>
+        </div>
         <div id="jira-evidence-gallery" class="evidence-gallery"></div>
         <p id="jira-video-note" class="video-note" hidden></p>
         <div class="run-actions">
