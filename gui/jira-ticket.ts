@@ -25,10 +25,10 @@ import { MODEL } from './visual-compare';
 // guessed account id). Rosters per the Confluence "Team & Resource Directory"
 // (Projects and QA / Product and R&D) and the people on recent Jira bugs: the QA
 // team and the three developers. The person running the GUI (the Jira token's
-// owner) is the default and is listed first: tickets are created under the owner
-// of the web release project, who then passes them to Boaz (the standards'
-// default developer, Protocol §4.9 step 12). The confirm step names the
-// assignee before anything is created, so the person is always asked.
+// owner) is listed first; Boaz is the default (Bug Ticket Standard, Protocol
+// §4.9 step 12). The owner is only the fallback when Boaz can't be found in Jira.
+// The confirm step names the assignee before anything is created, so the person
+// is always asked.
 const ASSIGNEE_LOOKUP: Array<{ name: string; role: 'QA' | 'Dev' }> = [
   { name: 'Reeve', role: 'QA' },
   { name: 'Edward', role: 'QA' },
@@ -241,17 +241,16 @@ const STANDARDS_MAX_CHARS = 60000;
 // THEN bump the version number here (and the date). Never bump it without
 // re-reading — that would just silence the warning.
 //
-// Settled 2026-10-07 (QA PIC): Boaz by default, and the person is always asked
-// (Protocol §4.9 step 12 and the Bug Ticket Standard agree). Here the ticket is
-// created under the person running the GUI (web release project owner), who
-// hands it to Boaz — confirmed by Reeve 2026-10-08.
+// Settled by the QA PIC (Bug Ticket Standard v5, Protocol §4.9 step 12): Boaz
+// by default, and the person is always asked. This supersedes the earlier
+// "created under the person running the GUI" default (2026-10-08).
 // Still open on the QA PIC's side (not decided by this code, re-check when
 // these pages change): Actual-vs-Expected order (the Protocol contradicts
 // itself; this file uses Actual first, as the Bug Ticket Standard does).
 export const CHECKS_WRITTEN_AGAINST = {
-  asOf: '2026-10-08',
+  asOf: '2026-10-19',
   pages: [
-    { id: BUG_STANDARD_PAGE_ID, title: 'Bug Ticket Standard', version: 4 },
+    { id: BUG_STANDARD_PAGE_ID, title: 'Bug Ticket Standard', version: 5 },
     { id: PROTOCOL_PAGE_ID, title: 'QA Reporting Protocols & Guidelines 2026', version: 5 },
     { id: '281870363', title: 'Kinetic Digital — Brands & GEO Mapping', version: 2 }, // basis of the COM-vs-UK rule
   ],
@@ -398,7 +397,8 @@ export function registerJiraTicketRoutes(app: Express, deps: Deps): void {
       const mine = at >= 0 ? assigneeOptions.splice(at, 1)[0] : { ...jiraLookups.me, role: 'QA' as const };
       assigneeOptions.unshift(mine);
     }
-    const defaultAssignee = jiraLookups.me;
+    // Boaz by default; the token's owner only if Boaz isn't a single Jira match.
+    const defaultAssignee = assigneeOptions.find(o => o.role === 'Dev' && /boaz/i.test(o.displayName)) ?? jiraLookups.me;
     if (jiraLookups.error) flags.push(`Could not read Jira (${jiraLookups.error}) — project, priority, versions and assignee below are unconfirmed.`);
     else if (!jiraLookups.fields) flags.push(`Jira space ${project.key} has no "Bug" work type.`);
 
@@ -526,7 +526,7 @@ Rules:
     // The test never reached the real page, so what the draft describes (e.g. a
     // "missing" button) is not a product defect. Said first and plainly.
     if (gate) flags.unshift(`Do not file this as a product bug. ${gate.plainSummary} ${gate.reasoning}`);
-    flags.push('Affects Version and the x.xx-post label need the version shown in the site footer (e.g. "V: 2.19.0") — enter it below. They are never guessed.');
+    flags.push('Affects Version and the x.xx-post label need the version shown in the site footer (e.g. "V: 2.19.0") — enter it below. The Affects Version is then matched to the project\'s real version name (e.g. "SC 2.34 Autumn 28/09", not "SC 2.34"); it is never built from the footer number.');
 
     res.json({
       project,

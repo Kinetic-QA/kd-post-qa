@@ -1647,7 +1647,7 @@ function updateJiraVersionFields() {
 
 jiraSiteVerEl.addEventListener('input', updateJiraVersionFields);
 
-// ── Assignee: the person running the GUI by default, always confirmed in the create step ──
+// ── Assignee: Boaz by default (Bug Ticket Standard), always confirmed in the create step ──
 function renderJiraAssignee(d) {
   jiraAssigneeEl.textContent = '';
   const def = d.fields.assignee;
