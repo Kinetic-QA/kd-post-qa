@@ -33,6 +33,7 @@ import {
 } from './jira-checker-bug';
 import { captureFullPageScreenshot, captureMultipleFrames } from './screenshot-capture';
 import { compareVisual, VisualCompareResult } from './visual-compare';
+import { annotateEvidence, todayDdMmYyyy } from '../src/evidence-annotate';
 
 // What a "visual check" needs varies by kind — situational, not fixed:
 // site-vs-site needs two live URLs (QA vs Production); asset-vs-site needs
@@ -43,8 +44,6 @@ import { compareVisual, VisualCompareResult } from './visual-compare';
 type VisualCheckOption =
   | { kind: 'site-vs-site'; qaUrl: string; liveUrl: string }
   | { kind: 'asset-vs-site'; attachmentUrl: string; attachmentFilename: string; siteUrl: string };
-
-const MIME_BY_EXT: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
 
 const TRANSITION_IN_REVIEW  = process.env.JIRA_TRANSITION_IN_REVIEW  ?? '71';
 const TRANSITION_APPROVED   = process.env.JIRA_TRANSITION_APPROVED   ?? '101';
@@ -208,6 +207,8 @@ interface PlaywrightCheckSession extends SessionExtras {
   testResult: TestRunResult;
   phase: CheckPhase;
   geo?: string;
+  // The site the test ran against — drawn into each screenshot's caption.
+  url?: string;
 }
 
 interface SiteVsSiteSession extends SessionExtras {
@@ -218,6 +219,8 @@ interface SiteVsSiteSession extends SessionExtras {
   result: VisualCompareResult;
   qaBuffer: Buffer;
   prodBuffer: Buffer;
+  qaUrl: string;
+  liveUrl: string;
   geo?: string;
 }
 
@@ -229,6 +232,7 @@ interface AssetVsSiteSession extends SessionExtras {
   result: VisualCompareResult;
   geo?: string;
   siteBuffers: Buffer[];
+  siteUrl: string;
 }
 
 type CheckSession = PlaywrightCheckSession | SiteVsSiteSession | AssetVsSiteSession;
@@ -262,21 +266,70 @@ function failingItems(s: CheckSession): string[] {
     : ['Visual mismatch detected — see evidence'];
 }
 
+// Every screenshot of a pass with its Standing Rules #13 annotation drawn in:
+// green/red border and a caption bar (verdict, date, URL, measured viewport).
+// One function builds them, so the preview, the comment and any new bug ticket
+// always carry the same images. A screenshot that can't be annotated is kept
+// as it was and named in `warnings` — evidence is never dropped.
+interface EvidenceImage { filename: string; buffer: Buffer }
+
+async function annotatedEvidence(s: CheckSession): Promise<{ images: EvidenceImage[]; warnings: string[] }> {
+  const verdict = sessionSuccess(s) ? 'pass' : 'fail';
+  const date = todayDdMmYyyy();
+  const warnings: string[] = [];
+  const draw = async (raw: Buffer, filename: string, label: string | undefined, url: string | undefined): Promise<EvidenceImage> => {
+    const out = await annotateEvidence(raw, { verdict, label, url, geo: s.geo, platform: 'Desktop', date });
+    if (out.error) warnings.push(`Could not annotate ${filename}, so it is attached as captured: ${out.error}`);
+    // The annotated image is always a PNG, whatever the source format was.
+    return { filename: out.error ? filename : filename.replace(/\.[^.]+$/, '') + '.png', buffer: out.buffer };
+  };
+
+  const images: EvidenceImage[] = [];
+  if (s.kind === 'playwright') {
+    for (const p of s.testResult.screenshotPaths) {
+      images.push(await draw(fs.readFileSync(p), path.basename(p), undefined, s.url));
+    }
+  } else if (s.visualKind === 'site-vs-site') {
+    images.push(await draw(s.qaBuffer, 'qa-site.png', 'QA site', s.qaUrl));
+    images.push(await draw(s.prodBuffer, 'production-site.png', 'Production site', s.liveUrl));
+  } else {
+    for (let i = 0; i < s.siteBuffers.length; i++) {
+      images.push(await draw(s.siteBuffers[i], `site-frame-${i}.png`, `Live site, frame ${i + 1} of ${s.siteBuffers.length}`, s.siteUrl));
+    }
+  }
+  return { images, warnings };
+}
+
+// Uploads the annotated screenshots for the comment. A failed upload becomes a
+// warning and the comment still posts; the Standing Rules' "stop after three
+// failed attempts" is not implemented — each image is tried once.
+async function uploadEvidence(
+  jira: JiraClient,
+  key: string,
+  s: CheckSession,
+  warnings: string[],
+): Promise<{ thumbnailUrl: string; filename: string }[]> {
+  const { images, warnings: annotateWarnings } = await annotatedEvidence(s);
+  warnings.push(...annotateWarnings);
+  const attachments: { thumbnailUrl: string; filename: string }[] = [];
+  for (const img of images) {
+    try {
+      const att = await uploadBufferAsAttachment(jira, key, img.buffer, img.filename);
+      attachments.push({ thumbnailUrl: att.thumbnailUrl, filename: att.filename });
+    } catch (e) {
+      warnings.push(`Could not upload screenshot ${img.filename}: ${getErrorMessage(e)}`);
+    }
+  }
+  return attachments;
+}
+
 // The evidence a new ticket carries: the same screenshots the comment shows.
 async function attachSessionEvidence(jira: JiraClient, ticketKey: string, s: CheckSession): Promise<string[]> {
   const failed: string[] = [];
-  const tryOne = async (label: string, fn: () => Promise<unknown>) => {
-    try { await fn(); } catch (e) { failed.push(`${label} (${getErrorMessage(e)})`); }
-  };
-  if (s.kind === 'playwright') {
-    for (const p of s.testResult.screenshotPaths) await tryOne(path.basename(p), () => jira.uploadAttachment(ticketKey, p));
-  } else if (s.visualKind === 'site-vs-site') {
-    await tryOne('qa-site.png', () => uploadBufferAsAttachment(jira, ticketKey, s.qaBuffer, 'qa-site.png'));
-    await tryOne('production-site.png', () => uploadBufferAsAttachment(jira, ticketKey, s.prodBuffer, 'production-site.png'));
-  } else {
-    for (let i = 0; i < s.siteBuffers.length; i++) {
-      await tryOne(`site-frame-${i}.png`, () => uploadBufferAsAttachment(jira, ticketKey, s.siteBuffers[i], `site-frame-${i}.png`));
-    }
+  const { images } = await annotatedEvidence(s);
+  for (const img of images) {
+    try { await uploadBufferAsAttachment(jira, ticketKey, img.buffer, img.filename); }
+    catch (e) { failed.push(`${img.filename} (${getErrorMessage(e)})`); }
   }
   return failed;
 }
@@ -676,6 +729,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
 
     const session: PlaywrightCheckSession = {
       kind: 'playwright', testType, testFile, checkItems: checkItems ?? [], testResult, phase, geo: params?.GEO,
+      url: params?.QA_BASE_URL,
       remarks: postCheckRemarks(phase, params?.GEO),
       retest: retestFromBody(req.body?.retest, testResult.success),
     };
@@ -686,12 +740,12 @@ export function registerJiraCheckerRoutes(app: Express): void {
     // Videos aren't embedded here (webm files are typically tens of MB;
     // impractical as base64 over JSON) — just named, with the real link
     // only resolvable once Commit has actually uploaded them.
-    const screenshots = testResult.screenshotPaths.map(p => {
-      const ext = path.extname(p).toLowerCase();
-      const mime = MIME_BY_EXT[ext] ?? 'image/png';
-      const dataUri = `data:${mime};base64,${fs.readFileSync(p).toString('base64')}`;
-      return { filename: path.basename(p), dataUri };
-    });
+    // Shown annotated (border + caption bar), exactly as it will be posted.
+    const evidence = await annotatedEvidence(session);
+    const screenshots = evidence.images.map(img => ({
+      filename: img.filename,
+      dataUri: `data:image/png;base64,${img.buffer.toString('base64')}`,
+    }));
     const videoFilenames = testResult.videoPaths.map(p => path.basename(p));
 
     res.json({
@@ -704,6 +758,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
       durationMs: testResult.durationMs,
       errors: testResult.errors,
       screenshots,
+      evidenceWarnings: evidence.warnings,
       videoFilenames,
       preview: sessionPreview(session),
     });
@@ -746,10 +801,11 @@ export function registerJiraCheckerRoutes(app: Express): void {
       }
 
       const session: SiteVsSiteSession = {
-        kind: 'visual', visualKind: 'site-vs-site', checkItems, phase, result, qaBuffer, prodBuffer, geo,
+        kind: 'visual', visualKind: 'site-vs-site', checkItems, phase, result, qaBuffer, prodBuffer, qaUrl, liveUrl, geo,
         retest: retestFromBody(req.body?.retest, visualSuccess(result)),
       };
       checkSessions.set(key, session);
+      const evidence = await annotatedEvidence(session);
 
       res.json({
         success: sessionSuccess(session),
@@ -758,10 +814,8 @@ export function registerJiraCheckerRoutes(app: Express): void {
         status: result.status,
         findings: result.findings,
         breakdown: result.breakdown,
-        screenshots: [
-          { filename: 'qa-site.png', dataUri: `data:image/png;base64,${qaBuffer.toString('base64')}` },
-          { filename: 'production-site.png', dataUri: `data:image/png;base64,${prodBuffer.toString('base64')}` },
-        ],
+        screenshots: evidence.images.map(img => ({ filename: img.filename, dataUri: `data:image/png;base64,${img.buffer.toString('base64')}` })),
+        evidenceWarnings: evidence.warnings,
         preview: sessionPreview(session),
       });
       return;
@@ -803,11 +857,12 @@ export function registerJiraCheckerRoutes(app: Express): void {
     }
 
     const session: AssetVsSiteSession = {
-      kind: 'visual', visualKind: 'asset-vs-site', checkItems, phase, result, siteBuffers, geo,
+      kind: 'visual', visualKind: 'asset-vs-site', checkItems, phase, result, siteBuffers, siteUrl: visualCheck.siteUrl, geo,
       remarks: postCheckRemarks(phase, geo),
       retest: retestFromBody(req.body?.retest, visualSuccess(result)),
     };
     checkSessions.set(key, session);
+    const evidence = await annotatedEvidence(session);
 
     res.json({
       success: sessionSuccess(session),
@@ -818,8 +873,9 @@ export function registerJiraCheckerRoutes(app: Express): void {
       breakdown: result.breakdown,
       screenshots: [
         { filename: visualCheck.attachmentFilename, dataUri: `data:${assetMimeType};base64,${assetBuffer.toString('base64')}` },
-        ...siteBuffers.map((buf, i) => ({ filename: `site-frame-${i}.png`, dataUri: `data:image/png;base64,${buf.toString('base64')}` })),
+        ...evidence.images.map(img => ({ filename: img.filename, dataUri: `data:image/png;base64,${img.buffer.toString('base64')}` })),
       ],
+      evidenceWarnings: evidence.warnings,
       preview: sessionPreview(session),
     });
   }));
@@ -1055,15 +1111,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
     let commentAdf: object;
 
     if (session.kind === 'playwright') {
-      const attachments: { thumbnailUrl: string; filename: string }[] = [];
-      for (const screenshotPath of session.testResult.screenshotPaths) {
-        try {
-          const att = await jira.uploadAttachment(key, screenshotPath);
-          attachments.push({ thumbnailUrl: att.thumbnailUrl, filename: att.filename });
-        } catch (e) {
-          warnings.push(`Could not upload screenshot ${screenshotPath}: ${getErrorMessage(e)}`);
-        }
-      }
+      const attachments = await uploadEvidence(jira, key, session, warnings);
 
       const videos: VideoAttachment[] = [];
       for (const videoPath of session.testResult.videoPaths) {
@@ -1078,32 +1126,12 @@ export function registerJiraCheckerRoutes(app: Express): void {
       success = sessionSuccess(session);
       commentAdf = buildCommentAdf(session.testResult, attachments, session.checkItems, session.phase, videos, sessionCtx(session));
     } else if (session.visualKind === 'site-vs-site') {
-      const attachments: { thumbnailUrl: string; filename: string }[] = [];
-      try {
-        const qaAtt = await uploadBufferAsAttachment(jira, key, session.qaBuffer, 'qa-site.png');
-        attachments.push({ thumbnailUrl: qaAtt.thumbnailUrl, filename: qaAtt.filename });
-      } catch (e) {
-        warnings.push(`Could not upload QA screenshot: ${getErrorMessage(e)}`);
-      }
-      try {
-        const prodAtt = await uploadBufferAsAttachment(jira, key, session.prodBuffer, 'production-site.png');
-        attachments.push({ thumbnailUrl: prodAtt.thumbnailUrl, filename: prodAtt.filename });
-      } catch (e) {
-        warnings.push(`Could not upload Production screenshot: ${getErrorMessage(e)}`);
-      }
+      const attachments = await uploadEvidence(jira, key, session, warnings);
 
       success = sessionSuccess(session);
       commentAdf = buildVisualCommentAdf('site-vs-site', session.result, attachments, session.checkItems, session.phase, sessionCtx(session));
     } else {
-      const attachments: { thumbnailUrl: string; filename: string }[] = [];
-      for (let i = 0; i < session.siteBuffers.length; i++) {
-        try {
-          const att = await uploadBufferAsAttachment(jira, key, session.siteBuffers[i], `site-frame-${i}.png`);
-          attachments.push({ thumbnailUrl: att.thumbnailUrl, filename: att.filename });
-        } catch (e) {
-          warnings.push(`Could not upload site frame ${i}: ${getErrorMessage(e)}`);
-        }
-      }
+      const attachments = await uploadEvidence(jira, key, session, warnings);
 
       success = sessionSuccess(session);
       commentAdf = buildVisualCommentAdf('asset-vs-site', session.result, attachments, session.checkItems, session.phase, sessionCtx(session));
