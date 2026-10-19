@@ -9,6 +9,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-19
+
+### Added
+
+- **Screenshots in JIRA Checker comments are now marked up the way the QA standards ask.** Each screenshot gets a green border for a pass or a red border for a fail, and a caption bar inside the picture showing the result, the date, the page address, the width the page was shown at (measured from the picture itself) and the platform and GEO. The preview shows the marked-up pictures exactly as they will be posted, and bug tickets filed from a failed post-check carry the same pictures. If a picture cannot be marked up, the original is attached instead and a warning says so.
+
+### Changed
+
+- **The new-bug popup now follows version 5 of the Bug Ticket Standard.** The developer to assign is now Boaz by default (it used to default to whoever is running the tool); you are still always asked and can pick or search for someone else. The note about Affects Version now explains that it is matched to the project's real version name, never built from the number in the site footer. The popup's change warning is reset to version 5.
+
+---
+
 ## [Unreleased] - 2026-10-16
 
 ### Added
