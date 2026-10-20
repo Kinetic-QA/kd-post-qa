@@ -19,9 +19,9 @@ import { test } from '@playwright/test';
  */
 const KNOWN_GEOS_BY_BRAND: Record<string, string[]> = {
   SC: ['UK', 'ES', 'IE', 'ROW'],
-  SNG: ['UK', 'IE', 'CA', 'ON', 'FR-CA', 'ES', 'ROW'],
+  SNG: ['UK', 'IE', 'CA', 'ON', 'FR-CA', 'ES', 'ROW', 'AB'],
   GC: ['UK', 'ES'],
-  MC: ['UK', 'COM', 'CA', 'FR-CA', 'IE', 'ES'],
+  MC: ['UK', 'COM', 'CA', 'FR-CA', 'IE', 'ES', 'AB'],
   PC: ['UK', 'ES', 'CA', 'IE', 'COM'],
   LP: ['UK', 'ES', 'IE', 'CA', 'COM'],
   ZI: ['UK', 'COM'],

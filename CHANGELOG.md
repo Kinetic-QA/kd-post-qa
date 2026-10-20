@@ -9,6 +9,18 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-20
+
+### Added
+
+- **Spin Genie Alberta and Mega Casino Alberta now get a real login test.** Both sites now have a working test account, so the Login check actually signs in and confirms the player lands in the logged-in area, on both desktop and mobile. Before, this check was skipped for both Alberta sites.
+
+### Fixed
+
+- **Alberta login would have used the wrong account.** The list of markets that have their own test login did not include Alberta for either brand, so the tool would have quietly signed in with the UK account instead. Alberta is now on the list for Spin Genie and Mega Casino.
+
+---
+
 ## [Unreleased] - 2026-10-19
 
 ### Added
