@@ -9,6 +9,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-30
+
+### Fixed
+
+- **Blog checks on Mega Casino Spain no longer fail for the wrong reason.** The blog tests (Blog Page, Blog Sidebar and Blog Page Header) were clicking the middle of the side menu instead of the Blog link, so the page never left the homepage and the checks then reported "no blog category link found" or a blocked login button. They now click the real Blog link and confirm the blog page actually opened before carrying on. The Mega Casino Spain blog page itself was working fine all along. The same fix applies to every brand that opens its blog from the side menu.
+
+---
+
 ## [Unreleased] - 2026-10-20
 
 ### Added

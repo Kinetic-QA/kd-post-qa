@@ -521,9 +521,30 @@ export async function navigateToBlogViaSidebar(page: Page, blogPath: string): Pr
   await page.waitForTimeout(600);
   await dismissCampaignPopup(page);
 
-  const blogLink = page.locator(`${SIDEBAR_SELECTOR} a[href*="${blogPathNoTrailingSlash}"]`).first();
+  // :is() so the link part binds to BOTH sidebar branches — a bare
+  // comma-joined SIDEBAR_SELECTOR only attaches the trailing "a[href…]" to
+  // #top-nav, so on brands whose drawer is MainMenu_main-menu (MC ES) this
+  // resolved to the whole menu container and the click landed in the middle
+  // of it (on "Más Juegos") instead of on the Blog link.
+  const blogLink = page.locator(`:is(${SIDEBAR_SELECTOR}) a[href*="${blogPathNoTrailingSlash}"]`).first();
   await expect(blogLink).toBeVisible({ timeout: 10_000 });
+  // Confirmed from the MC ES 2026-10-29 failure screenshots: the click can
+  // land without the page ever leaving the homepage (drawer still open,
+  // overlay still blocking), and waitForLoadState('domcontentloaded') then
+  // returns instantly because the homepage already finished loading — so the
+  // blog specs carried on from the wrong page and failed with misleading
+  // "no blog category link found" / overlay-blocked-click errors. Wait for
+  // the URL to actually reach the blog, retrying the click once if it did
+  // not take.
+  const reachedBlog = () => page.waitForURL(u => u.pathname.includes(blogPathNoTrailingSlash), { timeout: 8_000 }).then(() => true, () => false);
   await blogLink.click();
+  if (!(await reachedBlog())) {
+    // Direct element click — does not depend on where things are on screen.
+    await blogLink.evaluate(el => (el as HTMLElement).click());
+    if (!(await reachedBlog())) {
+      throw new Error(`navigateToBlogViaSidebar: clicked the sidebar Blog link but the page never reached "${blogPathNoTrailingSlash}" (still on ${page.url()})`);
+    }
+  }
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(1_000);
   // Same fresh-page re-render as the footer-link branch above.
