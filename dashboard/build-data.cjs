@@ -403,7 +403,7 @@ function buildBrandSummary(runs, tests = []) {
 // TARGET_DATE is no longer a hard filter — it's kept only so a caller can
 // still ask "what did TODAY look like" via the CLI/env var if ever needed,
 // but the snapshot itself always covers full history for Run History.
-const TARGET_DATE = process.env.TARGET_DATE || new Date().toISOString().slice(0, 10);
+const TARGET_DATE = process.env.TARGET_DATE || require('../helpers/run-token.cjs').localDateToken();
 
 function latestRunsPerBrand(allRuns) {
   const latestDateByBrand = new Map();

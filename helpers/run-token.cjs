@@ -24,4 +24,12 @@ function localTimestampToken(date = new Date()) {
   return `${datePart}T${timePart}`;
 }
 
-module.exports = { localTimeToken, localTimestampToken };
+// YYYY-MM-DD from the machine's local calendar date. Report folders and
+// combined workbooks are named with this, so it must match the local day the
+// run was started — new Date().toISOString().slice(0, 10) gives the UTC day,
+// which is "yesterday" before 08:00 on a UTC+8 machine (found 2026-10-31).
+function localDateToken(date = new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+module.exports = { localTimeToken, localTimestampToken, localDateToken };

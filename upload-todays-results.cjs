@@ -31,7 +31,7 @@ const TEST_REPORTS = path.join(ROOT, 'Test Reports');
 // it so a stray folder never gets "uploaded" to the team-facing site.
 const EXCLUDE_BRANDS = new Set(['TESTORDER']);
 
-const dateStr = process.env.TEST_DATE || new Date().toISOString().slice(0, 10);
+const dateStr = process.env.TEST_DATE || require('./helpers/run-token.cjs').localDateToken();
 
 function detectBrandsTestedOn(targetDate) {
   if (!fs.existsSync(TEST_REPORTS)) return [];

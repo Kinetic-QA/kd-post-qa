@@ -9,6 +9,19 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-10-31
+
+### Fixed
+
+- **Test results are now filed under today's local date, not the UTC date.** Because the laptop is ahead of UTC, anything run before 8am local time was saved in yesterday's folder, so "Done Today's test" found nothing to upload. Every place that names a run folder, report or upload by date now uses the date on the laptop's clock.
+- **Header logo check no longer fails on Lord Ping Spain.** That site draws its logo as an inline drawing rather than a normal picture, so the check reported the logo as missing even though it was on the page. The check now accepts both kinds, and for the drawing it confirms the logo is visible and actually drawn.
+
+### Changed
+
+- **Ice36 and Lord Ping now show on the public results overview.** Both were added to the list of brands the overview is allowed to display; before, their uploads were hidden.
+
+---
+
 ## [Unreleased] - 2026-10-30
 
 ### Fixed

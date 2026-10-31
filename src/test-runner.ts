@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { localTimeToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string };
+const { localTimeToken, localDateToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string; localDateToken: (d?: Date) => string };
 
 export interface TestRunResult {
   success: boolean;
@@ -101,7 +101,7 @@ export function runPlaywrightTest(testType: string, testFile: string): TestRunRe
   const brand = process.env.TEST_BRAND ?? 'SC';
   const geos = process.env.TEST_GEOS
     ?.split(',').map(g => g.trim()).filter(Boolean) ?? [process.env.TEST_GEO ?? 'UK'];
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = localDateToken();
   const reportRoot = geos.length === 1
     ? path.join('Test Reports', brand, geos[0], dateStr)
     : path.join('Test Reports', brand, `_combined-${geos.join('-')}`, dateStr);

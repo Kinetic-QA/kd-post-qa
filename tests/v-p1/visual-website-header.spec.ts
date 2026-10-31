@@ -12,6 +12,10 @@ import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, 
  * <a href="https://www.slingo.com/"><img src="//cdn.slingo.com/img/logos/logo.png"
  * width="200" height="110"></a> inside the <header role="banner"> landmark;
  * naturalWidth/Height (200x110) matched the rendered box exactly on this run.
+ * Some brands (e.g. Lord Ping) render the logo as an inline <svg><use
+ * href="...sprites.svg#main-logo"> instead of an <img>; those are checked for
+ * a non-empty drawn shape and a visible box (an SVG scales itself with
+ * preserveAspectRatio, so the natural-ratio comparison does not apply).
  * Homepage-only by design (header is a global element, identical on every
  * page).
  * Evidence: attaches a screenshot scoped to just the logo <img> (not a
@@ -66,11 +70,11 @@ test.describe('Visual P1 - Website Header', () => {
       // root-relative "/" depending on brand.
       const rootPath = new URL(siteUrl('')).pathname;
       const logo = page.getByRole('banner')
-        .locator(`a[href="${siteUrl('')}"] img, a[href="${rootPath}"] img`)
+        .locator(`a[href="${siteUrl('')}"] :is(img, svg), a[href="${rootPath}"] :is(img, svg)`)
         .first();
 
       await runStep('Locate header logo', async () => {
-        await expect(logo, 'Header brand logo <img> must exist inside the header landmark').toBeVisible({ timeout: 10_000 });
+        await expect(logo, 'Header brand logo (<img> or inline <svg>) must exist inside the header landmark').toBeVisible({ timeout: 10_000 });
         // Element-scoped evidence — just the logo, not a full-page shot — so
         // the HTML report visibly proves which element was inspected.
         await test.info().attach('header-logo.png', {
@@ -79,12 +83,18 @@ test.describe('Visual P1 - Website Header', () => {
         });
       });
 
-      const info = await logo.evaluate((el: HTMLImageElement) => {
+      const info = await logo.evaluate((el: Element) => {
         const rect = el.getBoundingClientRect();
+        const isSvg = el instanceof SVGElement;
+        const img = el as HTMLImageElement;
+        // For an inline SVG sprite, getBBox() is empty when the <use> target
+        // symbol failed to load — the SVG equivalent of a broken image.
+        const box = isSvg ? (el as unknown as SVGGraphicsElement).getBBox() : null;
         return {
-          complete: el.complete,
-          naturalWidth: el.naturalWidth,
-          naturalHeight: el.naturalHeight,
+          isSvg,
+          complete: isSvg ? true : img.complete,
+          naturalWidth: isSvg ? (box?.width ?? 0) : img.naturalWidth,
+          naturalHeight: isSvg ? (box?.height ?? 0) : img.naturalHeight,
           renderedWidth: rect.width,
           renderedHeight: rect.height,
         };
@@ -101,6 +111,9 @@ test.describe('Visual P1 - Website Header', () => {
       });
 
       await runStep('Verify aspect ratio is not distorted', async () => {
+        // Inline SVGs keep their own proportions (preserveAspectRatio), so
+        // there is no natural ratio to compare against.
+        if (info.isSvg) return;
         // Aspect-ratio drift catches stretch/crop/squash even when the image
         // itself loaded fine — a plain "is it visible" check would miss that.
         const naturalRatio = info.naturalWidth / info.naturalHeight;
