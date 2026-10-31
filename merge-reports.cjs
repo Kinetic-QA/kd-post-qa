@@ -21,7 +21,7 @@ if (!brand) {
   process.exit(1);
 }
 
-const dateStr = process.env.TEST_DATE || new Date().toISOString().slice(0, 10);
+const dateStr = process.env.TEST_DATE || require('./helpers/run-token.cjs').localDateToken();
 const blobDir = path.join('Test Reports', brand, '_blob-reports', dateStr);
 
 // Both mergeInputDir and outputFolder live OUTSIDE blobDir (as siblings, not

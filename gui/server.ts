@@ -36,7 +36,7 @@ import { JiraClient } from '../src/jira-client';
 const { pruneOldRuns } = require('../helpers/prune-old-runs.cjs') as {
   pruneOldRuns: (brand: string, geo: string, dateStr: string, keep?: number) => void;
 };
-const { localTimeToken, localTimestampToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string; localTimestampToken: (d?: Date) => string };
+const { localTimeToken, localTimestampToken, localDateToken } = require('../helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string; localTimestampToken: (d?: Date) => string; localDateToken: (d?: Date) => string };
 import { registerJiraCheckerRoutes } from './jira-checker';
 import { registerJiraTicketRoutes, findingEnvironment, pageSnapshotExcerpt, detectBlockedPage, Finding } from './jira-ticket';
 import { plainError } from './plain-error';
@@ -2305,7 +2305,7 @@ app.get('/run', (req, res) => {
   });
 
   const id = crypto.randomUUID();
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = localDateToken();
   // Folded into excelReportFile below so starting a brand-new session for a
   // brand/date that already ran today gets its OWN combined workbook,
   // instead of colliding with (and silently replacing GEO tabs in) an

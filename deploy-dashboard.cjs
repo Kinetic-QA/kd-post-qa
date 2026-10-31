@@ -269,7 +269,7 @@ function backfillLinks(brand, dateStr, baseUrl) {
 
 (async function main() {
   const brand = process.env.TEST_BRAND;
-  const dateStr = process.env.TEST_DATE || new Date().toISOString().slice(0, 10);
+  const dateStr = process.env.TEST_DATE || require('./helpers/run-token.cjs').localDateToken();
 
   const site = ensureSite();
 

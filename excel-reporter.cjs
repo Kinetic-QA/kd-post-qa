@@ -166,7 +166,7 @@ class ExcelReporter {
     // Must match playwright.config.ts's own dateStr/reportRoot formula so
     // the Excel file and the HTML report/traces from the same run all land
     // in the same dated folder.
-    const dateStr = new Date().toISOString().slice(0, 10);
+    const dateStr = require('./helpers/run-token.cjs').localDateToken();
     const reportRoot = baseGeos.length === 1
       ? `Test Reports/${brand}/${baseGeos[0]}/${dateStr}`
       : `Test Reports/${brand}/_combined-${baseGeos.join('-')}/${dateStr}`;

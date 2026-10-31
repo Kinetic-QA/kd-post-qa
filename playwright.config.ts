@@ -74,7 +74,7 @@ const geosToRun = TEST_GEOS && TEST_GEOS.length > 0 ? TEST_GEOS : [TEST_GEO];
 // rerun of the same brand/GEO gets its own report folder and its own
 // test-results (screenshots/videos/traces) instead of silently overwriting
 // the previous run's — previously all three were keyed only by date.
-const { localTimeToken } = require('./helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string };
+const { localTimeToken, localDateToken } = require('./helpers/run-token.cjs') as { localTimeToken: (d?: Date) => string; localDateToken: (d?: Date) => string };
 process.env.PW_RUN_TOKEN = process.env.PW_RUN_TOKEN || localTimeToken();
 const runToken = process.env.PW_RUN_TOKEN;
 
@@ -93,7 +93,7 @@ const runToken = process.env.PW_RUN_TOKEN;
 // *.xlsx siblings directly inside the GEO folder — same-day reruns share
 // that date folder (latest overwrites, same as before), different days get
 // their own.
-const dateStr = new Date().toISOString().slice(0, 10);
+const dateStr = localDateToken();
 const reportRoot = geosToRun.length === 1
   ? `Test Reports/${TEST_BRAND}/${geosToRun[0]}/${dateStr}`
   : `Test Reports/${TEST_BRAND}/_combined-${geosToRun.join('-')}/${dateStr}`;
