@@ -112,13 +112,13 @@ starting GEO #2. Never auto-proceed to the next GEO.
 
 ## 6. Known Intentional Behaviors (not bugs — don't re-flag)
 
-None at present.
-
-Corrected 2026-11-10: the blog page header logo used to be listed here as
-intentional. It is not. Clicking the logo on a blog page must go to the
-blog's own homepage (`/blog/`), not the main site homepage. Slingo, Simba
-Games and Mega Casino currently send it to the main site homepage — that is a
-bug, not intended behavior, so do flag it.
+- The blog page header logo goes to the main site homepage, not `/blog/`, on
+  **Slingo** (all markets), **Simba Games UK** and **Mega Casino UK**. This is
+  intentional — confirmed by the SEO brand owner on 2026-11-10 (and earlier by
+  the dev team for Slingo). On every other brand, and on Mega Casino Spain, the
+  logo goes to the blog's own homepage; a brand that does not do that is a
+  bug. If a QA checklist item implies otherwise for those three brands, treat
+  the checklist as outdated, not the site.
 
 ## 7. How to Extend This File
 

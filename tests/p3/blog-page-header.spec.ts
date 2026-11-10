@@ -189,14 +189,18 @@ test.describe('P3 - Blog Page Header', () => {
     });
 
     await runStep('Step 4: Brand title click sends to blog homepage', async () => {
-      // Clicking the logo on a blog page must go to the blog's OWN homepage
-      // (/blog/), not the main site homepage — confirmed as an issue on
-      // 2026-11-10. Slingo (SC), Simba Games (SG) and Mega Casino (MC) send
-      // it to the main site root, which is a bug, so no brand is exempt any
-      // more. This step used to allow the site root for SC and SG ("confirmed
-      // intentional", 2026-07/08), which hid that bug; Spin Genie and Genting
-      // were already confirmed live on the blog homepage (2026-07-20/23).
-      const expectedUrl = siteUrl(geoFeatures.blogPath!);
+      // By default the logo on a blog page goes to the blog's OWN homepage
+      // (/blog/): confirmed live on SNG (2026-07-20, CA), GC (2026-07-23, ES)
+      // and MC ES. Three brands intentionally send it to the main site root
+      // instead — confirmed by the SEO brand owner on 2026-11-10 (briefly
+      // treated as a bug earlier that day, then reversed): Slingo (SC) in all
+      // its markets (dev team, earlier), Simba Games (SG) UK (confirmed live
+      // 2026-08-04) and Mega Casino (MC) UK. MC is per-market: MC ES goes to
+      // the blog homepage like the default, so only MC UK is in the exception.
+      const brandCode = (process.env.TEST_BRAND ?? 'SC').toUpperCase();
+      const marketName = test.info().project.name.replace(/-mobile$/, '');
+      const goesToSiteRoot = ['SC', 'SG'].includes(brandCode) || (brandCode === 'MC' && marketName === 'UK');
+      const expectedUrl = goesToSiteRoot ? siteUrl('') : siteUrl(geoFeatures.blogPath!);
 
       // Confirmed live on Simba Games (SG) UK 2026-08-04: this brand's
       // /blog/search/ is a genuine 404 (no working blog search feature at
@@ -219,6 +223,17 @@ test.describe('P3 - Blog Page Header', () => {
       await logo.click();
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(expectedUrl, { timeout: 10_000 });
+      // Confirmed live on Simba Games (SG) UK 2026-08-04: when the logo
+      // routes to the site root (goesToSiteRoot brands), later steps in
+      // this same test (e.g. Step 5's blog-specific mobile hamburger)
+      // still expect to be ON the blog — navigate back rather than leaving
+      // the test parked on the main site after this step's own check.
+      if (goesToSiteRoot) {
+        await page.goto(geoFeatures.blogPath!, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(1_000);
+        await dismissCampaignPopup(page);
+      }
     });
 
     await runStep('Step 5: Sidebar menu opens after clicking the 3-line icon', async () => {
