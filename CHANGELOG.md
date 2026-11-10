@@ -9,6 +9,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-11-10 (session 3)
+
+### Changed
+
+- **The team standards file now has its own Confluence page, and the RevWright project reads from it.** The page is called "RevWright Agent Standards". Until now someone had to upload `AGENT-STANDARDS.md` by hand to the RevWright project after every change. From now on the end-of-session routine updates both the file in the repo and the Confluence page, and the RevWright project pulls the standards from Confluence, so nothing needs uploading. Claude shows the page update first and only changes it once it is approved. Only the wording that describes this routine changed in `AGENT-STANDARDS.md`, `CLAUDE.md` and the quickstart guide; none of the standards themselves changed.
+
+---
+
 ## [Unreleased] - 2026-11-10 (session 2)
 
 ### Fixed

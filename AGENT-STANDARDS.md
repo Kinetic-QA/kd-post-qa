@@ -1,9 +1,11 @@
 # QA Automation Agent — Standards & Knowledge Base
 
-Upload this file to the RevWright Claude Project's Project Knowledge. It's the
-single source of truth for how this team writes and maintains Playwright QA
-automation against this repo — every teammate using RevWright to code here
-should be working from these same rules, regardless of who's driving.
+This file is mirrored on the Confluence page **RevWright Agent Standards** (QA
+Knowledge Base), and the RevWright Claude Project pulls its standards from that
+page — there is no manual upload. It's the single source of truth for how this
+team writes and maintains Playwright QA automation against this repo — every
+teammate using RevWright to code here should be working from these same rules,
+regardless of who's driving.
 
 This file covers **durable** standards and architecture. It intentionally
 does NOT include point-in-time status (current test pass rates, in-flight
@@ -124,6 +126,8 @@ starting GEO #2. Never auto-proceed to the next GEO.
 
 When a session surfaces a new durable rule (a coding convention, an
 architecture gotcha, a confirmed non-bug), add it here under the right
-section and re-upload to RevWright's Project Knowledge. Keep point-in-time
-status (what's currently passing, what's mid-rollout) out of this file —
-that belongs in CHANGELOG.md, Jira, or session-local memory instead.
+section, then update the Confluence page **RevWright Agent Standards** with the
+same change (and its Last synced date) at the end of the session. Keep
+point-in-time status (what's currently passing, what's mid-rollout) out of
+this file — that belongs in CHANGELOG.md, Jira, or session-local memory
+instead.
