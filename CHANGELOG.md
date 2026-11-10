@@ -9,12 +9,21 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-11-10 (session 2)
+
+### Fixed
+
+- **The blog logo check allows the main site homepage again for Slingo, Simba Games and Mega Casino UK.** Earlier today the check was tightened so these brands failed when the blog logo took you to the main homepage. The SEO brand owner has since confirmed that behaviour is intentional for these three, so it is not a problem and the earlier change is reversed. Mega Casino is covered for the UK site only — Mega Casino Spain still has to go to the blog homepage, like every other brand.
+- **The team standards file lists this as intentional again.** `AGENT-STANDARDS.md` now says the main-site logo behaviour is deliberate for those three brands (with the date and who confirmed it), and that any other brand sending the logo to the main homepage is a real problem.
+
+---
+
 ## [Unreleased] - 2026-11-10
 
 ### Fixed
 
-- **The blog logo check no longer lets Slingo and Simba Games off the hook.** Clicking the logo on a blog page is meant to take you back to the blog's own homepage. The check used to accept the main site homepage for Slingo and Simba Games, which hid a real problem. It now expects the blog homepage on every brand. Slingo and Simba Games UK will show a failure on that step until their websites are fixed, and Mega Casino sends the logo to the main site homepage too (its check already expected the blog homepage). A ticket is being raised for all three.
-- **The team standards file no longer calls this behaviour intentional.** `AGENT-STANDARDS.md` listed the main-site logo behaviour under "Known Intentional Behaviors — don't re-flag". That entry is removed, the list now says there are none at present, and a short note explains the correction.
+- **The blog logo check no longer lets Slingo and Simba Games off the hook.** *(Reversed later the same day — see the entry above.)* Clicking the logo on a blog page is meant to take you back to the blog's own homepage. The check used to accept the main site homepage for Slingo and Simba Games, which hid a real problem. It now expects the blog homepage on every brand. Slingo and Simba Games UK will show a failure on that step until their websites are fixed, and Mega Casino sends the logo to the main site homepage too (its check already expected the blog homepage). A ticket is being raised for all three.
+- **The team standards file no longer calls this behaviour intentional.** *(Reversed later the same day — see the entry above.)* `AGENT-STANDARDS.md` listed the main-site logo behaviour under "Known Intentional Behaviors — don't re-flag". That entry is removed, the list now says there are none at present, and a short note explains the correction.
 
 ---
 
