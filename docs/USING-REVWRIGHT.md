@@ -1,9 +1,9 @@
 # Using RevWright — Quickstart for the QA Team
 
 RevWright is our shared Claude agent for QA work on this repo. It already
-knows our coding standards and site architecture (see `AGENT-STANDARDS.md` in
-Project Knowledge) — this doc is just about how to actually work with it
-day-to-day.
+knows our coding standards and site architecture (see the Confluence page
+**RevWright Agent Standards**, which mirrors `AGENT-STANDARDS.md`) — this doc
+is just about how to actually work with it day-to-day.
 
 **RevWright (or Claude Code, for anyone working from the CLI) is the standard
 AI coding tool for this repo.** Please don't use other AI coding assistants

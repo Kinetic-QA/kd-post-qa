@@ -72,6 +72,10 @@ When the user says **"That's it for today"**, execute the full end-of-session pu
 2. Create a new branch — never push to `main` directly
 3. Stage, commit, and push
 4. After the push succeeds, create a Slack-ready update doc (see rules below)
+5. If `AGENT-STANDARDS.md` changed this session, draft the matching update to the
+   Confluence page **RevWright Agent Standards** and show it to the user; once
+   they approve, update that page and its "Last synced" date (see the
+   AGENT-STANDARDS.md Sync Rule below)
 
 ---
 
@@ -128,18 +132,25 @@ Every push **must** include a CHANGELOG.md update. The CI will hard-block any PR
 
 ## AGENT-STANDARDS.md Sync Rule
 
-`AGENT-STANDARDS.md` is the team-wide knowledge base uploaded to the RevWright
-Claude Project's Project Knowledge, so every teammate (on claude.ai or CLI)
-codes from the same standards. Project Knowledge does not auto-sync with git.
+`AGENT-STANDARDS.md` is the team-wide knowledge base. It is mirrored on the
+Confluence page **RevWright Agent Standards** (QA Knowledge Base space, page id
+358744065), and the RevWright Claude Project pulls its standards from that
+page — there is no manual upload to Project Knowledge any more — so every
+teammate (on claude.ai or CLI) codes from the same standards. The Confluence
+page does not auto-sync with git.
 
 - If a PR modifies `AGENT-STANDARDS.md`, review that diff like any other code
   change before merging.
-- After merging any PR that changed `AGENT-STANDARDS.md` to `main`/`develop`,
-  the merger (currently Reeve) re-uploads the merged version to RevWright's
-  Project Knowledge, replacing the previous file.
-- This is not a per-session or per-push step — only when the file itself
-  actually changed. Check `git log -- AGENT-STANDARDS.md` if unsure whether
-  the uploaded copy is behind.
+- When the file changes in a session, update the Confluence page to match at
+  the end of that session (Push Trigger step 5): sections 1–6 are identical,
+  and the page's "Last synced" date is set to that day. Only the intro and
+  the last section differ on purpose — each describes its own copy.
+- Claude drafts the Confluence update and shows it first; it writes to that
+  one page only after the user approves. Everything else in Confluence and
+  Jira stays read-only for Claude.
+- This is not a per-session step — only when the file itself actually
+  changed. Check `git log -- AGENT-STANDARDS.md` and the page's "Last synced"
+  date if unsure whether the Confluence page is behind.
 
 ---
 
