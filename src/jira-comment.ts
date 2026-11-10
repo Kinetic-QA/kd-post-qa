@@ -17,6 +17,10 @@
 // Re-sync this file by hand if the Confluence page changes.
 import type { TestRunResult } from './test-runner';
 
+// A run result plus the titles of the tests that passed, which the Checker adds
+// for the FAIL layout's Documentation section (Standing Rules #6/#12).
+export type CheckedRun = TestRunResult & { passedTests?: string[] };
+
 export function adfDoc(...content: object[]) {
   return { type: 'doc', version: 1, content };
 }
@@ -62,9 +66,21 @@ export interface VideoAttachment {
   filename: string;
 }
 
+// One Documentation bullet with the screenshot(s) made for it — one per
+// platform (Standing Rules #12/#13). When present, these ARE the Documentation.
+export interface DocBullet {
+  text: string;
+  images: { thumbnailUrl: string }[];
+}
+
 export interface CommentContext {
   geo?: string;
+  documentation?: DocBullet[];
   platform?: string; // default 'Desktop' — automated Playwright runs are desktop-only today
+  // The actual pages / named site sections the ticket covers (Standing Rules
+  // #6: "Homepage", "Promotions" — never test-category labels or check
+  // statements). Shown under Scope Checked.
+  scopePages?: string[];
   // Itemised notes for the Remarks section (Standing Rules #12) — an inferred
   // GEO/URL, how a check was carried out. Omitted entirely when empty; never
   // padded in just to exist.
@@ -85,6 +101,53 @@ export function retestAllFixed(r: RetestContext | undefined): boolean {
   return !r || (r.flagged.length > 0 && r.flagged.every((_, i) => r.fixed[i] === true));
 }
 
+// A bullet list whose items can hold more than one block (a line of text and
+// its screenshot, a flagged line and its "fixed" note).
+export function adfRichBulletList(...items: object[][]): object {
+  return {
+    type: 'bulletList',
+    content: items.map(blocks => ({ type: 'listItem', content: blocks })),
+  };
+}
+
+// A bullet list with its screenshots directly under the bullet they evidence
+// (Standing Rules #13). The checks produce one image set per run, not one
+// image per bullet, so images are only nested when there is exactly one per
+// bullet — otherwise guessing a pairing could put a screenshot under a bullet
+// it does not show, so they follow the list instead.
+export function bulletsWithEvidence(entries: object[][], attachments: { thumbnailUrl: string }[]): object[] {
+  if (entries.length > 0 && attachments.length === entries.length) {
+    return [adfRichBulletList(...entries.map((blocks, i) => [...blocks, adfImage(attachments[i].thumbnailUrl)]))];
+  }
+  return [adfRichBulletList(...entries), ...evidenceImages(attachments)];
+}
+
+const textEntries = (lines: string[]): object[][] => lines.map(l => [adfPara(adfText(l))]);
+
+// "---" then Documentation: the record of what passed, with its screenshots.
+// On every comment that has at least one passing item (Standing Rules #6/#12).
+export function documentationNodes(entries: object[][], attachments: { thumbnailUrl: string }[] = []): object[] {
+  return [adfRule(), adfPara(adfBold('Documentation')), ...bulletsWithEvidence(entries, attachments)];
+}
+
+// What stands under Scope Checked when the ticket named no page: an obvious
+// placeholder to correct, never a check statement or test-category label.
+export const SCOPE_PLACEHOLDER = '(pages not stated — see ticket)';
+
+export function scopeItemsFor(ctx: CommentContext = {}): string[] {
+  const pages = (ctx.scopePages ?? []).map(p => p.trim()).filter(Boolean);
+  return pages.length > 0 ? pages : [SCOPE_PLACEHOLDER];
+}
+
+// Re-test line for a fixed issue (Standing Rules #8): the flagged line copied
+// whole with "← ✅ FIXED" (FIXED in bold), then one short line on why.
+const FIXED_NOTE = 'This was re-checked and is now considered fixed.';
+function fixedEntries(retest: RetestContext): object[][] {
+  return retest.flagged
+    .filter((_, i) => retest.fixed[i])
+    .map(l => [adfPara(adfText(`${l} ← ✅ `), adfBold('FIXED')), adfPara(adfText(FIXED_NOTE))]);
+}
+
 // Everything under the Overall Result verdict line for a re-test comment.
 // PASS: each flagged line copied whole with "← ✅ FIXED", under Documentation.
 // FAIL: still-failing items first with what is observed now, then any fixed
@@ -96,32 +159,26 @@ export function retestNodes(
   attachments: { thumbnailUrl: string }[],
   observed: string,
 ): object[] {
-  const fixedLines = retest.flagged.filter((_, i) => retest.fixed[i]).map(l => `${l} ← ✅ FIXED`);
+  const fixed = fixedEntries(retest);
   const failing = retest.flagged.filter((_, i) => !retest.fixed[i]);
-  const fixedBlock = fixedLines.length > 0
-    ? [adfRule(), adfPara(adfBold('Documentation')), adfBulletList(...fixedLines)]
-    : [];
 
   if (success) {
     return [
       adfPara(adfText(`No issues were identified during ${phase === 'post-check' ? 'post-checking' : 'pre-checking'}.`)),
-      ...fixedBlock,
-      adfPara(adfText('Each flagged issue was re-checked and is now considered fixed.')),
-      ...evidenceImages(attachments),
+      ...documentationNodes(fixed, attachments),
     ];
   }
   return [
     ...(phase === 'post-check' ? [adfPara(adfText(POST_CHECK_FAIL_SENTENCE))] : []),
-    adfBulletList(...failing.map(l => `${l} — still failing: ${observed}`)),
-    ...evidenceImages(attachments),
-    ...fixedBlock,
+    ...bulletsWithEvidence(textEntries(failing.map(l => `${l} — still failing: ${observed}`)), attachments),
+    ...(fixed.length > 0 ? documentationNodes(fixed) : []),
   ];
 }
 
 // Shared "Platform and GEOs Checked" bullet pair — same two-line shape
 // (GEO: <x> / Platform: <y>) the format reference specifies for every
 // comment, functional or visual.
-function platformGeoBullets(ctx: CommentContext = {}): object {
+export function platformGeoBullets(ctx: CommentContext = {}): object {
   return adfBulletList(
     `GEO: ${ctx.geo || '(not resolved — see ticket)'}`,
     `Platform: ${ctx.platform || 'Desktop'}`,
@@ -130,6 +187,18 @@ function platformGeoBullets(ctx: CommentContext = {}): object {
 
 // Fixed wording from the QA Reporting Protocols §7.5 / Standing Rules #12.
 export const POST_CHECK_FAIL_SENTENCE = 'There are still issues found in the post-check. We will file a ticket for this.';
+
+// A post-check runs against the live site, logged out (Post-Check Standard,
+// Protocol §5.5) — say so in Remarks (Standing Rules #12 default lines, as of
+// 2026-10-14). A pre-check has no default Remarks.
+export function postCheckRemarks(phase: CheckPhase, geo: string | undefined): string[] | undefined {
+  return phase === 'post-check'
+    ? [
+        'The platform was taken from the pre-check.',
+        `The page was checked on the live ${geo ? `${geo} ` : ''}site, logged out.`,
+      ]
+    : undefined;
+}
 
 // Screenshots go inline in the comment body, directly under the item they
 // evidence (Standing Rules #13) — images only, never a separate caption line
@@ -145,17 +214,21 @@ export function remarksNodes(ctx: CommentContext = {}): object[] {
   return items.length > 0 ? [adfPara(adfBold('Remarks')), adfBulletList(...items)] : [];
 }
 
+// "16 October 2026" — the date in the Pre-Checked / Post-Checked header.
+export function commentDate(date: Date = new Date()): string {
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 export function buildCommentAdf(
-  result: TestRunResult,
+  result: CheckedRun,
   attachments: { thumbnailUrl: string; filename: string }[],
   checkItems: string[],
   phase: CheckPhase = 'pre-check',
   videos: VideoAttachment[] = [],
   ctx: CommentContext = {},
 ): object {
-  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const today = commentDate();
   const testLabel = result.testType.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-  const scopeItems = checkItems.length > 0 ? checkItems : [`${testLabel} Flow`];
   const headerLabel = phase === 'post-check' ? 'Post-Checked' : 'Pre-Checked';
   const phaseWord = phase === 'post-check' ? 'post-checking' : 'pre-checking';
 
@@ -165,7 +238,7 @@ export function buildCommentAdf(
   const nodes: object[] = [
     adfPara(adfBold(`${headerLabel} (${today})`)),
     adfPara(adfBold('Scope Checked')),
-    adfBulletList(...scopeItems),
+    adfBulletList(...scopeItemsFor(ctx)),
     adfPara(adfBold('Platform and GEOs Checked')),
     platformGeoBullets(ctx),
     adfPara(adfBold('Overall Result')),
@@ -186,26 +259,28 @@ export function buildCommentAdf(
     nodes.push(
       adfPara(adfText(`✅ `), adfBold('PASS')),
       adfPara(adfText(`No issues were identified during ${phaseWord}.`)),
-      adfRule(),
-      adfPara(adfBold('Documentation')),
-      checkItems.length > 0
-        ? adfBulletList(...checkItems)
-        : adfBulletList(`${testLabel} flow confirmed working.`),
-      ...evidenceImages(attachments),
+      ...(ctx.documentation && ctx.documentation.length > 0
+        ? documentationNodes(ctx.documentation.map(d => [adfPara(adfText(d.text)), ...evidenceImages(d.images)]))
+        : documentationNodes(
+            textEntries(checkItems.length > 0 ? checkItems : [`${testLabel} flow confirmed working.`]),
+            attachments,
+          )),
     );
   } else {
     // One bullet per defect, stated as a factual mismatch, evidence directly
     // underneath. The post-check FAIL closing sentence is fixed wording; a
-    // pre-check FAIL has no closing line (Standing Rules #7).
+    // pre-check FAIL has no closing line (Standing Rules #7). Anything that
+    // passed in the same run is still recorded under Documentation (#6/#12).
     const errItems = result.errors.length
       ? result.errors
       : ['Test failed — no error details captured'];
+    const passedItems = result.passedTests ?? [];
 
     nodes.push(
       adfPara(adfText(`❌ `), adfBold('FAIL')),
       ...(phase === 'post-check' ? [adfPara(adfText(POST_CHECK_FAIL_SENTENCE))] : []),
-      adfBulletList(...errItems),
-      ...evidenceImages(attachments),
+      ...bulletsWithEvidence(textEntries(errItems), attachments),
+      ...(passedItems.length > 0 ? documentationNodes(textEntries(passedItems)) : []),
     );
   }
 
@@ -231,8 +306,15 @@ export function adfDocToPreviewText(doc: { content: any[] }): string {
       lines.push((node.content ?? []).map((n: any) => n.text ?? '').join(''));
     } else if (node.type === 'bulletList') {
       for (const item of node.content ?? []) {
-        const text = (item.content?.[0]?.content ?? []).map((n: any) => n.text ?? '').join('');
-        lines.push(`  • ${text}`);
+        // A bullet can hold several blocks: its own text first, then any
+        // follow-up line or the screenshot nested under it.
+        (item.content ?? []).forEach((block: any, i: number) => {
+          if (block.type === 'mediaSingle') lines.push('      [screenshot]');
+          else {
+            const text = (block.content ?? []).map((n: any) => n.text ?? '').join('');
+            lines.push(i === 0 ? `  • ${text}` : `    ${text}`);
+          }
+        });
       }
     } else if (node.type === 'mediaSingle') {
       lines.push('  [screenshot]');
@@ -246,6 +328,6 @@ export function adfDocToPreviewText(doc: { content: any[] }): string {
 // Plain-text render of the same comment, for the GUI's pre-Commit preview —
 // screenshots aren't uploaded yet at preview time, so attachments are never
 // passed here (Commit builds the real ADF version, with attachments, itself).
-export function commentPreviewText(result: TestRunResult, checkItems: string[], phase: CheckPhase = 'pre-check', ctx: CommentContext = {}): string {
+export function commentPreviewText(result: CheckedRun, checkItems: string[], phase: CheckPhase = 'pre-check', ctx: CommentContext = {}): string {
   return adfDocToPreviewText(buildCommentAdf(result, [], checkItems, phase, [], ctx) as { content: any[] });
 }

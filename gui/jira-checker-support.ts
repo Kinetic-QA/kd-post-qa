@@ -2,7 +2,10 @@
 // what prior QA comments say, whether the ticket is ready (Protocol §2.2), and
 // whether this pass is a re-test (Standing Rules #8, Protocol §5.5/§5.6).
 // Pure functions, no Jira calls — jira-checker.ts fetches, this interprets.
+import * as fs from 'fs';
+import * as path from 'path';
 import type { JiraComment } from '../src/jira-client';
+import { commentDate } from '../src/jira-comment';
 import type { CheckPhase } from '../src/jira-comment';
 
 // ── Prior QA comments ────────────────────────────────────────────────────────
@@ -11,7 +14,7 @@ export interface PriorQaComment {
   id: string;
   created: string;
   authorName: string;
-  header: string;            // e.g. "Pre-Checked (16/10/2026)"
+  header: string;            // e.g. "Pre-Checked (16 October 2026)"
   phase: CheckPhase;
   verdict: 'pass' | 'fail' | 'unknown';
   flaggedIssues: string[];   // the defect bullets under a FAIL Overall Result
@@ -64,8 +67,14 @@ export function parseQaComments(comments: JiraComment[]): PriorQaComment[] {
   return comments.map(parseQaComment).filter((c): c is PriorQaComment => c !== null);
 }
 
-// DD/MM/YYYY, the date format the comment headers use.
+// The date as the comment headers write it ("16 October 2026").
 export function todayHeaderDate(now = new Date()): string {
+  return commentDate(now);
+}
+
+// Headers written before the long format used DD/MM/YYYY — a pass posted
+// earlier today in that style is still today's pass.
+function legacyHeaderDate(now = new Date()): string {
   return now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
@@ -80,7 +89,7 @@ export function findSamePassComment(
   for (const c of [...comments].reverse()) {
     if (c.authorAccountId !== myAccountId) continue;
     const q = parseQaComment(c);
-    if (q && q.phase === phase && q.header.includes(`(${today})`)) return q;
+    if (q && q.phase === phase && (q.header.includes(`(${today})`) || q.header.includes(`(${legacyHeaderDate()})`))) return q;
   }
   return null;
 }
@@ -176,4 +185,44 @@ export function buildReadiness(i: ReadinessInput): ReadinessItem[] {
   items.push({ label: 'Status matches the check', level: 'ok', detail: `"${i.status}" — ${expectedStatus} expected for a ${i.phase}.` });
 
   return items;
+}
+
+// ── Passed tests of the run that just finished ───────────────────────────────
+
+// Titles of the tests that passed in the newest results.json written since
+// `sinceMs` under Test Reports/<brand>/<geo>/ — for a FAIL comment's
+// Documentation section, so passed tests are still recorded (Standing Rules
+// #6/#12). Empty when the results file can't be found or read.
+export function passedTestTitles(brand: string | undefined, geo: string | undefined, sinceMs: number): string[] {
+  if (!brand || !geo) return [];
+  const base = path.join(process.cwd(), 'Test Reports', brand, geo);
+  let newest: { file: string; mtime: number } | undefined;
+  try {
+    for (const day of fs.readdirSync(base)) {
+      const dayDir = path.join(base, day);
+      if (!fs.statSync(dayDir).isDirectory()) continue;
+      for (const run of fs.readdirSync(dayDir)) {
+        if (!run.startsWith('run-')) continue;
+        const file = path.join(dayDir, run, 'test-results', 'results.json');
+        if (!fs.existsSync(file)) continue;
+        const mtime = fs.statSync(file).mtimeMs;
+        if (mtime >= sinceMs - 2_000 && (!newest || mtime > newest.mtime)) newest = { file, mtime };
+      }
+    }
+    if (!newest) return [];
+    const titles: string[] = [];
+    const walk = (suites: any[]) => {
+      for (const suite of suites || []) {
+        for (const spec of suite.specs || []) {
+          const passed = (spec.tests || []).some((t: any) => (t.results || []).some((r: any) => r.status === 'passed'));
+          if (passed && spec.title && !titles.includes(spec.title)) titles.push(spec.title);
+        }
+        walk(suite.suites);
+      }
+    };
+    walk(JSON.parse(fs.readFileSync(newest.file, 'utf-8')).suites);
+    return titles;
+  } catch {
+    return [];
+  }
 }

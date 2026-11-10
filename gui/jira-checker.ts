@@ -15,25 +15,27 @@ import * as path from 'path';
 import * as os from 'os';
 import { JiraClient, JiraComment } from '../src/jira-client';
 import { parseTestType } from '../src/requirements-parser';
-import { interpretTicket, VisualCheckKind, DraftedTestCase } from '../src/ticket-interpreter';
+import { interpretTicket, normalizeEvidencePlan, splitOutOfScope, VisualCheckKind, DraftedTestCase, EvidenceTarget } from '../src/ticket-interpreter';
 import { resolveTestFile, runPlaywrightTest, SUPPORTED_TEST_TYPES, TestRunResult } from '../src/test-runner';
 import { getQAUrl, getLiveUrl, getBrandEntry, resolveBrandFromProjectKey } from '../helpers/brand-urls';
 import {
   buildCommentAdf, commentPreviewText, adfDocToPreviewText,
   adfDoc, adfPara, adfBold, adfText, adfBulletList,
-  adfRule, evidenceImages, remarksNodes, retestNodes, retestAllFixed, POST_CHECK_FAIL_SENTENCE,
-  CheckPhase, VideoAttachment, CommentContext, RetestContext,
+  adfRule, remarksNodes, retestNodes, retestAllFixed, POST_CHECK_FAIL_SENTENCE,
+  documentationNodes, bulletsWithEvidence, scopeItemsFor, platformGeoBullets, postCheckRemarks, commentDate,
+  CheckPhase, VideoAttachment, CommentContext, RetestContext, DocBullet, CheckedRun,
 } from '../src/jira-comment';
 import {
   parseQaComments, findSamePassComment, detectRetest, buildReadiness,
-  RetestInfo, ReadinessItem,
+  RetestInfo, ReadinessItem, passedTestTitles,
 } from './jira-checker-support';
 import {
   draftBugTickets, normaliseBugEdit, checkBugEdit, buildBugFields,
 } from './jira-checker-bug';
 import { captureFullPageScreenshot, captureMultipleFrames } from './screenshot-capture';
 import { compareVisual, VisualCompareResult } from './visual-compare';
-import { annotateEvidence, todayDdMmYyyy } from '../src/evidence-annotate';
+import { annotateEvidence } from '../src/evidence-annotate';
+import { captureBulletEvidence, BulletEvidence } from './evidence-capture';
 
 // What a "visual check" needs varies by kind — situational, not fixed:
 // site-vs-site needs two live URLs (QA vs Production); asset-vs-site needs
@@ -69,28 +71,27 @@ const POST_CHECK_STATUSES = ['production qa', 'approved'];
 // 'asset-vs-site', a brand-new image rollout — neither is "the" fallback,
 // each is the right tool for a different kind of ticket). Both reuse the
 // existing Visual Check tab's own compareVisual() modes/prompts as-is.
-const VISUAL_LABELS: Record<'site-vs-site' | 'asset-vs-site', { scopeFallback: string }> = {
-  'site-vs-site': {
-    scopeFallback: 'QA vs Production content/visual comparison',
-  },
-  'asset-vs-site': {
-    scopeFallback: 'New/changed asset renders correctly on the live site',
-  },
-};
 
-function buildVisualCommentAdf(
+// One defect as a plain factual line — no severity tag (Standing Rules #7).
+function findingLine(f: { title: string; description: string; location?: string }): string {
+  return `${f.title} — ${f.description}${f.location ? ` (${f.location})` : ''}`;
+}
+
+// One confirmed field as a plain factual line, not a data row.
+function confirmedLine(r: { field: string; siteValue: string }): string {
+  return `${r.field} matches: ${r.siteValue}`;
+}
+
+export function buildVisualCommentAdf(
   visualKind: 'site-vs-site' | 'asset-vs-site',
   result: VisualCompareResult,
   attachments: { thumbnailUrl: string; filename: string }[],
-  checkItems: string[],
   phase: CheckPhase,
   ctx: CommentContext = {},
 ): object {
-  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const today = commentDate();
   const headerLabel = phase === 'post-check' ? 'Post-Checked' : 'Pre-Checked';
-  const labels = VISUAL_LABELS[visualKind];
   const success = result.status === 'matched' || result.status === 'no_issues_found';
-  const scopeItems = checkItems.length > 0 ? checkItems : [labels.scopeFallback];
 
   // Shared skeleton per the Jira Comment Format Reference — same shape
   // buildCommentAdf() uses for functional checks: header, Scope Checked,
@@ -99,12 +100,9 @@ function buildVisualCommentAdf(
   const nodes: object[] = [
     adfPara(adfBold(`${headerLabel} (${today})`)),
     adfPara(adfBold('Scope Checked')),
-    adfBulletList(...scopeItems),
+    adfBulletList(...scopeItemsFor(ctx)),
     adfPara(adfBold('Platform and GEOs Checked')),
-    adfBulletList(
-      `GEO: ${ctx.geo || '(not resolved — see ticket)'}`,
-      `Platform: ${ctx.platform || 'Desktop'} — AI-assisted visual check (${visualKind})`,
-    ),
+    platformGeoBullets(ctx),
     adfPara(adfBold('Overall Result')),
   ];
 
@@ -116,35 +114,31 @@ function buildVisualCommentAdf(
   // its screenshots inline underneath (#13) — present on every comment that
   // has at least one passing item, after a divider.
   const passedRows = result.breakdown.filter(r => r.match);
-  const rowLine = (r: { field: string; assetValue: string; siteValue: string }) =>
-    `${r.field}: ${r.assetValue} | ${r.siteValue} ✅`;
+  const docEntries = (lines: string[]) => lines.map(l => [adfPara(adfText(l))]);
 
   if (ctx.retest) {
     nodes.push(...retestNodes(passed, phase, ctx.retest, attachments, result.findings[0]?.title ?? 'see evidence'));
   } else if (success) {
     nodes.push(
       adfPara(adfText(`No issues were identified during ${phase === 'post-check' ? 'post-checking' : 'pre-checking'}.`)),
-      adfRule(),
-      adfPara(adfBold('Documentation')),
-      adfBulletList(
+      ...documentationNodes(docEntries([
         visualKind === 'site-vs-site'
           ? 'No meaningful visual/content differences found between QA and Production.'
           : 'The asset is present and matches on the live site.',
-        ...passedRows.map(rowLine),
-      ),
-      ...evidenceImages(attachments),
+        ...passedRows.map(confirmedLine),
+      ]), attachments),
     );
   } else {
     // One bullet per defect, stated as a factual mismatch, evidence directly
     // underneath. The post-check FAIL sentence is fixed wording; a pre-check
     // FAIL has no closing line (Standing Rules #7/#12).
     const findingLines = result.findings.length
-      ? result.findings.map(f => `[${f.severity.toUpperCase()}] ${f.title} — ${f.description}${f.location ? ` (${f.location})` : ''}`)
+      ? result.findings.map(findingLine)
       : ['Visual mismatch detected — see evidence.'];
     if (phase === 'post-check') nodes.push(adfPara(adfText(POST_CHECK_FAIL_SENTENCE)));
-    nodes.push(adfBulletList(...findingLines), ...evidenceImages(attachments));
+    nodes.push(...bulletsWithEvidence(docEntries(findingLines), attachments));
     if (passedRows.length > 0) {
-      nodes.push(adfRule(), adfPara(adfBold('Documentation')), adfBulletList(...passedRows.map(rowLine)));
+      nodes.push(...documentationNodes(docEntries(passedRows.map(confirmedLine))));
     }
   }
 
@@ -156,11 +150,10 @@ function buildVisualCommentAdf(
 function visualCommentPreviewText(
   visualKind: 'site-vs-site' | 'asset-vs-site',
   result: VisualCompareResult,
-  checkItems: string[],
   phase: CheckPhase,
   ctx: CommentContext = {},
 ): string {
-  return adfDocToPreviewText(buildVisualCommentAdf(visualKind, result, [], checkItems, phase, ctx) as { content: any[] });
+  return adfDocToPreviewText(buildVisualCommentAdf(visualKind, result, [], phase, ctx) as { content: any[] });
 }
 
 function detectPhase(status: string): CheckPhase | null {
@@ -192,6 +185,12 @@ function getErrorMessage(e: unknown): string {
 // Carried by every session kind: Remarks lines for the comment, and — when this
 // pass is a re-test — which of the flagged issues are now fixed.
 interface SessionExtras {
+  // The pages the ticket covers — the comment's Scope Checked list.
+  scopePages?: string[];
+  // Where to photograph each check statement, and the screenshots made from it
+  // (one set per Documentation bullet — Standing Rules #12/#13).
+  evidencePlan?: (EvidenceTarget | null)[];
+  bulletEvidence?: BulletEvidence[];
   remarks?: string[];
   retest?: RetestContext;
   // New bug tickets already created for this pass, by draft id — a retry after
@@ -204,7 +203,7 @@ interface PlaywrightCheckSession extends SessionExtras {
   testType: string;
   testFile: string;
   checkItems: string[];
-  testResult: TestRunResult;
+  testResult: CheckedRun;
   phase: CheckPhase;
   geo?: string;
   // The site the test ran against — drawn into each screenshot's caption.
@@ -262,7 +261,7 @@ function failingItems(s: CheckSession): string[] {
     return s.testResult.errors.length ? s.testResult.errors : ['Test failed — no error details captured'];
   }
   return s.result.findings.length
-    ? s.result.findings.map(f => `${f.title} — ${f.description}${f.location ? ` (${f.location})` : ''}`)
+    ? s.result.findings.map(findingLine)
     : ['Visual mismatch detected — see evidence'];
 }
 
@@ -275,7 +274,7 @@ interface EvidenceImage { filename: string; buffer: Buffer }
 
 async function annotatedEvidence(s: CheckSession): Promise<{ images: EvidenceImage[]; warnings: string[] }> {
   const verdict = sessionSuccess(s) ? 'pass' : 'fail';
-  const date = todayDdMmYyyy();
+  const date = commentDate();
   const warnings: string[] = [];
   const draw = async (raw: Buffer, filename: string, label: string | undefined, url: string | undefined): Promise<EvidenceImage> => {
     const out = await annotateEvidence(raw, { verdict, label, url, geo: s.geo, platform: 'Desktop', date });
@@ -285,6 +284,13 @@ async function annotatedEvidence(s: CheckSession): Promise<{ images: EvidenceIma
   };
 
   const images: EvidenceImage[] = [];
+  if (s.kind === 'playwright' && s.bulletEvidence) {
+    // Already boxed, captioned and made for their own bullet.
+    return {
+      images: s.bulletEvidence.flatMap(b => b.images.map(i => ({ filename: i.filename, buffer: i.buffer }))),
+      warnings,
+    };
+  }
   if (s.kind === 'playwright') {
     for (const p of s.testResult.screenshotPaths) {
       images.push(await draw(fs.readFileSync(p), path.basename(p), undefined, s.url));
@@ -323,6 +329,27 @@ async function uploadEvidence(
   return attachments;
 }
 
+// Uploads each bullet's own screenshots and returns their addresses in the same
+// bullet / image order, so each lands under its bullet. A failed upload leaves
+// an empty address (dropped from the comment) and a warning — never a shifted pairing.
+async function uploadBulletEvidence(jira: JiraClient, key: string, s: CheckSession, warnings: string[]): Promise<string[][]> {
+  const urls: string[][] = [];
+  for (const b of s.bulletEvidence ?? []) {
+    const row: string[] = [];
+    for (const img of b.images) {
+      try {
+        const att = await uploadBufferAsAttachment(jira, key, img.buffer, img.filename);
+        row.push(att.thumbnailUrl);
+      } catch (e) {
+        row.push('');
+        warnings.push(`Could not upload screenshot ${img.filename}: ${getErrorMessage(e)}`);
+      }
+    }
+    urls.push(row);
+  }
+  return urls;
+}
+
 // The evidence a new ticket carries: the same screenshots the comment shows.
 async function attachSessionEvidence(jira: JiraClient, ticketKey: string, s: CheckSession): Promise<string[]> {
   const failed: string[] = [];
@@ -334,13 +361,36 @@ async function attachSessionEvidence(jira: JiraClient, ticketKey: string, s: Che
   return failed;
 }
 
-function sessionCtx(s: CheckSession): CommentContext {
-  return { geo: s.geo, remarks: s.remarks, retest: s.retest };
+// Per-bullet screenshots as comment content. `urls` are the uploaded
+// attachments' addresses, one list per bullet; without them (the preview) each
+// image is a placeholder.
+function bulletDocs(s: CheckSession, urls?: string[][]): DocBullet[] | undefined {
+  if (!s.bulletEvidence?.length) return undefined;
+  return s.bulletEvidence.map((b, i) => ({
+    text: b.text,
+    images: b.images
+      .map((_, j) => ({ thumbnailUrl: urls?.[i]?.[j] ?? '' }))
+      .filter(img => !urls || img.thumbnailUrl !== ''),
+  }));
+}
+
+// "Desktop/Mobile" once any bullet carries a mobile screenshot (Standing Rules #12).
+function platformLabel(s: CheckSession): string | undefined {
+  const platforms = new Set((s.bulletEvidence ?? []).flatMap(b => b.images.map(i => i.platform)));
+  if (platforms.has('Desktop') && platforms.has('Mobile')) return 'Desktop/Mobile';
+  return platforms.has('Mobile') ? 'Mobile' : undefined;
+}
+
+function sessionCtx(s: CheckSession, docUrls?: string[][]): CommentContext {
+  return {
+    geo: s.geo, scopePages: s.scopePages, remarks: s.remarks, retest: s.retest,
+    documentation: bulletDocs(s, docUrls), platform: platformLabel(s),
+  };
 }
 
 function sessionPreview(s: CheckSession): string {
   if (s.kind === 'playwright') return commentPreviewText(s.testResult, s.checkItems, s.phase, sessionCtx(s));
-  return visualCommentPreviewText(s.visualKind, s.result, s.checkItems, s.phase, sessionCtx(s));
+  return visualCommentPreviewText(s.visualKind, s.result, s.phase, sessionCtx(s));
 }
 
 // Default re-test state: every flagged issue fixed only if the automated check
@@ -352,10 +402,10 @@ function retestFromBody(body: unknown, automated: boolean): RetestContext | unde
   return { flagged: lines, fixed: lines.map(() => automated) };
 }
 
-// Post-check runs against the live site, logged out (Post-Check Standard,
-// Protocol §5.5) — say so in Remarks (Standing Rules #12 default line).
-function postCheckRemarks(phase: CheckPhase, geo: string | undefined): string[] | undefined {
-  return phase === 'post-check' ? [`The page was checked on the live ${geo ? `${geo} ` : ''}site, logged out.`] : undefined;
+// The pages from a request body, as plain non-empty strings.
+function scopePagesFromBody(body: unknown): string[] {
+  const pages = (body as { scopePages?: unknown } | undefined)?.scopePages;
+  return Array.isArray(pages) ? pages.map(String).map(p => p.trim()).filter(Boolean) : [];
 }
 
 // In-memory only — a POC-scale hold between "Check" and "Commit" on the same
@@ -484,6 +534,8 @@ export function registerJiraCheckerRoutes(app: Express): void {
     // not just a testType fallback.
     let testType: string | null = parseTestType(ticket.description);
     let checkItems: string[] = [];
+    let scopePages: string[] = [];
+    let evidencePlan: (EvidenceTarget | null)[] = [];
     let params: Record<string, string> = {};
     let confidence: 'high' | 'low' = 'high';
     let visualCheckKind: VisualCheckKind = 'none';
@@ -496,10 +548,21 @@ export function registerJiraCheckerRoutes(app: Express): void {
     if (interpreted) {
       testType = testType ?? interpreted.testType;
       checkItems = interpreted.checkItems;
+      scopePages = interpreted.scopePages;
+      evidencePlan = interpreted.evidencePlan;
       params = interpreted.params;
       confidence = interpreted.confidence;
       visualCheckKind = interpreted.visualCheckKind;
       testCases = interpreted.testCases;
+    }
+    // On the functional path only statements the test can prove stay in the
+    // comment; the visual-only ones are listed in the readiness box instead.
+    let droppedStatements: string[] = [];
+    if (testType && resolveTestFile(testType)) {
+      const split = splitOutOfScope(checkItems, evidencePlan);
+      checkItems = split.items;
+      evidencePlan = split.plan;
+      droppedStatements = split.dropped;
     }
     const testCasesWarning = interpreted ? undefined : TEST_CASE_FAILURE_WARNING;
     if (resolvedBrand) params.BRAND = resolvedBrand;
@@ -519,6 +582,13 @@ export function registerJiraCheckerRoutes(app: Express): void {
       geo: params.GEO,
       envUrl,
     });
+    if (droppedStatements.length > 0) {
+      readiness.push({
+        label: 'Left out of the comment',
+        level: 'warn',
+        detail: `The automated test does not measure size, layout or responsiveness, so these statements are not in the comment: ${droppedStatements.map(s => `"${s}"`).join('; ')}. Check them with a visual check if they matter.`,
+      });
+    }
     // Everything the Checker adds on top of the basic ticket facts.
     const extra = () => ({
       ...priors,
@@ -559,6 +629,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
           mode: 'visual',
           phase,
           checkItems,
+          scopePages,
           confidence,
           params,
           visualCheck: visualCheckOption,
@@ -661,6 +732,8 @@ export function registerJiraCheckerRoutes(app: Express): void {
       testType,
       testFile,
       checkItems,
+      scopePages,
+      evidencePlan,
       confidence,
       params,
       testCases,
@@ -719,20 +792,47 @@ export function registerJiraCheckerRoutes(app: Express): void {
       process.env[`QA_${k}`] = String(v);
     }
 
-    let testResult: TestRunResult;
+    let testResult: CheckedRun;
     try {
+      const startedAt = Date.now();
       testResult = runPlaywrightTest(testType, testFile);
+      testResult.passedTests = passedTestTitles(process.env.TEST_BRAND, process.env.TEST_GEO, startedAt);
     } catch (e) {
       res.status(500).json({ error: `Test runner failed: ${getErrorMessage(e)}` });
       return;
     }
 
     const session: PlaywrightCheckSession = {
-      kind: 'playwright', testType, testFile, checkItems: checkItems ?? [], testResult, phase, geo: params?.GEO,
+      kind: 'playwright', testType, testFile, checkItems: checkItems ?? [], scopePages: scopePagesFromBody(req.body),
+      evidencePlan: normalizeEvidencePlan(req.body?.evidencePlan, (checkItems ?? []).length),
+      testResult, phase, geo: params?.GEO,
       url: params?.QA_BASE_URL,
       remarks: postCheckRemarks(phase, params?.GEO),
       retest: retestFromBody(req.body?.retest, testResult.success),
     };
+    // One screenshot set per Documentation bullet, boxed on the live page —
+    // only for a passing first check (a re-test and a FAIL keep the run's own
+    // screenshots). If nothing could be captured the comment falls back to the
+    // run screenshots, with the reason shown as a warning.
+    const captureWarnings: string[] = [];
+    if (testResult.success && !session.retest && session.evidencePlan?.some(Boolean) && params?.QA_BASE_URL && session.checkItems.length > 0) {
+      try {
+        const cap = await captureBulletEvidence({
+          baseUrl: params.QA_BASE_URL,
+          items: session.checkItems,
+          plan: session.evidencePlan,
+          verdict: 'pass',
+          geo: params?.GEO,
+          date: commentDate(),
+          scopePages: session.scopePages,
+        });
+        captureWarnings.push(...cap.warnings);
+        if (cap.bullets.some(b => b.images.length > 0)) session.bulletEvidence = cap.bullets;
+        else captureWarnings.push('No per-bullet screenshot could be captured, so the check\'s own screenshots are used instead.');
+      } catch (e) {
+        captureWarnings.push(`Per-bullet screenshots could not be captured (${getErrorMessage(e)}), so the check's own screenshots are used instead.`);
+      }
+    }
     checkSessions.set(key, session);
 
     // Real inline images, not just a count — this is what actually posts to
@@ -758,7 +858,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
       durationMs: testResult.durationMs,
       errors: testResult.errors,
       screenshots,
-      evidenceWarnings: evidence.warnings,
+      evidenceWarnings: [...captureWarnings, ...evidence.warnings],
       videoFilenames,
       preview: sessionPreview(session),
     });
@@ -801,7 +901,8 @@ export function registerJiraCheckerRoutes(app: Express): void {
       }
 
       const session: SiteVsSiteSession = {
-        kind: 'visual', visualKind: 'site-vs-site', checkItems, phase, result, qaBuffer, prodBuffer, qaUrl, liveUrl, geo,
+        kind: 'visual', visualKind: 'site-vs-site', checkItems, scopePages: scopePagesFromBody(req.body), phase, result, qaBuffer, prodBuffer, qaUrl, liveUrl, geo,
+        remarks: postCheckRemarks(phase, geo),
         retest: retestFromBody(req.body?.retest, visualSuccess(result)),
       };
       checkSessions.set(key, session);
@@ -857,7 +958,7 @@ export function registerJiraCheckerRoutes(app: Express): void {
     }
 
     const session: AssetVsSiteSession = {
-      kind: 'visual', visualKind: 'asset-vs-site', checkItems, phase, result, siteBuffers, siteUrl: visualCheck.siteUrl, geo,
+      kind: 'visual', visualKind: 'asset-vs-site', checkItems, scopePages: scopePagesFromBody(req.body), phase, result, siteBuffers, siteUrl: visualCheck.siteUrl, geo,
       remarks: postCheckRemarks(phase, geo),
       retest: retestFromBody(req.body?.retest, visualSuccess(result)),
     };
@@ -1111,7 +1212,10 @@ export function registerJiraCheckerRoutes(app: Express): void {
     let commentAdf: object;
 
     if (session.kind === 'playwright') {
-      const attachments = await uploadEvidence(jira, key, session, warnings);
+      // Per-bullet screenshots go under their own bullets; otherwise the run's
+      // screenshots follow the list.
+      const docUrls = session.bulletEvidence ? await uploadBulletEvidence(jira, key, session, warnings) : undefined;
+      const attachments = session.bulletEvidence ? [] : await uploadEvidence(jira, key, session, warnings);
 
       const videos: VideoAttachment[] = [];
       for (const videoPath of session.testResult.videoPaths) {
@@ -1124,17 +1228,17 @@ export function registerJiraCheckerRoutes(app: Express): void {
       }
 
       success = sessionSuccess(session);
-      commentAdf = buildCommentAdf(session.testResult, attachments, session.checkItems, session.phase, videos, sessionCtx(session));
+      commentAdf = buildCommentAdf(session.testResult, attachments, session.checkItems, session.phase, videos, sessionCtx(session, docUrls));
     } else if (session.visualKind === 'site-vs-site') {
       const attachments = await uploadEvidence(jira, key, session, warnings);
 
       success = sessionSuccess(session);
-      commentAdf = buildVisualCommentAdf('site-vs-site', session.result, attachments, session.checkItems, session.phase, sessionCtx(session));
+      commentAdf = buildVisualCommentAdf('site-vs-site', session.result, attachments, session.phase, sessionCtx(session));
     } else {
       const attachments = await uploadEvidence(jira, key, session, warnings);
 
       success = sessionSuccess(session);
-      commentAdf = buildVisualCommentAdf('asset-vs-site', session.result, attachments, session.checkItems, session.phase, sessionCtx(session));
+      commentAdf = buildVisualCommentAdf('asset-vs-site', session.result, attachments, session.phase, sessionCtx(session));
     }
 
     try {
