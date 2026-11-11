@@ -127,9 +127,64 @@ export interface DraftedTestCase {
   automatable: boolean;
 }
 
+// Where to photograph the evidence for ONE check statement (Standing Rules
+// #12/#13: a screenshot under each Documentation bullet, boxing the element
+// the bullet is about, on desktop and mobile).
+export type EvidencePlatforms = 'both' | 'desktop' | 'mobile';
+
+export interface EvidenceTarget {
+  // Path relative to the site root, no domain and no leading slash ('' = home).
+  page: string;
+  // The one element the bullet is about — by ARIA role + name, or by visible text.
+  locate?: { role?: string; name?: string; text?: string };
+  platforms: EvidencePlatforms;
+}
+
+// A functional spec proves presence, text, links and click-through. It does NOT
+// measure pixel sizes, layout, overlap or responsive appearance (the banner spec
+// says so in its header; a size claim once misrepresented its scope to
+// management), so a statement about those must never appear as a passed check.
+const VISUAL_ONLY_STATEMENT = /\b(dimensions?|pixels?|layout|overlap\w*|responsive\w*|aspect ratio|appropriate(?:ly)? siz\w*|correctly siz\w*)\b/i;
+
+// Splits the statements a functional test can stand behind from the visual-only
+// ones, keeping each kept statement's evidence slot aligned. If every statement
+// would be dropped nothing is dropped, so a comment is never left empty.
+export function splitOutOfScope<T>(items: string[], plan: T[]): { items: string[]; plan: T[]; dropped: string[] } {
+  const keep = items.map(text => !VISUAL_ONLY_STATEMENT.test(text));
+  if (!keep.some(Boolean)) return { items, plan, dropped: [] };
+  return {
+    items: items.filter((_, i) => keep[i]),
+    plan: plan.filter((_, i) => keep[i]),
+    dropped: items.filter((_, i) => !keep[i]),
+  };
+}
+
+// Keeps only well-formed entries, one slot per check statement; a slot the AI
+// left empty or malformed is null (that bullet gets no screenshot and a warning).
+export function normalizeEvidencePlan(raw: unknown, count: number): (EvidenceTarget | null)[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+  return Array.from({ length: count }, (_, i): EvidenceTarget | null => {
+    const e = list[i] as Record<string, unknown> | null | undefined;
+    if (!e || typeof e !== 'object' || typeof e.page !== 'string') return null;
+    const loc = e.locate && typeof e.locate === 'object' ? e.locate as Record<string, unknown> : null;
+    const locate = loc
+      ? { role: str(loc.role), name: str(loc.name), text: str(loc.text) }
+      : undefined;
+    const hasLocate = !!locate && !!(locate.text || locate.name);
+    const platforms: EvidencePlatforms = e.platforms === 'desktop' || e.platforms === 'mobile' ? e.platforms : 'both';
+    return { page: e.page.trim(), locate: hasLocate ? locate : undefined, platforms };
+  });
+}
+
 export interface InterpretedTicket {
   testType: string | null;          // one of SUPPORTED_TEST_TYPES, or null if no automated spec fits
   checkItems: string[];             // 2–5 plain-English verification statements
+  // Same length and order as checkItems: where to photograph each one.
+  evidencePlan: (EvidenceTarget | null)[];
+  // The actual pages / named site sections the ticket covers ("Homepage",
+  // "Promotions"), for the comment's Scope Checked list (Standing Rules #6).
+  scopePages: string[];
   confidence: 'high' | 'low';      // high = clear match, low = best guess
   params: Record<string, string>;  // tag ID, GEO, and any other runtime values
   // Independent of testType — a ticket can match a page-name test type
@@ -176,6 +231,13 @@ Your job is to read a Jira ticket and return a single JSON object with these fie
 
 - "testType": the best matching test type from the supported list, or "none" if nothing fits
 - "checkItems": array of 2–5 short plain-English strings describing exactly what will be verified
+  - Only statements an automated functional test can prove: something is present or visible, its text, where a link goes, what a click opens. NEVER a statement about pixel dimensions, size, layout, overlap or responsive appearance — those are visual checks and are not tested here.
+  - When the ticket states a viewport for a platform (e.g. "desktop 1920 px wide", "mobile 430×932"), write it in that platform's statement as "(1920×1080)" or "(430×932)", or "(1920px wide)" when only a width is given.
+- "evidencePlan": array with EXACTLY one entry per "checkItems" entry, same order, saying where to photograph the evidence for that statement: {"page": string, "locate": {"role": string, "name": string} or {"text": string}, "platforms": "both"|"desktop"|"mobile"}
+  - "page": the page's path relative to the site root, no domain and no leading slash ("" for the homepage, "promotions/" for /promotions/). Only a page the ticket names or clearly implies; for a site-wide item such as the footer use "" (the homepage). Never invent a path.
+  - "locate": the ONE element that statement is about — its ARIA role and accessible name (e.g. {"role":"link","name":"Terms and Conditions"}) or its exact visible text (e.g. {"text":"Play Now"}). Omit "locate" only if no single element applies. Never guess a CSS class or id.
+  - "platforms": "both" unless the ticket says the item exists on one platform only
+- "scopePages": array of the actual pages or named site sections the ticket covers, exactly as the ticket names them (e.g. "Homepage", "Online Slots — Jackpots", "Promotions", "Homepage - footer"). Pages and site sections ONLY — never a check statement, test category or feature label (not "CTA 1", "Scheduling", "Display"). Use [] if the ticket names no page.
 - "confidence": "high" if the match is clear, "low" if it is a best guess
 - "params": object of key-value pairs extracted from the ticket needed at runtime
 - "visualCheckKind": one of "asset-vs-site", "site-vs-site", or "none" — set this independently of "testType" (a ticket can BOTH name a page that matches a testType AND still need a visual/AI check instead, because a structural spec checking links/buttons won't catch either of these):
@@ -217,10 +279,14 @@ Rules for "checkItems":
 - Write each as a verification statement (e.g. "GA tag G-XXXXXXX is present on the homepage")
 - Do not write generic items like "page loads correctly"
 
+Rules for "scopePages":
+- Only pages or site sections the ticket actually names or clearly implies (a site-wide change is "All pages")
+- Never invent a page, and never list a check statement here — those belong in "checkItems"
+
 Respond with ONLY valid JSON. No explanation, no markdown fences, no extra text.
 
 Example for a GA ticket with title "[SNG AB] Google Analytics tag" (ticket SNG-123):
-{"testType":"google analytics","checkItems":["GA tag G-ABC123 present on all pages","window.dataLayer initialized on all pages","gtag function defined and callable"],"confidence":"high","params":{"TAG_ID":"G-ABC123","GEO":"AB"},"visualCheckKind":"none","testCases":[{"testCaseId":"TC-123-001","title":"GA4 tag G-ABC123 fires on page load","requirementReference":"Ticket description: add GA4 tag G-ABC123 site-wide","brandGeo":"Slingo AB","platform":"Desktop & Mobile","environment":"QA","preconditions":["QA environment loaded","Browser dev tools / network tab available"],"testData":["Measurement ID: G-ABC123"],"steps":[{"step":"Open the homepage on QA and open browser dev tools","expected":"Page loads without console errors"},{"step":"Inspect window.dataLayer in the console","expected":"dataLayer is initialized and present"},{"step":"Check network requests for a call to Google Analytics with measurement ID G-ABC123","expected":"Request fires with the correct measurement ID"},{"step":"Navigate to at least one other page","expected":"A new pageview event fires with the same measurement ID"}],"notes":"","automatable":true}]}`
+{"testType":"google analytics","checkItems":["GA tag G-ABC123 present on all pages","window.dataLayer initialized on all pages","gtag function defined and callable"],"evidencePlan":[{"page":"","platforms":"both"},{"page":"","platforms":"both"},{"page":"","platforms":"both"}],"scopePages":["All pages"],"confidence":"high","params":{"TAG_ID":"G-ABC123","GEO":"AB"},"visualCheckKind":"none","testCases":[{"testCaseId":"TC-123-001","title":"GA4 tag G-ABC123 fires on page load","requirementReference":"Ticket description: add GA4 tag G-ABC123 site-wide","brandGeo":"Slingo AB","platform":"Desktop & Mobile","environment":"QA","preconditions":["QA environment loaded","Browser dev tools / network tab available"],"testData":["Measurement ID: G-ABC123"],"steps":[{"step":"Open the homepage on QA and open browser dev tools","expected":"Page loads without console errors"},{"step":"Inspect window.dataLayer in the console","expected":"dataLayer is initialized and present"},{"step":"Check network requests for a call to Google Analytics with measurement ID G-ABC123","expected":"Request fires with the correct measurement ID"},{"step":"Navigate to at least one other page","expected":"A new pageview event fires with the same measurement ID"}],"notes":"","automatable":true}]}`
     + (standingRules
         ? `\n\n---\nCurrent QA Standing Rules (live from the team's Confluence knowledge base — these are practical lessons confirmed in production and take priority over general judgement; use them when writing "checkItems" and judging "confidence"):\n${standingRules}`
         : '')
@@ -241,7 +307,7 @@ Example for a GA ticket with title "[SNG AB] Google Analytics tag" (ticket SNG-1
   try {
     const response = await client.messages.create({
       model: MODEL,
-      max_tokens: 3000,
+      max_tokens: 5000,
       system: systemPrompt,
       messages: [{
         role: 'user',
@@ -271,6 +337,10 @@ Example for a GA ticket with title "[SNG AB] Google Analytics tag" (ticket SNG-1
     const parsed = JSON.parse(jsonSlice);
     const testType = parsed.testType?.trim().toLowerCase();
     const checkItems: string[] = Array.isArray(parsed.checkItems) ? parsed.checkItems : [];
+    const evidencePlan = normalizeEvidencePlan(parsed.evidencePlan, checkItems.length);
+    const scopePages: string[] = Array.isArray(parsed.scopePages)
+      ? parsed.scopePages.filter((p: unknown): p is string => typeof p === 'string' && p.trim() !== '')
+      : [];
     const confidence: 'high' | 'low' = parsed.confidence === 'low' ? 'low' : 'high';
     const params: Record<string, string> = parsed.params && typeof parsed.params === 'object'
       ? Object.fromEntries(
@@ -287,7 +357,7 @@ Example for a GA ticket with title "[SNG AB] Google Analytics tag" (ticket SNG-1
     // to offer an AI-vision check instead of a Playwright spec. Only an
     // actual API/parse failure (above) returns null.
     if (!testType || testType === 'none') {
-      return { testType: null, checkItems, confidence, params, visualCheckKind, testCases };
+      return { testType: null, checkItems, evidencePlan, scopePages, confidence, params, visualCheckKind, testCases };
     }
 
     const matched =
@@ -295,9 +365,9 @@ Example for a GA ticket with title "[SNG AB] Google Analytics tag" (ticket SNG-1
       SUPPORTED_TEST_TYPES.find(t => testType.includes(t) || t.includes(testType)) ??
       null;
 
-    if (!matched) return { testType: null, checkItems, confidence, params, visualCheckKind, testCases };
+    if (!matched) return { testType: null, checkItems, evidencePlan, scopePages, confidence, params, visualCheckKind, testCases };
 
-    return { testType: matched, checkItems, confidence, params, visualCheckKind, testCases };
+    return { testType: matched, checkItems, evidencePlan, scopePages, confidence, params, visualCheckKind, testCases };
   } catch {
     console.warn('      [WARN] AI interpreter returned malformed JSON — skipping.');
     return null;

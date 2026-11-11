@@ -9,6 +9,22 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-11-10 (session 4)
+
+### Added
+
+- **The JIRA Checker now puts a screenshot under each point of the Jira comment.** Every line under Documentation gets its own picture, desktop first and then mobile, with a green box drawn around the part of the page that line is about and a caption showing the page address, date and screen width. If the Checker cannot find the part of the page, the picture is still attached without a box and a warning appears on screen, so nothing is made up.
+- **The Checker now has its own set of tests.** They check the comment layout, the screenshots and the new safety checks without needing Jira, a real website or the AI. They run separately with `npx playwright test -c gui/tests/playwright.config.ts` and are not part of the main test run.
+
+### Changed
+
+- **The comment the JIRA Checker writes now follows the QA reporting standard more closely.** Scope Checked lists the real pages from the ticket instead of check names. Documentation lists what was checked. A failed check keeps the Documentation for the things that did pass. A re-test pass keeps the original line with FIXED in bold. A post-check always gets the two standard Remarks lines. The heading date now reads like "10 November 2026".
+- **Screenshots use the screen size the ticket asks for.** If the ticket says the desktop is 1920 wide or the phone is 430 by 932, the pictures are taken at that size and the caption shows it. When the ticket gives no size, the Checker uses its usual desktop and phone sizes.
+- **The Checker no longer writes check lines the test cannot prove.** The automated tests check that things are there, what they say and where they link, but they do not measure sizes or layout. Lines such as "banner dimensions are correct" are now left out of the comment and listed in the readiness box as "Left out of the comment", so you can check them with a visual check instead of the comment claiming a pass that was never tested.
+- **A warning appears when the Checker had to guess the page.** If the ticket is about a page other than the homepage but no page address was worked out, the Checker photographs the homepage and says so, rather than doing it quietly.
+
+---
+
 ## [Unreleased] - 2026-11-10 (session 3)
 
 ### Changed
