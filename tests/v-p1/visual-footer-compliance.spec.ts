@@ -23,9 +23,13 @@ import { currentGeoFeatures } from '../../helpers/geo-features';
 
 test.describe('Visual P1 - Footer Compliance', () => {
 
-  test.setTimeout(90_000);
+  test.setTimeout(180_000);
 
   test('V1-FC-01: All footer regulator/licensing logos render without a broken image', async ({ page }) => {
+    // Also set inside the test itself (same convention as the other specs and
+    // the banner spec): the describe-level call alone did not take effect on
+    // the 2026-10-31 I36 ES banner run, which fell back to the 30s default.
+    test.setTimeout(180_000);
     const results: { label: string; status: string }[] = [];
     function record(label: string, passed: boolean) {
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
@@ -80,7 +84,7 @@ test.describe('Visual P1 - Footer Compliance', () => {
         // footer-regulations.spec.ts's Step 1).
         await expect.poll(() => logos.count(), {
           message: 'Regulator/licensing logo row must mount in the footer',
-          timeout: 5_000,
+          timeout: 20_000,
         }).toBeGreaterThan(0);
         count = await logos.count();
         // Element-scoped evidence — just the logo row, not a full-page shot —
@@ -102,7 +106,7 @@ test.describe('Visual P1 - Footer Compliance', () => {
           // single snapshot against an in-flight load.
           await expect.poll(
             () => logo.evaluate((el: HTMLImageElement) => el.complete),
-            { message: `logo #${i + 1} never finished loading`, timeout: 8_000 }
+            { message: `logo #${i + 1} never finished loading`, timeout: 20_000 }
           ).toBe(true).catch(() => {}); // fall through to the real assertion below either way, so a genuinely-stuck logo still reports as broken with real src/dimensions rather than a bare timeout
           const info = await logo.evaluate((el: HTMLImageElement) => ({
             src: el.currentSrc || el.src,

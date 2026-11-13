@@ -24,9 +24,13 @@ import { dismissCookieConsent, dismissCampaignPopup, setupCampaignPopupWatcher, 
 
 test.describe('Visual P1 - Website Header', () => {
 
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
 
   test('V1-WH-01: Header brand logo renders without breaking or distorting', async ({ page }) => {
+    // Also set inside the test itself (same convention as the other specs and
+    // the banner spec): the describe-level call alone did not take effect on
+    // the 2026-10-31 I36 ES banner run, which fell back to the 30s default.
+    test.setTimeout(120_000);
     const results: { label: string; status: string }[] = [];
     function record(label: string, passed: boolean) {
       results.push({ label, status: passed ? 'Pass' : 'Fail' });
@@ -74,7 +78,7 @@ test.describe('Visual P1 - Website Header', () => {
         .first();
 
       await runStep('Locate header logo', async () => {
-        await expect(logo, 'Header brand logo (<img> or inline <svg>) must exist inside the header landmark').toBeVisible({ timeout: 10_000 });
+        await expect(logo, 'Header brand logo (<img> or inline <svg>) must exist inside the header landmark').toBeVisible({ timeout: 20_000 });
         // Element-scoped evidence — just the logo, not a full-page shot — so
         // the HTML report visibly proves which element was inspected.
         await test.info().attach('header-logo.png', {

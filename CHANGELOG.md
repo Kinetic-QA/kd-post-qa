@@ -9,6 +9,15 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-11-13
+
+### Fixed
+
+- **The visual Banner check no longer fails just because the pages load slowly.** On the I36 Spain run of 31 October it stopped with "Test timeout of 30000ms exceeded" and only passed on the automatic retry. The banners themselves loaded fine in well under a second; it was the 22 pages, about 18 seconds each, that added up to more than the 30 seconds the check was allowed. The check now has its full 15 minutes set inside the test, waits up to 20 seconds for a banner to appear (was 5) and up to 30 seconds for a banner picture to finish loading (was 10).
+- **The visual Footer and Header checks got the same extra patience.** The Footer check now has 3 minutes (was 90 seconds) and waits up to 20 seconds for the licence logos to appear and load (was 5 and 8). The Header check now has 2 minutes (was 60 seconds) and waits up to 20 seconds for the logo to appear (was 10). Faster brands finish just as quickly as before — these are only the maximum times allowed.
+
+---
+
 ## [Unreleased] - 2026-11-10 (session 4)
 
 ### Added
