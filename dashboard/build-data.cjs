@@ -15,8 +15,12 @@
 const fs = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
+const { loadLiveBase, mergeWithLive } = require('./live-history.cjs');
 
-const ROOT = path.join(__dirname, '..');
+// QA_DATA_ROOT: read another folder's Test Reports/ + combined-reports/ (staging
+// uses it to check a snapshot against the live folder's real runs). The snapshot is
+// still written next to this script.
+const ROOT = process.env.QA_DATA_ROOT || path.join(__dirname, '..');
 
 function normalizeStatus(raw) {
   const upper = String(raw || '').toUpperCase();
@@ -426,8 +430,19 @@ const inScope = r => SCOPED_BRANDS.has(r.brand) && r.date >= SINCE_DATE;
 
 async function main() {
   const { reports: scannedRuns, tests: scannedTests } = await scanRunReports();
-  const allRuns = scannedRuns.filter(inScope);
-  const allTests = scannedTests.filter(inScope);
+
+  // Build on top of what the public site already shows instead of only this
+  // machine's Test Reports/, so uploading from one laptop never removes runs
+  // that were tested on another (MERGE_WITH_LIVE=0 turns this off).
+  let merged = { runs: scannedRuns, tests: scannedTests };
+  if (process.env.MERGE_WITH_LIVE !== '0') {
+    const base = await loadLiveBase();
+    const isPinned = r => Boolean(PINNED_MATCH) && r.brand === PINNED_MATCH[1] && r.date === PINNED_MATCH[2];
+    merged = mergeWithLive(base, { runs: scannedRuns, tests: scannedTests }, isPinned);
+    console.log(`Merged with the live site (${base.source}): ${base.runs.length} run(s) live + ${scannedRuns.length} on this machine -> ${merged.runs.length}.`);
+  }
+  const allRuns = merged.runs.filter(inScope);
+  const allTests = merged.tests.filter(inScope);
 
   if (allRuns.length === 0) {
     console.log(`No runs found for release-scope brands (${[...SCOPED_BRANDS].join(', ')}) — writing an empty snapshot.`);
@@ -478,6 +493,9 @@ async function main() {
   const outDir = path.join(__dirname, 'public');
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, 'data.json'), JSON.stringify(data));
+  // Every run and test (not just each brand's latest) — the next upload, from any
+  // machine, starts from this file so nothing already on the site is lost.
+  fs.writeFileSync(path.join(outDir, 'history.json'), JSON.stringify({ generatedAt, runs: allRuns, tests: allTests }));
 
   console.log(`Wrote ${path.join(outDir, 'data.json')} (brands scoped to each one's latest run; history covers up to 30 days)`);
   console.log(`  ${currentRuns.length} current run(s) across ${brands.length} brand(s); ${days.length} day(s) of history.`);

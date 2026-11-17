@@ -48,5 +48,6 @@ Thumbs.db
 # local Test Reports/, not meant to live in git) and its local Netlify
 # site-link state, same reasoning as .netlify above.
 dashboard/public/data.json
+dashboard/public/history.json
 dashboard/public/reports/
 dashboard/.netlify-site.json

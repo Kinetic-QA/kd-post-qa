@@ -9,6 +9,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-11-17
+
+### Fixed
+
+- **Uploading to the results website no longer removes runs tested on another laptop.** Each upload used to replace the whole website with whatever was on the laptop doing the upload, so the 13 November upload from the second laptop wiped the Spanish runs from 29–31 October. Now an upload adds to what is already on the website and only replaces the exact run being re-uploaded. If the website can't be reached, the upload stops instead of publishing a partial copy.
+
+---
+
 ## [Unreleased] - 2026-11-13
 
 ### Fixed
