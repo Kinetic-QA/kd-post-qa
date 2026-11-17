@@ -34,6 +34,7 @@ const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
 const { stripTraceButtons } = require('./strip-trace-buttons.cjs');
+const { mergeDeploy } = require('./helpers/netlify-merge.cjs');
 require('dotenv').config();
 
 const SITE_NAME = 'qa-automated-regression-results';
@@ -209,24 +210,24 @@ function linkReportUrlsInData(brand, dateStr, geos) {
 }
 
 // --- 4. Deploy the combined dashboard/public dir ---
-function deploy(siteId) {
+// Adds dashboard/public ON TOP of what the site already serves (see
+// helpers/netlify-merge.cjs) so runs uploaded from another machine stay up.
+// dropPrefixes: the report folders just re-staged, replaced rather than merged.
+async function deploy(siteId, dropPrefixes, reportsPrefix) {
   const sizeMb = (dirSizeBytes(DASHBOARD_PUBLIC) / 1024 / 1024).toFixed(0);
-  console.log(`\nDeploying dashboard/public (${sizeMb} MB) to Netlify site ${siteId}...`);
-  const deployCmd = `npx netlify deploy --dir "${DASHBOARD_PUBLIC}" --site ${siteId} --prod --json`;
-  const result = run(deployCmd);
-  if (result.status !== 0) {
-    console.error(result.stdout);
-    console.error(result.stderr);
-    process.exit(1);
-  }
-  let info;
+  console.log(`\nDeploying dashboard/public (${sizeMb} MB) on top of what is live on Netlify site ${siteId}...`);
   try {
-    info = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')));
-  } catch {
-    console.error('Could not parse `netlify deploy` output:', result.stdout);
+    const { deploy: info } = await mergeDeploy({
+      token, siteId, dir: DASHBOARD_PUBLIC, dropPrefixes,
+      // Only the report folders staged in THIS run are added; whatever else sits in
+      // dashboard/public/reports from older uploads could be older than what's live.
+      include: key => !key.startsWith('/reports/') || (reportsPrefix !== null && key.startsWith(reportsPrefix)),
+    });
+    return info;
+  } catch (err) {
+    console.error(`Deploy failed — nothing was changed on the live site.\n${err.message}`);
     process.exit(1);
   }
-  return info;
 }
 
 // --- 5. Backfill the brand's Excel workbook's Shareable Report Link column ---
@@ -281,9 +282,11 @@ function backfillLinks(brand, dateStr, baseUrl) {
     linkReportUrlsInData(brand, dateStr, staged);
   }
 
-  const deployResult = deploy(site.siteId);
-  const deployUrl = deployResult.deploy_url || deployResult.url;
-  const prodUrl = deployResult.url || deployUrl;
+  const reportsPrefix = brand && staged.length > 0 ? `/reports/${brand}/${dateStr}/`.toLowerCase() : null;
+  const dropPrefixes = staged.map(geo => `/reports/${brand}/${dateStr}/${geo}/`);
+  const deployResult = await deploy(site.siteId, dropPrefixes, reportsPrefix);
+  const deployUrl = deployResult.deploy_ssl_url || deployResult.deploy_url || deployResult.url;
+  const prodUrl = deployResult.ssl_url || deployResult.url || deployUrl;
   console.log(`\nDeployed overview: ${prodUrl}`);
   if (staged.length > 0) {
     for (const geo of staged) console.log(`  ${geo}: ${deployUrl}/reports/${brand}/${dateStr}/${geo}/index.html`);

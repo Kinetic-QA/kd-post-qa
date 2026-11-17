@@ -60,8 +60,12 @@ run" without needing you to repeat information the test run already recorded.
 - It does not upload trace `.zip` files — only the video, screenshots, and
   HTML report, same as the team's other report-hosting deploy (see the
   "No trace upload to Netlify" decision).
-- It does not delete or overwrite a previous day's uploaded reports — each
-  day's reports are staged under their own date folder.
+- It does not delete or overwrite anything already on the website, from this
+  laptop or any other. Each upload starts from what is live (the site keeps a
+  `history.json` of every run) and adds to it; only the exact brand/GEO/day
+  being re-uploaded is replaced. If the website can't be reached, the upload
+  stops rather than publishing a partial copy. (Before 2026-11-17 each upload
+  replaced the whole site with this laptop's own files.)
 
 ## First-time setup on a new machine (laptop, teammate's computer, etc.)
 
