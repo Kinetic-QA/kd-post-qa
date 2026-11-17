@@ -189,20 +189,17 @@ test.describe('P3 - Blog Page Header', () => {
     });
 
     await runStep('Step 4: Brand title click sends to blog homepage', async () => {
-      // Slingo (SC): CONFIRMED via live DOM inspection the blog header logo
-      // links to the main site root, NOT /blog/ — confirmed intentional by
-      // the dev team, consistent across Slingo's markets.
-      // SNG (confirmed 2026-07-20, CA) and GC (confirmed 2026-07-23, ES):
-      // the blog header logo genuinely links to the blog's OWN homepage
-      // (/blog/), not the main site root — a real, confirmed difference
-      // from Slingo's behavior, matching this step's literal name. Two
-      // independent brands now confirm the /blog/ behavior vs. only SC
-      // confirming root, so SC is the special case here, not the default.
-      // Simba Games (SG) UK — confirmed live 2026-08-04: this brand's blog
-      // logo ALSO routes to the main site root, same as SC, not to the
-      // blog's own homepage like SNG/GC — a second confirmed brand in the
-      // "goes to root" camp, not a one-off SC special case.
-      const goesToSiteRoot = ['SC', 'SG'].includes((process.env.TEST_BRAND ?? 'SC').toUpperCase());
+      // By default the logo on a blog page goes to the blog's OWN homepage
+      // (/blog/): confirmed live on SNG (2026-07-20, CA), GC (2026-07-23, ES)
+      // and MC ES. Three brands intentionally send it to the main site root
+      // instead — confirmed by the SEO brand owner on 2026-11-10 (briefly
+      // treated as a bug earlier that day, then reversed): Slingo (SC) in all
+      // its markets (dev team, earlier), Simba Games (SG) UK (confirmed live
+      // 2026-08-04) and Mega Casino (MC) UK. MC is per-market: MC ES goes to
+      // the blog homepage like the default, so only MC UK is in the exception.
+      const brandCode = (process.env.TEST_BRAND ?? 'SC').toUpperCase();
+      const marketName = test.info().project.name.replace(/-mobile$/, '');
+      const goesToSiteRoot = ['SC', 'SG'].includes(brandCode) || (brandCode === 'MC' && marketName === 'UK');
       const expectedUrl = goesToSiteRoot ? siteUrl('') : siteUrl(geoFeatures.blogPath!);
 
       // Confirmed live on Simba Games (SG) UK 2026-08-04: this brand's

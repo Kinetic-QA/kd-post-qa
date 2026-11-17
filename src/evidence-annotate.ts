@@ -69,8 +69,12 @@ export async function annotateEvidence(input: Buffer, caption: EvidenceCaption):
       `Viewport: ${width}px wide (measured)`,
       caption.platform ? `Platform: ${caption.platform}` : '',
       caption.geo ? `GEO: ${caption.geo}` : '',
-    ].filter(Boolean).join('  |  ');
-    lines.push({ text: facts });
+    ].filter(Boolean);
+    // One line when it fits; on a narrow (phone) image each fact gets its own
+    // line so nothing is cut off the end (Standing Rules #13, 1a).
+    const factsLine = facts.join('  |  ');
+    if (factsLine.length <= charsPerLine) lines.push({ text: factsLine });
+    else for (const f of facts) for (const l of wrap(f, charsPerLine)) lines.push({ text: l });
 
     const barHeight = pad * 2 + lines.length * lineHeight;
     const outerH = height + border * 2 + barHeight;

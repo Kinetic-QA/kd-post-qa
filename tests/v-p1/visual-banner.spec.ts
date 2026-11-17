@@ -151,6 +151,12 @@ test.describe('Visual P1 - Banner', () => {
   test.setTimeout(15 * 60_000);
 
   test('V1-BN-01: Banner renders correctly across every page (desktop + mobile)', async ({ page }) => {
+    // Also set inside the test itself (same convention as the other specs):
+    // the describe-level call above did not take effect on the 2026-10-31
+    // I36 ES run, which failed with "Test timeout of 30000ms exceeded" even
+    // though every page was loading fine — each page takes ~18s to load and
+    // 22 pages need ~6.5 minutes, far past the 30s default.
+    test.setTimeout(15 * 60_000);
     await setupCampaignPopupWatcher(page);
     const isMobile = test.info().project.name.endsWith('-mobile');
     const newFormat = isNewBannerFormat();
@@ -213,7 +219,7 @@ test.describe('Visual P1 - Banner', () => {
           return;
         }
         note = `${slideCount} slide${slideCount > 1 ? 's' : ''}`;
-        await expect(slideSections.first(), `${label}: banner section must be visible`).toBeVisible({ timeout: 5_000 });
+        await expect(slideSections.first(), `${label}: banner section must be visible`).toBeVisible({ timeout: 20_000 });
 
         const navButtons = page.locator('[class*="MainBannerSlider_navButton"]');
         const hasNav = (await navButtons.count()) > 0;
@@ -239,7 +245,7 @@ test.describe('Visual P1 - Banner', () => {
             // reading a single snapshot that can race a real in-flight load.
             await expect.poll(
               () => slideImg.evaluate((el: HTMLImageElement) => el.complete),
-              { message: `${label} ${slideLabel}: banner image never finished loading`, timeout: 10_000 }
+              { message: `${label} ${slideLabel}: banner image never finished loading`, timeout: 30_000 }
             ).toBe(true);
             const info = await slideImg.evaluate((el: HTMLImageElement) => {
               const rect = el.getBoundingClientRect();

@@ -17,6 +17,57 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] - 2026-11-13
+
+### Fixed
+
+- **The visual Banner check no longer fails just because the pages load slowly.** On the I36 Spain run of 31 October it stopped with "Test timeout of 30000ms exceeded" and only passed on the automatic retry. The banners themselves loaded fine in well under a second; it was the 22 pages, about 18 seconds each, that added up to more than the 30 seconds the check was allowed. The check now has its full 15 minutes set inside the test, waits up to 20 seconds for a banner to appear (was 5) and up to 30 seconds for a banner picture to finish loading (was 10).
+- **The visual Footer and Header checks got the same extra patience.** The Footer check now has 3 minutes (was 90 seconds) and waits up to 20 seconds for the licence logos to appear and load (was 5 and 8). The Header check now has 2 minutes (was 60 seconds) and waits up to 20 seconds for the logo to appear (was 10). Faster brands finish just as quickly as before — these are only the maximum times allowed.
+
+---
+
+## [Unreleased] - 2026-11-10 (session 4)
+
+### Added
+
+- **The JIRA Checker now puts a screenshot under each point of the Jira comment.** Every line under Documentation gets its own picture, desktop first and then mobile, with a green box drawn around the part of the page that line is about and a caption showing the page address, date and screen width. If the Checker cannot find the part of the page, the picture is still attached without a box and a warning appears on screen, so nothing is made up.
+- **The Checker now has its own set of tests.** They check the comment layout, the screenshots and the new safety checks without needing Jira, a real website or the AI. They run separately with `npx playwright test -c gui/tests/playwright.config.ts` and are not part of the main test run.
+
+### Changed
+
+- **The comment the JIRA Checker writes now follows the QA reporting standard more closely.** Scope Checked lists the real pages from the ticket instead of check names. Documentation lists what was checked. A failed check keeps the Documentation for the things that did pass. A re-test pass keeps the original line with FIXED in bold. A post-check always gets the two standard Remarks lines. The heading date now reads like "10 November 2026".
+- **Screenshots use the screen size the ticket asks for.** If the ticket says the desktop is 1920 wide or the phone is 430 by 932, the pictures are taken at that size and the caption shows it. When the ticket gives no size, the Checker uses its usual desktop and phone sizes.
+- **The Checker no longer writes check lines the test cannot prove.** The automated tests check that things are there, what they say and where they link, but they do not measure sizes or layout. Lines such as "banner dimensions are correct" are now left out of the comment and listed in the readiness box as "Left out of the comment", so you can check them with a visual check instead of the comment claiming a pass that was never tested.
+- **A warning appears when the Checker had to guess the page.** If the ticket is about a page other than the homepage but no page address was worked out, the Checker photographs the homepage and says so, rather than doing it quietly.
+
+---
+
+## [Unreleased] - 2026-11-10 (session 3)
+
+### Changed
+
+- **The team standards file now has its own Confluence page, and the RevWright project reads from it.** The page is called "RevWright Agent Standards". Until now someone had to upload `AGENT-STANDARDS.md` by hand to the RevWright project after every change. From now on the end-of-session routine updates both the file in the repo and the Confluence page, and the RevWright project pulls the standards from Confluence, so nothing needs uploading. Claude shows the page update first and only changes it once it is approved. Only the wording that describes this routine changed in `AGENT-STANDARDS.md`, `CLAUDE.md` and the quickstart guide; none of the standards themselves changed.
+
+---
+
+## [Unreleased] - 2026-11-10 (session 2)
+
+### Fixed
+
+- **The blog logo check allows the main site homepage again for Slingo, Simba Games and Mega Casino UK.** Earlier today the check was tightened so these brands failed when the blog logo took you to the main homepage. The SEO brand owner has since confirmed that behaviour is intentional for these three, so it is not a problem and the earlier change is reversed. Mega Casino is covered for the UK site only — Mega Casino Spain still has to go to the blog homepage, like every other brand.
+- **The team standards file lists this as intentional again.** `AGENT-STANDARDS.md` now says the main-site logo behaviour is deliberate for those three brands (with the date and who confirmed it), and that any other brand sending the logo to the main homepage is a real problem.
+
+---
+
+## [Unreleased] - 2026-11-10
+
+### Fixed
+
+- **The blog logo check no longer lets Slingo and Simba Games off the hook.** *(Reversed later the same day — see the entry above.)* Clicking the logo on a blog page is meant to take you back to the blog's own homepage. The check used to accept the main site homepage for Slingo and Simba Games, which hid a real problem. It now expects the blog homepage on every brand. Slingo and Simba Games UK will show a failure on that step until their websites are fixed, and Mega Casino sends the logo to the main site homepage too (its check already expected the blog homepage). A ticket is being raised for all three.
+- **The team standards file no longer calls this behaviour intentional.** *(Reversed later the same day — see the entry above.)* `AGENT-STANDARDS.md` listed the main-site logo behaviour under "Known Intentional Behaviors — don't re-flag". That entry is removed, the list now says there are none at present, and a short note explains the correction.
+
+---
+
 ## [Unreleased] - 2026-10-31
 
 ### Fixed

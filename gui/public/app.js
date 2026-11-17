@@ -3100,6 +3100,14 @@ investigateExportBtn.addEventListener('click', () => {
       evidenceGallery.appendChild(figure);
     }
 
+    // Why a bullet has no box or no screenshot (element not found, page blocked).
+    const warningNote = document.getElementById('jira-evidence-warnings');
+    if (warningNote) {
+      const lines = data.evidenceWarnings ?? [];
+      warningNote.hidden = lines.length === 0;
+      warningNote.textContent = lines.length ? `Screenshot notes — ${lines.join(' ')}` : '';
+    }
+
     if (data.videoFilenames?.length) {
       videoNote.hidden = false;
       videoNote.textContent = `${data.videoFilenames.length} video(s) recorded (${data.videoFilenames.join(', ')}) — will be attached and linked in the comment on Commit.`;
@@ -3158,6 +3166,7 @@ investigateExportBtn.addEventListener('click', () => {
           kind: 'visual',
           phase: data.phase,
           checkItems: data.checkItems,
+          scopePages: data.scopePages,
           visualCheck: data.visualCheck,
           geo: data.params?.GEO,
           retest: data.retest ? { flagged: data.retest.flaggedIssues } : undefined,
@@ -3184,6 +3193,8 @@ investigateExportBtn.addEventListener('click', () => {
         testType: data.testType,
         testFile: data.testFile,
         checkItems: data.checkItems,
+        scopePages: data.scopePages,
+        evidencePlan: data.evidencePlan,
         params: data.params,
         retest: data.retest ? { flagged: data.retest.flaggedIssues } : undefined,
       };
@@ -3293,6 +3304,7 @@ investigateExportBtn.addEventListener('click', () => {
       key: current.key,
       phase: current.phase,
       checkItems: current.checkItems,
+      scopePages: current.scopePages,
       visualCheck: JSON.parse(contentMismatchNote.dataset.visualCheck),
       geo: current.params?.GEO,
       retest: current.retest,
