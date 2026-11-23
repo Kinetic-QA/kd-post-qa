@@ -874,6 +874,7 @@ runBtn.addEventListener('click', () => {
   resetReviewPanel();
   resetTriage();
   uploadOutputEl.hidden = true;
+  earlierRunsCardEl.hidden = true;
   lastRunBrand = null;
   lastRunDateStr = null;
   lastRunRef = null;
@@ -1875,6 +1876,60 @@ document.addEventListener('keydown', e => {
   if (!jiraConfirmEl.hidden) { jiraConfirmEl.hidden = true; return; } // Esc on the question = Back
   if (!jiraModalEl.hidden) closeJiraModal();
 });
+
+// ── Earlier runs ─────────────────────────────────────────────────────────
+// Review / Upload only learn which run just finished from the one-off
+// 'all-done' message, so reloading the page used to lose them. This asks the
+// server for the recent finished runs on disk and lets the person pick one,
+// which restores exactly what 'all-done' would have set.
+const earlierRunsCardEl = document.getElementById('earlier-runs-card');
+const earlierRunsSelectEl = document.getElementById('earlier-runs-select');
+const earlierRunsLoadBtn = document.getElementById('earlier-runs-load-btn');
+let earlierRuns = [];
+
+async function loadEarlierRuns() {
+  try {
+    const res = await fetch('/recent-runs');
+    if (!res.ok) return;
+    const data = await res.json();
+    earlierRuns = Array.isArray(data.runs) ? data.runs : [];
+  } catch {
+    return; // The picker is a convenience; the rest of the page works without it.
+  }
+  earlierRunsSelectEl.innerHTML = '';
+  earlierRuns.forEach((run, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    const when = new Date(run.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+    opt.textContent = `${run.brand} — ${Object.keys(run.reportFolders).join(', ')} — started ${when}`;
+    earlierRunsSelectEl.appendChild(opt);
+  });
+  earlierRunsCardEl.hidden = earlierRuns.length === 0 || Boolean(lastRunBrand);
+}
+
+earlierRunsLoadBtn.addEventListener('click', () => {
+  const run = earlierRuns[Number(earlierRunsSelectEl.value)];
+  if (!run) return;
+  lastRunBrand = run.brand;
+  lastRunDateStr = run.dateStr;
+  lastRunRef = { excelReportFile: run.excelReportFile, reportFolders: run.reportFolders };
+  resetReviewPanel();
+  uploadOutputEl.hidden = true;
+  uploadOutputEl.textContent = '';
+  uploadOutputEl.classList.remove('error');
+  reportLinkEl.textContent = '';
+  excelLinkEl.textContent = '';
+  setStatus(statusDetailEl, `${run.brand} run from ${new Date(run.startedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`, '');
+  resultsCardEl.classList.add('visible');
+  reviewBtn.hidden = false;
+  reviewBtn.disabled = false;
+  reviewBtn.textContent = 'Review';
+  earlierRunsCardEl.hidden = true;
+  loadTriage();
+  resultsCardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+loadEarlierRuns();
 
 reviewBtn.addEventListener('click', async () => {
   if (!lastRunBrand || !lastRunDateStr) return;

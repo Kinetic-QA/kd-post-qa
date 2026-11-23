@@ -2283,6 +2283,59 @@ app.post('/upload-to-netlify', async (req, res) => {
   });
 });
 
+// Recent finished runs, rebuilt from what is on disk. The Review / Upload
+// buttons normally get their "which run is this" details from the one-off
+// 'all-done' message at the end of a run, so reloading the page lost them.
+// This lets the page ask again. Each run is one combined workbook
+// (<BRAND>-<date>-<HH-MM-SS>.xlsx, the HH-MM-SS being when the session
+// started); its GEOs' report folders are the report-* folders that appeared
+// between that start and the start of the same brand's next session.
+app.get('/recent-runs', (_req, res) => {
+  try {
+    const combinedDir = path.join(process.cwd(), 'combined-reports');
+    const reportsRoot = path.join(process.cwd(), 'Test Reports');
+    const sessions: { brand: string; dateStr: string; excelReportFile: string; startMs: number }[] = [];
+    for (const file of fs.existsSync(combinedDir) ? fs.readdirSync(combinedDir) : []) {
+      const m = file.match(/^([A-Za-z0-9]+)-(\d{4}-\d{2}-\d{2})-(\d{2})-(\d{2})-(\d{2})\.xlsx$/);
+      if (!m || !isValidBrand(m[1])) continue;
+      // No trailing Z: the token is this machine's local wall clock.
+      const startMs = new Date(`${m[2]}T${m[3]}:${m[4]}:${m[5]}`).getTime();
+      if (Number.isNaN(startMs)) continue;
+      sessions.push({ brand: m[1], dateStr: m[2], excelReportFile: file.slice(0, -'.xlsx'.length), startMs });
+    }
+
+    const runs: { brand: string; dateStr: string; excelReportFile: string; reportFolders: Record<string, string>; startedAt: string; startMs: number }[] = [];
+    for (const s of sessions) {
+      const next = sessions
+        .filter(o => o.brand === s.brand && o.startMs > s.startMs)
+        .reduce((min, o) => Math.min(min, o.startMs), Infinity);
+      const brandDir = path.join(reportsRoot, s.brand);
+      if (!fs.existsSync(brandDir)) continue;
+      const reportFolders: Record<string, string> = {};
+      for (const geoEntry of fs.readdirSync(brandDir, { withFileTypes: true })) {
+        if (!geoEntry.isDirectory() || geoEntry.name.startsWith('_') || !/^[A-Za-z0-9-]+$/.test(geoEntry.name)) continue;
+        const dayDir = path.join(brandDir, geoEntry.name, s.dateStr);
+        if (!fs.existsSync(dayDir)) continue;
+        const inWindow = fs.readdirSync(dayDir, { withFileTypes: true })
+          .filter(e => e.isDirectory() && /^report-\d+$/.test(e.name))
+          .map(e => ({ name: e.name, mtime: fs.statSync(path.join(dayDir, e.name)).mtimeMs }))
+          .filter(e => e.mtime >= s.startMs - 5_000 && e.mtime < next)
+          .sort((a, b) => b.mtime - a.mtime);
+        if (inWindow.length > 0) reportFolders[geoEntry.name] = inWindow[0].name;
+      }
+      // A run whose report folders are gone (older runs get pruned) can't be
+      // uploaded, so it isn't offered.
+      if (Object.keys(reportFolders).length === 0) continue;
+      runs.push({ ...s, reportFolders, startedAt: new Date(s.startMs).toISOString() });
+    }
+
+    runs.sort((a, b) => b.startMs - a.startMs);
+    res.json({ runs: runs.slice(0, 10).map(({ startMs: _startMs, ...r }) => r) });
+  } catch (err) {
+    res.status(500).json({ error: `Could not list recent runs: ${(err as Error).message}` });
+  }
+});
+
 app.get('/run', (req, res) => {
   const brand = String(req.query.brand ?? '');
   const geos = String(req.query.geos ?? '').split(',').map(g => g.trim()).filter(Boolean);
