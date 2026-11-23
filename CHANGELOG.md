@@ -11,6 +11,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] - 2026-11-23
 
+### Added
+
+- **Prime Casino now appears on the public results website.** Prime Casino's 23 November Spain run was a real release run, but the website only shows brands on a hand-kept list and Prime Casino wasn't on it, so the run was uploaded yet stayed out of Run History and the Brands overview (the Upload screen showed a small "isn't in release-scope.json yet" note). It is on the list now. Any other brand that isn't on the list yet still needs adding the same way once its own release run is done.
+
 ### Fixed
 
 - **Uploading to the results website no longer gives up the first time Netlify says "slow down".** On 23 November the first upload from this computer (Prime Casino Spain) stopped part-way because Netlify refused one of the big video files with a "too many requests" message, and the old code quit on that single refusal. The website itself was never changed, but nothing could be published. The upload now waits as long as Netlify asks and tries the same file again (up to 8 times), also retries after a dropped connection or a short Netlify hiccup, and sends 4 files at a time instead of 8 so it is less likely to be refused in the first place. While it waits, the log says so, for example "Netlify said HTTP 429 … waiting 2s, then try 2 of 8". Real errors, such as a wrong password or token, still stop straight away.
