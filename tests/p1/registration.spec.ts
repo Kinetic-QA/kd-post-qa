@@ -1134,6 +1134,34 @@ async function clickContinuarAndWait(
   throw new Error(`REG-01 (ES): registration did not advance past "${stepLabel}" (inline error: ${inlineError ?? 'none'}) — see debug screenshot`);
 }
 
+/**
+ * ES "Nacionalidad" (#nationality) and "Provincia" (#state) are searchable
+ * comboboxes — <input id="…" role="combobox"> with a #…-listbox of options —
+ * NOT native <select>s (confirmed live 2026-11-23 on PC ES; the earlier code
+ * used selectOption(), which throws on an <input>, and the failure was
+ * swallowed so the form went on blank: "Nacionalidad no válida", "Provincia
+ * no reconocida"). Opens the list and picks the option matching `prefer`,
+ * falling back to the first one; fails loudly if the list never opens or
+ * nothing ends up selected.
+ */
+async function chooseEsCombobox(page: Page, scope: Scope, id: string, prefer: RegExp): Promise<void> {
+  const field = scope.locator(`#${id}`).first();
+  await expect(field, `ES "${id}" field is not on the page`).toBeVisible({ timeout: 10_000 });
+
+  await field.click();
+  const options = scope.locator(`#${id}-listbox`).getByRole('option');
+  await expect(options.first(), `ES "${id}" list did not open`).toBeVisible({ timeout: 5_000 });
+  const preferred = options.filter({ hasText: prefer }).first();
+  const choice = (await preferred.isVisible().catch(() => false)) ? preferred : options.first();
+  const chosenText = ((await choice.textContent()) ?? '').trim();
+  await choice.click();
+  // The page shows the pick in #…-selection (the input's own value stays
+  // empty), so that is what proves something was really selected.
+  await expect(scope.locator(`#${id}-selection`), `ES "${id}" "${chosenText}" was not selected`)
+    .toContainText(chosenText, { timeout: 5_000 });
+  await page.waitForTimeout(200);
+}
+
 async function fillEsIdStep(page: Page, scope: Scope, data: EsRegistrationData, readyLocator?: Locator): Promise<void> {
   console.log('REG-01 (ES) DNI/NIE + password: ' + data.nie);
 
@@ -1149,13 +1177,15 @@ async function fillEsIdStep(page: Page, scope: Scope, data: EsRegistrationData, 
   await page.waitForTimeout(300);
 
   // Next screen is desktop's "Paso 1 de 3" personal-details form, which has
-  // a nationality <select> the ID screen doesn't — a reliable "we've
-  // actually advanced" signal, unlike reusing a generic <input> locator that
-  // would already match the still-mounted ID field and false-positive
-  // instantly. Mobile's next screen (Paso 1 de 6) has no select at all — it's
-  // name-only — so callers there must pass their own readyLocator (e.g.
+  // the nationality combobox (#nationality) the ID screen doesn't — a reliable
+  // "we've actually advanced" signal, unlike reusing a generic <input> locator
+  // that would already match the still-mounted ID field and false-positive
+  // instantly. (It used to be a native <select>; waiting for one made this step
+  // report "did not advance" even though the page had, and the retry click then
+  // submitted the empty form.) Mobile's next screen (Paso 1 de 6) is name-only
+  // — no nationality — so callers there must pass their own readyLocator (e.g.
   // #firstName) instead of relying on this default.
-  await clickContinuarAndWait(page, scope, readyLocator ?? scope.locator('select').first(), 'id-step');
+  await clickContinuarAndWait(page, scope, readyLocator ?? scope.locator('#nationality').first(), 'id-step');
   console.log('REG-01 (ES) DNI/NIE step complete');
 }
 
@@ -1189,27 +1219,24 @@ async function clickEsGenderOption(scope: Scope, gender: string): Promise<void> 
 async function fillEsPersonalDetails(page: Page, scope: Scope, data: EsRegistrationData): Promise<void> {
   console.log('REG-01 (ES) Paso 1/3 personal details');
 
-  // Nationality — a <select>; leave the default if the form already has one
-  // selected, otherwise pick the first real option (index 1, skipping any
-  // blank placeholder at index 0).
-  const nationalitySelect = scope.locator('select').first();
-  if (await nationalitySelect.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    const current = await nationalitySelect.inputValue().catch(() => '');
-    if (!current) {
-      await nationalitySelect.selectOption({ index: 1 }).catch(() => {});
-    }
-    await page.waitForTimeout(200);
-  }
+  // Nationality — a searchable combobox, not a <select> (see chooseEsCombobox).
+  await chooseEsCombobox(page, scope, 'nationality', /espa[ñn]ol/i);
 
-  const inputs = scope.locator('input:not([type="radio"]):not([type="checkbox"])').filter({ visible: true });
-  // Order confirmed live: first name, last name, second last name (optional), DOB.
-  await inputs.nth(0).fill(data.firstName);
+  // By id, not by position: nationality is now a text <input> too (combobox), so
+  // "the Nth visible input" shifted by one and put the first name into the
+  // nationality box, the surname into first name and the date of birth into the
+  // second surname (confirmed live 2026-11-23). Same ids as the mobile steps.
+  const firstNameInput = scope.locator('#firstName').first();
+  await expect(firstNameInput).toBeVisible({ timeout: 5_000 });
+  await firstNameInput.fill(data.firstName);
   await page.waitForTimeout(150);
-  await inputs.nth(1).fill(data.lastName);
+  const lastNameInput = scope.locator('#lastName').first();
+  await expect(lastNameInput).toBeVisible({ timeout: 5_000 });
+  await lastNameInput.fill(data.lastName);
   await page.waitForTimeout(150);
-  // Second surname (index 2) is explicitly optional per the form's own
-  // helper text — leave it blank.
-  const dobInput = inputs.nth(3);
+  // Second surname is explicitly optional per the form's own helper text — leave it blank.
+  const dobInput = scope.locator('#dateOfBirth').first();
+  await expect(dobInput).toBeVisible({ timeout: 5_000 });
   await dobInput.click();
   await dobInput.fill(data.dob);
   await page.waitForTimeout(200);
@@ -1261,16 +1288,8 @@ async function fillEsAddress(page: Page, scope: Scope): Promise<void> {
   await cityInput.fill('Madrid');
   await page.waitForTimeout(200);
 
-  const provinceSelect = scope.locator('select').first();
-  if (await provinceSelect.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    const current = await provinceSelect.inputValue().catch(() => '');
-    if (!current) {
-      const optionTexts = await provinceSelect.locator('option').allTextContents().catch(() => []);
-      const madridIndex = optionTexts.findIndex(t => /madrid/i.test(t));
-      await provinceSelect.selectOption({ index: madridIndex > 0 ? madridIndex : 1 }).catch(() => {});
-    }
-    await page.waitForTimeout(200);
-  }
+  // Provincia — a searchable combobox (#state), not a <select> (see chooseEsCombobox).
+  await chooseEsCombobox(page, scope, 'state', /madrid/i);
 
   // Next screen is the verification/username/password step (Paso 3 de 3).
   await clickContinuarAndWait(page, scope, scope.locator('input[name="username"]').first(), 'address');
@@ -1364,12 +1383,7 @@ async function fillEsMobileStep1Name(page: Page, scope: Scope, data: EsRegistrat
 async function fillEsMobileStep2NationalityDobGender(page: Page, scope: Scope, data: EsRegistrationData): Promise<void> {
   console.log('REG-01 (ES mobile) Paso 2/6 nationality + DOB + gender');
 
-  const nationalitySelect = scope.locator('#nationality').first();
-  if (await nationalitySelect.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    const current = await nationalitySelect.inputValue().catch(() => '');
-    if (!current) await nationalitySelect.selectOption({ index: 1 }).catch(() => {});
-    await page.waitForTimeout(200);
-  }
+  await chooseEsCombobox(page, scope, 'nationality', /espa[ñn]ol/i);
 
   const dobInput = scope.locator('#dateOfBirth').first();
   await expect(dobInput).toBeVisible({ timeout: 5_000 });
@@ -1425,16 +1439,7 @@ async function fillEsMobileStep4Address(page: Page, scope: Scope): Promise<void>
   await cityInput.fill('Madrid');
   await page.waitForTimeout(200);
 
-  const provinceSelect = scope.locator('#state').first();
-  if (await provinceSelect.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    const current = await provinceSelect.inputValue().catch(() => '');
-    if (!current) {
-      const optionTexts = await provinceSelect.locator('option').allTextContents().catch(() => []);
-      const madridIndex = optionTexts.findIndex(t => /madrid/i.test(t));
-      await provinceSelect.selectOption({ index: madridIndex > 0 ? madridIndex : 1 }).catch(() => {});
-    }
-    await page.waitForTimeout(200);
-  }
+  await chooseEsCombobox(page, scope, 'state', /madrid/i);
 
   await clickContinuarAndWait(page, scope, scope.locator('#username').first(), 'mobile-address');
   console.log('REG-01 (ES mobile) Paso 4/6 complete');
