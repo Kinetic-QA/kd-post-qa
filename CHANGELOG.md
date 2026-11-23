@@ -13,6 +13,8 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **Genting Casino now appears on the public results website.** The website only shows brands on a hand-kept list, and Genting Casino wasn't on it, so its runs would have been uploaded but stayed out of Run History and the Brands overview. It is on the list now. Only its 23 November Spain run will show up, because the older Genting Casino UK run (20 August) is from before the list's start date of 1 September.
+
 - **Prime Casino now appears on the public results website.** Prime Casino's 23 November Spain run was a real release run, but the website only shows brands on a hand-kept list and Prime Casino wasn't on it, so the run was uploaded yet stayed out of Run History and the Brands overview (the Upload screen showed a small "isn't in release-scope.json yet" note). It is on the list now. Any other brand that isn't on the list yet still needs adding the same way once its own release run is done.
 
 ### Fixed
