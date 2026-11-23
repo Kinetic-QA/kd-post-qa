@@ -17,18 +17,51 @@ const crypto = require('crypto');
 
 const API = 'https://api.netlify.com/api/v1';
 
-async function api(token, method, urlPath, { json, body } = {}) {
+// Netlify rate-limits uploads (HTTP 429, confirmed 2026-11-23 on a 22 MB video) and
+// now and then answers with a temporary 5xx or drops the connection. None of those
+// mean the upload is wrong, so wait and try the same request again instead of
+// abandoning the whole deploy on the first one.
+const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const MAX_ATTEMPTS = 8;
+const MAX_WAIT_MS = 120 * 1000;
+const UPLOAD_WORKERS = 4;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// How long to wait before the next try: what Netlify asks for (Retry-After, in
+// seconds) when it says, otherwise 2s, 4s, 8s... (capped), plus a little jitter.
+function waitBeforeRetry(res, attempt) {
+  const asked = res ? Number(res.headers.get('retry-after')) : NaN;
+  if (Number.isFinite(asked) && asked >= 0) return Math.min(asked * 1000, MAX_WAIT_MS);
+  return Math.min(1000 * 2 ** attempt, 30 * 1000) + Math.floor(Math.random() * 500);
+}
+
+async function api(token, method, urlPath, { json, body } = {}, log = console.log) {
   const headers = { Authorization: `Bearer ${token}` };
   if (json !== undefined) headers['Content-Type'] = 'application/json';
   if (body !== undefined) headers['Content-Type'] = 'application/octet-stream';
-  const res = await fetch(`${API}${urlPath}`, {
-    method,
-    headers,
-    body: json !== undefined ? JSON.stringify(json) : body,
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`Netlify ${method} ${urlPath} -> ${res.status} ${text.slice(0, 300)}`);
-  return text ? JSON.parse(text) : null;
+  for (let attempt = 1; ; attempt++) {
+    let res = null;
+    let failure = null;
+    try {
+      res = await fetch(`${API}${urlPath}`, {
+        method,
+        headers,
+        body: json !== undefined ? JSON.stringify(json) : body,
+      });
+    } catch (err) {
+      failure = `no answer (${err.cause?.code || err.message})`; // dropped connection, timeout...
+    }
+    if (res) {
+      const text = await res.text();
+      if (res.ok) return text ? JSON.parse(text) : null;
+      if (!RETRY_STATUSES.has(res.status)) throw new Error(`Netlify ${method} ${urlPath} -> ${res.status} ${text.slice(0, 300)}`);
+      failure = `HTTP ${res.status}${text ? ' ' + text.slice(0, 100) : ''}`;
+    }
+    if (attempt >= MAX_ATTEMPTS) throw new Error(`Netlify ${method} ${urlPath} -> ${failure}; gave up after ${attempt} tries`);
+    const wait = waitBeforeRetry(res, attempt);
+    log(`  Netlify said ${failure} for ${method} ${urlPath.split('/').pop()} — waiting ${Math.round(wait / 1000)}s, then try ${attempt + 1} of ${MAX_ATTEMPTS}`);
+    await sleep(wait);
+  }
 }
 
 const toKey = rel => '/' + rel.split(path.sep).join('/').replace(/^\/+/, '').toLowerCase();
@@ -50,8 +83,8 @@ function walk(dir, base = dir, out = []) {
 }
 
 // path (lowercase, leading slash) -> sha1 of everything the site serves right now.
-async function listLiveFiles(token, siteId) {
-  const files = await api(token, 'GET', `/sites/${siteId}/files`);
+async function listLiveFiles(token, siteId, log = console.log) {
+  const files = await api(token, 'GET', `/sites/${siteId}/files`, {}, log);
   return new Map(files.map(f => [String(f.path).toLowerCase(), f.sha]));
 }
 
@@ -60,7 +93,7 @@ async function listLiveFiles(token, siteId) {
 // include(key): optional filter on the folder's files (key = lowercase path with a
 // leading slash) — used to leave stale leftovers of old uploads out of the deploy.
 async function mergeDeploy({ token, siteId, dir, dropPrefixes = [], include = () => true, dryRun = false, log = console.log }) {
-  const live = await listLiveFiles(token, siteId);
+  const live = await listLiveFiles(token, siteId, log);
   const prefixes = dropPrefixes.map(p => p.toLowerCase());
   const merged = new Map();
   let dropped = 0;
@@ -95,7 +128,7 @@ async function mergeDeploy({ token, siteId, dir, dropPrefixes = [], include = ()
   if (dryRun) return { summary, merged, dryRun: true };
 
   const files = Object.fromEntries(merged);
-  const deploy = await api(token, 'POST', `/sites/${siteId}/deploys`, { json: { files } });
+  const deploy = await api(token, 'POST', `/sites/${siteId}/deploys`, { json: { files } }, log);
   const required = new Set(deploy.required || []);
   log(`Netlify needs ${required.size} file(s) uploaded.`);
 
@@ -110,12 +143,12 @@ async function mergeDeploy({ token, siteId, dir, dropPrefixes = [], include = ()
     while (queue.length) {
       const [sha, key] = queue.shift();
       const rel = key.replace(/^\//, '').split('/').map(encodeURIComponent).join('/');
-      await api(token, 'PUT', `/deploys/${deploy.id}/files/${rel}`, { body: fs.readFileSync(local.get(key).abs) });
+      await api(token, 'PUT', `/deploys/${deploy.id}/files/${rel}`, { body: fs.readFileSync(local.get(key).abs) }, log);
       done++;
       if (done % 200 === 0) log(`  uploaded ${done}/${pathBySha.size}`);
     }
   }
-  await Promise.all(Array.from({ length: 8 }, worker));
+  await Promise.all(Array.from({ length: UPLOAD_WORKERS }, worker));
 
   const deadline = Date.now() + 10 * 60 * 1000;
   let state = deploy;
@@ -123,7 +156,7 @@ async function mergeDeploy({ token, siteId, dir, dropPrefixes = [], include = ()
     if (state.state === 'error') throw new Error(`Netlify deploy ${deploy.id} failed: ${state.error_message || 'unknown error'}`);
     if (Date.now() > deadline) throw new Error(`Netlify deploy ${deploy.id} did not become ready in 10 minutes.`);
     await new Promise(r => setTimeout(r, 3000));
-    state = await api(token, 'GET', `/deploys/${deploy.id}`);
+    state = await api(token, 'GET', `/deploys/${deploy.id}`, {}, log);
   }
   return { summary, deploy: state };
 }
