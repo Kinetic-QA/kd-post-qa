@@ -8,7 +8,22 @@
 // eslint-disable-next-line no-control-regex
 const ANSI = /\x1b\[[0-9;]*m/g;
 
-export function plainError(rawMessage: string | null): string {
+/** Plain, readable step name: drops the arrow shorthand some step titles use. */
+export function cleanStep(step: string): string {
+  return step.replace(/\s*->\s*/g, ' → ').trim();
+}
+
+/**
+ * The plain sentence, plus the step of the test that stopped when known — the
+ * step name is often the only thing that says WHAT was being done when a
+ * yes/no check inside it came out wrong.
+ */
+export function plainError(rawMessage: string | null, failedStep?: string | null): string {
+  const base = describeFailure(rawMessage);
+  return failedStep ? `${base} It stopped during the step "${cleanStep(failedStep)}".` : base;
+}
+
+function describeFailure(rawMessage: string | null): string {
   if (!rawMessage) return 'The check failed, but no further detail was recorded.';
   const msg = rawMessage.replace(ANSI, '');
 
@@ -54,6 +69,11 @@ export function plainError(rawMessage: string | null): string {
   }
   if (/toBeEnabled|toBeDisabled|toBeChecked/.test(msg)) {
     return 'A button or option on the page was not in the state it should have been.';
+  }
+  // A plain yes/no check ("Expected: true, Received: false") says nothing a
+  // visitor could understand on its own, so it is never quoted.
+  if (/toBe\(|toEqual\(|toBeTruthy|toBeFalsy|Object\.is equality/.test(msg)) {
+    return 'A check the test makes on the page did not come out as expected.';
   }
   return 'The check failed.';
 }

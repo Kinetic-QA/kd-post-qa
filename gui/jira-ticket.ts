@@ -61,7 +61,17 @@ export const BRAND_TO_JIRA_PROJECT: Record<string, { key: string; name: string }
   I36: { key: 'ICE36', name: 'Ice36' },
 };
 
-export type FindingEvidence = { platform: 'Desktop' | 'Mobile'; screenshot: string | null; errorContext: string | null };
+export type FindingEvidence = {
+  platform: 'Desktop' | 'Mobile';
+  screenshot: string | null;
+  errorContext: string | null;
+  // Where the failing attempt's recorded browser activity lives, the run folder
+  // it came from, and which step of the test stopped — used to gather plain
+  // facts about the failure (see failure-facts.ts). Server-side only.
+  tracePath?: string | null;
+  resultsDir?: string | null;
+  failedStep?: string | null;
+};
 export type Finding = {
   id: string;
   geo: string;
@@ -81,6 +91,9 @@ type Deps = {
   isValidBrand: (brand: string) => boolean;
   isValidDateStr: (dateStr: string) => boolean;
   findFinding: (brand: string, dateStr: string, geo: string, title: string) => Promise<Finding | null>;
+  // Plain-sentence facts about a failing check (network errors, earlier results,
+  // a live re-check). Optional: the draft still works without them.
+  gatherFacts?: (brand: string, dateStr: string, finding: Finding) => Promise<string[]>;
   // The Jira ticket already recorded for a finding (null if none) and the write
   // that records a new one — owned by the Triage store in server.ts.
   getSavedTicket: (brand: string, dateStr: string, finding: Finding) => { key: string; url: string } | null;
@@ -417,6 +430,12 @@ export function registerJiraTicketRoutes(app: Express, deps: Deps): void {
     if (evidence.length === 0) flags.push('No screenshot was captured for this failure — attach evidence by hand (Protocol §4.6: state why if none).');
 
     const platformText = finding.platforms.join(', ');
+    // Facts read from the run's own recorded activity and a read-only re-check.
+    // A "noticed" item is not a failed check, so it has none.
+    // Lines about the test script itself are for the QA person reading Triage,
+    // not for the ticket (a ticket never mentions how the automation works).
+    const factLines = (finding.status === 'noticed' || !deps.gatherFacts ? [] : await deps.gatherFacts(brand, dateStr, finding).catch(() => [] as string[]))
+      .filter(l => !/test script/i.test(l) && !/^The check stopped at the step/i.test(l));
     // A "noticed" item is not a failed test: the functional check passed, but the
     // page showed text that was never filled in (e.g. a raw content key). The
     // draft is about that text, not about any test or any broken flow.
@@ -444,6 +463,9 @@ Error location: ${finding.errorLocation ?? '(unknown)'}
 
 === WHAT THE QA PERSON ALREADY SEES ON THE TRIAGE SCREEN (established fact — carry it over) ===
 ${[gate ? `${gate.plainSummary} ${gate.reasoning}` : '', whatHappened].filter(Boolean).join(' ') || '(nothing recorded)'}
+
+=== EVIDENCE GATHERED FROM THE RUN (established fact — use it) ===
+${factLines.length ? factLines.map(l => `- ${l}`).join('\n') : '(none gathered)'}
 
 --- The test's own code (its steps and assertions show what the page is expected to do) ---
 ${testSnippet || '(unavailable)'}
@@ -473,6 +495,9 @@ Rules:
 - Do not mention ISTQB or any testing-theory terminology.
 - The established statement above is what the QA person has already read and agreed with. The summaryOfBug and actualResult MUST carry it over, in plain words, and must not contradict it or swap it for a different explanation of the same failure.
 - If the established statement says the test was stopped by a login, sign-in, bot check or block page (it never reached the real page), the ticket is about THAT access problem, not about a "missing" button or element: "issue" names it (for example "Behind a Cloudflare Access sign-in, test cannot reach the page"), stepsToReplicate are only the steps needed to see the gate, expectedResult says the page should load for the testing computer without the gate, and needsHumanCheck says who should allow the test computer through is still to be confirmed.
+- Use the evidence gathered from the run: put the exact page address and what the site answered (for example "returns HTTP 404, page not found") into actualResult, and a "Checked again just now" line as a re-check, worded as "Re-checked: still returns ...". If it says the check passed in an earlier run, say so in impactNotes with the time. Use only what those lines say.
+- A page address in the evidence that the site answered with an error is the BROKEN DESTINATION, not where a visitor starts. affectedPages lists the page the visitor was on when they used the link or button (from the test's steps and the base URL), and the broken address is named separately in actualResult. Never make the broken address the page to open in the steps.
+- Never write the words "true", "false", "expected" or "received" about the test's own checks. Say in everyday words what the visitor sees.
 - Plain language a non-developer teammate can follow.${noticedRules}`;
 
     let ai: any;

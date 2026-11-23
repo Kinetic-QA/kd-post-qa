@@ -40,6 +40,7 @@ const { localTimeToken, localTimestampToken, localDateToken } = require('../help
 import { registerJiraCheckerRoutes } from './jira-checker';
 import { registerJiraTicketRoutes, findingEnvironment, pageSnapshotExcerpt, detectBlockedPage, Finding } from './jira-ticket';
 import { plainError } from './plain-error';
+import { gatherFailureFacts } from './failure-facts';
 import { saveExportImages, buildPdfExport, buildExcelExport, VisualExportInput } from './visual-export';
 
 dotenv.config();
@@ -1636,7 +1637,7 @@ type ReviewTestEntry = {
   // Absolute paths to the failing attempt's screenshot and Playwright
   // error-context.md (page snapshot at the moment of failure). Server-side
   // only — never sent to the browser; evidence is served by finding id.
-  evidence: { screenshot: string | null; errorContext: string | null };
+  evidence: { screenshot: string | null; errorContext: string | null; tracePath: string | null; resultsDir: string | null; failedStep: string | null };
   // Things the test NOTICED on the page without failing — currently raw
   // content keys such as "content.alberta_comment" (helpers/common.ts's
   // noteRawContentKeys). Present on passing tests too, which is the point.
@@ -1663,7 +1664,7 @@ function extractTestEntries(resultsJson: any, geo: string, resultsDir: string): 
         const status = String(test.status ?? 'unknown');
         let errorMessage: string | null = null;
         let errorLocation: string | null = null;
-        const evidence: ReviewTestEntry['evidence'] = { screenshot: null, errorContext: null };
+        const evidence: ReviewTestEntry['evidence'] = { screenshot: null, errorContext: null, tracePath: null, resultsDir: null, failedStep: null };
         if (status === 'unexpected' || status === 'flaky') {
           // Walk attempts in reverse — the failure worth explaining is
           // whichever attempt actually failed, not necessarily the last one
@@ -1680,6 +1681,12 @@ function extractTestEntries(resultsJson: any, geo: string, resultsDir: string): 
               const attachments: any[] = Array.isArray(r.attachments) ? r.attachments : [];
               evidence.screenshot = abs(attachments.find(a => a?.name === 'screenshot')?.path);
               evidence.errorContext = abs(attachments.find(a => a?.name === 'error-context')?.path);
+              evidence.tracePath = abs(attachments.find(a => a?.name === 'trace')?.path);
+              evidence.resultsDir = resultsDir;
+              // The first top-level step that recorded an error: its title says
+              // what the test was doing when it stopped.
+              const failedStep = (Array.isArray(r.steps) ? r.steps : []).find((s: any) => s?.error);
+              evidence.failedStep = failedStep?.title ? String(failedStep.title) : null;
               break;
             }
           }
@@ -1913,7 +1920,7 @@ app.post('/triage-run', async (req, res) => {
       return {
         ...rest,
         environment: findingEnvironment(brand, f),
-        plainError: plainError(f.errorMessage),
+        plainError: plainError(f.errorMessage, (f.evidence.find(e => e.failedStep) ?? f.evidence[0])?.failedStep),
         saved: saved[f.id] ?? null,
       };
     }),
@@ -1932,6 +1939,7 @@ registerJiraTicketRoutes(app, {
   isValidBrand,
   isValidDateStr,
   findFinding,
+  gatherFacts: (brand, dateStr, finding) => factLinesFor(brand, dateStr, finding),
   getSavedTicket: (brand, dateStr, finding) => {
     const saved = readTriageStore(brand, dateStr)[finding.id];
     return saved?.outcome === 'ticket_created' && saved.ticketKey && saved.ticketUrl
@@ -1995,14 +2003,42 @@ const REVIEW_VERDICT_GUIDE = `For EACH of the following failing/flaky checks, de
 
 FIRST look at "Page the test saw when it failed". If that page is not the page the test meant to check — a login or sign-in wall, a bot or security check, an access-denied or "blocked" page, an error or maintenance page — the real site was never tested, so it is neither a site issue nor a script issue: answer "blocked". Say what the page IS and who is stopping the test (for example "The site is behind a sign-in page, so the test could not get in"), and do NOT describe or list what is on that page (its headings, fields or buttons).
 
-How to write your notes (they are read by QA teammates and managers, not developers): plain everyday English only. Describe what a person visiting the page would see wrong. NEVER mention selectors, CSS classes, element names, locators, timeouts, test code, frameworks or file names. Name the environment correctly from the "Environment" line of each check — say "the QA site" for a QA-site result and "the live site" for a live one, and never call a QA-site result live. If you are not sure it is a real site issue, say what would settle it in plain words.`;
+Each check may also list "Evidence from the run": plain facts read from the test's recorded browser activity, its earlier results and a live re-check. Weigh them heavily, they matter more than the test's own wording, which is often vague. A page the test opened that the site answered with an error (HTTP 404 or 500), an address with an unfilled placeholder (such as ":gameSlug"), a check that passed in the previous run with no relevant test script file changed since, or a live re-check that still fails are each strong signs of a REAL SITE ISSUE. Evidence of no site errors, or a test script file for this very check that changed since the last pass, points toward a SCRIPT ISSUE. Quote the specifics (the page address, what the visitor sees) in your notes.
 
-function describeChecks(brand: string, list: Finding[]): string {
+How to write your notes (they are read by QA teammates and managers, not developers): plain everyday English only. Describe what a person visiting the page would see wrong. NEVER write the words "true", "false" or "received", and never describe the test's own yes/no checks; say instead what the visitor would see (for example "Opening a game in a new tab shows a 'page not found' page"). NEVER mention selectors, CSS classes, element names, locators, timeouts, test code, frameworks or file names. Name the environment correctly from the "Environment" line of each check — say "the QA site" for a QA-site result and "the live site" for a live one, and never call a QA-site result live. If you are not sure it is a real site issue, say what would settle it in plain words.`;
+
+// Plain-sentence facts about a failing check (see failure-facts.ts), read from
+// whichever platform's saved evidence has the recorded browser activity.
+async function factLinesFor(brand: string, dateStr: string, f: Finding): Promise<string[]> {
+  const ev = f.evidence.find(e => e.tracePath) ?? f.evidence[0];
+  const { lines } = await gatherFailureFacts({
+    brand, dateStr, geo: f.geo, title: f.title, specFile: f.specFile,
+    platform: ev?.platform ?? 'Desktop',
+    resultsDir: ev?.resultsDir ?? null,
+    tracePath: ev?.tracePath ?? null,
+    errorContext: ev?.errorContext ?? null,
+    failedStep: ev?.failedStep ?? null,
+  }, { reportsRoot: path.join(process.cwd(), 'Test Reports'), repoRoot: process.cwd() });
+  return lines;
+}
+
+// A few at a time: each one unzips a trace and may re-check a live page.
+async function factsForAll(brand: string, dateStr: string, list: Finding[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  const queue = [...list];
+  const worker = async () => {
+    for (let f = queue.shift(); f; f = queue.shift()) out.set(f.id, await factLinesFor(brand, dateStr, f));
+  };
+  await Promise.all(Array.from({ length: Math.min(3, list.length) }, worker));
+  return out;
+}
+
+function describeChecks(brand: string, list: Finding[], facts: Map<string, string[]> = new Map()): string {
   return list.map((f, i) => `${i + 1}. [${f.geo}] ${f.title} (${f.status} on ${f.platforms.join(' + ')})
    Environment: ${({ QA: 'the QA (pre-release test) site', Live: 'the live site', Unknown: 'not known' } as const)[findingEnvironment(brand, f)]}
    Error: ${f.errorMessage ?? '(no error message captured)'}
    Location: ${f.errorLocation ?? '(unknown)'}
-   Page the test saw when it failed (start of its saved snapshot): ${pageSnapshotExcerpt(f, 1200) || '(not available)'}`).join('\n\n');
+   Page the test saw when it failed (start of its saved snapshot): ${pageSnapshotExcerpt(f, 1200) || '(not available)'}${(facts.get(f.id) ?? []).length ? `\n   Evidence from the run:\n${(facts.get(f.id) ?? []).map(l => `     - ${l}`).join('\n')}` : ''}`).join('\n\n');
 }
 
 // Despite the "ONLY JSON" instruction, a stray prose prefix or a ```json fence
@@ -2082,6 +2118,9 @@ app.post('/review-run', async (req, res) => {
 
   try {
     const client = new Anthropic({ apiKey });
+    // Facts read from each failure's recorded activity, earlier results and a
+    // live re-check — the AI reasons from these, and the Triage row shows them.
+    const facts = await factsForAll(brand, dateStr, needsAttention);
     const prompt = `You are triaging a QA regression test run for the brand "${brand}", run on ${dateStr}.
 
 Result counts: ${JSON.stringify(counts)}
@@ -2092,7 +2131,7 @@ ${skipped.length ? skipped.map(f => `- [${f.geo}] ${f.title}`).join('\n') : '(no
 
 ${needsAttention.length === 0 ? 'There are no failing or flaky checks to classify.' : `${REVIEW_VERDICT_GUIDE}
 
-${describeChecks(brand, needsAttention)}`}
+${describeChecks(brand, needsAttention, facts)}`}
 
 Respond with ONLY a JSON object (no prose before or after it), in exactly this shape:
 {
@@ -2124,10 +2163,17 @@ Respond with ONLY a JSON object (no prose before or after it), in exactly this s
     const summary = typeof parsed.headline === 'string' && parsed.headline.trim() ? parsed.headline.trim() : 'Review completed, but no summary text was returned.';
     const validClassifications = new Set(['likely_site_issue', 'likely_script_issue', 'blocked', 'unclear']);
     type Verdict = { classification: string; reasoning: string; plainSummary: string };
+    // A note that quotes the test's own yes/no check ("expected true, received
+    // false") tells a reader nothing, so it is dropped: an empty summary leaves
+    // the Triage row's own plain sentence in place.
+    const readable = (s: unknown): string => {
+      const t = typeof s === 'string' ? s.trim() : '';
+      return /\b(true|false|received)\b/i.test(t) ? '' : t;
+    };
     const toVerdict = (v: any): Verdict => ({
       classification: validClassifications.has(v?.classification) ? v.classification : 'unclear',
-      reasoning: typeof v?.reasoning === 'string' ? v.reasoning.trim() : '',
-      plainSummary: typeof v?.plainSummary === 'string' ? v.plainSummary.trim() : '',
+      reasoning: readable(v?.reasoning),
+      plainSummary: readable(v?.plainSummary),
     });
     const norm = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -2168,7 +2214,7 @@ Respond with ONLY a JSON object (no prose before or after it), in exactly this s
 
 ${REVIEW_VERDICT_GUIDE}
 
-${describeChecks(brand, missing)}
+${describeChecks(brand, missing, facts)}
 
 Respond with ONLY a JSON object (no prose before or after it), in exactly this shape, with one entry per check above, in the same order, matching "geo" and "title" exactly:
 { "verdicts": [ { "geo": "...", "title": "...", "classification": "likely_site_issue" | "likely_script_issue" | "blocked" | "unclear", "plainSummary": "ONE short plain-English sentence saying what is wrong on the page from a visitor's point of view. No technical terms.", "reasoning": "ONE short plain-English sentence (about 25 words at most) on why you think it is a site issue or a test problem" } ] }` }],
@@ -2190,6 +2236,7 @@ Respond with ONLY a JSON object (no prose before or after it), in exactly this s
       // than a made-up "unclear" — the person judges it from the error details.
       findings: needsAttention.map(f => ({
         id: f.id,
+        facts: facts.get(f.id) ?? [],
         ...(verdicts.get(f.id) ?? {
           classification: 'unreviewed',
           reasoning: 'The AI did not return a verdict for this check. Judge it from the technical details.',

@@ -1392,6 +1392,25 @@ function fillTriageVerdicts(items) {
     if (!row) continue;
     // The AI's own one-line summary reads better than the generic restatement.
     if (f.plainSummary) row.plainEl.textContent = f.plainSummary;
+    // What the run's recorded activity, earlier results and a live re-check
+    // showed — plain facts under the sentence, replaced on every Review.
+    const oldFacts = row.plainEl.parentElement?.querySelector('.triage-facts');
+    if (oldFacts) oldFacts.remove();
+    if (Array.isArray(f.facts) && f.facts.length > 0) {
+      const factsEl = document.createElement('div');
+      factsEl.className = 'triage-facts';
+      const heading = document.createElement('div');
+      heading.className = 'triage-facts-title';
+      heading.textContent = 'What the evidence shows';
+      const list = document.createElement('ul');
+      for (const line of f.facts) {
+        const li = document.createElement('li');
+        li.textContent = line;
+        list.appendChild(li);
+      }
+      factsEl.append(heading, list);
+      row.plainEl.after(factsEl);
+    }
     const td = row.reviewTd;
     td.className = '';
     td.textContent = '';
