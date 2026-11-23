@@ -104,7 +104,7 @@ const STRINGS: Record<string, LocaleStrings> = {
     // slingocasino.es's homepage tiles.
     playCta: /^jugar$|jugar ahora|a jugar|vamos a jugar/i,
     bonusPolicyText: /pol[ií]tica de bon/i,
-    readMoreText: /sigue leyendo/i,
+    readMoreText: /sigue leyendo|m[aá]s informaci[oó]n/i, // "MÁS INFORMACIÓN" confirmed live on MC ES 2026-11-23
     feedbackNext: /^siguiente$/i,
     feedbackOther: /^otro$/i,
     feedbackSubmit: /^enviar$/i,

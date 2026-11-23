@@ -65,7 +65,12 @@ test.describe('P3 - Blog Page', () => {
     // after blogPath, e.g. "casino-guides/some-post/"), same pattern Step 1
     // uses to distinguish a real article from a bare category link (1 segment).
     async function clickReadMoreOrFirstPost() {
-      const readMore = page.getByText(strings.readMoreText, { exact: false }).first();
+      // Only a link or button counts as "Read More" — never plain text.
+      // Confirmed live on Mega Casino ES 2026-11-23: one post's excerpt ends
+      // with the words "¡Sigue leyendo!" as ordinary text, so a plain text
+      // search matched that paragraph, clicked it, and nothing happened
+      // (the real "MÁS INFORMACIÓN" button sat right below it).
+      const readMore = page.locator('a, button').filter({ hasText: strings.readMoreText }).first();
       const hasReadMoreLink = await readMore.isVisible({ timeout: 5_000 }).catch(() => false);
       if (hasReadMoreLink) {
         await readMore.click();
